@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useContext, useRef, useState } from 'react'
 import {
   ScrollView,
   KeyboardAvoidingView,
@@ -25,8 +25,10 @@ import { Button } from '@components/Button'
 import { AppError } from '@utils/AppError'
 import { useAuth } from '@hooks/useAuth'
 import { api } from '@services/api'
-import { AuthNavigatorRoutesProps } from '@routes/auth.routes'
+
 import isValidCPF from '@utils/isValidCPF'
+import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { CityContext } from '@contexts/CityContext'
 
 // ---------- CONFIG CLOUDINARY ----------
 const CLOUDINARY_CLOUD_NAME = 'dwqr47iii'
@@ -69,8 +71,8 @@ type FormDataProps = {
   password: string
   password_confirm: string
   street: string
-  city: string
-  state: string
+  // city: string
+  // state: string
   postalCode: string
 }
 
@@ -93,8 +95,8 @@ const signUpSchema = yup.object({
     .oneOf([yup.ref('password')], 'A senha digitada não confere!')
     .required('Confirme a senha'),
   street: yup.string().required('Informe a rua'),
-  city: yup.string().required('Informe a cidade'),
-  state: yup.string().required('Informe o estado'),
+  //city: yup.string().required('Informe a cidade'),
+  //state: yup.string().required('Informe o estado'),
   postalCode: yup.string().required('Informe o CEP'),
 })
 
@@ -155,8 +157,7 @@ export function SignUp() {
   const scrollViewRef = useRef<ScrollView>(null)
   const toast = useToast()
   const { signIn, userId } = useAuth()
-  const navigation = useNavigation<AuthNavigatorRoutesProps>()
-
+  const navigation = useNavigation<AppNavigatorRoutesProps>()
   const {
     control,
     handleSubmit,
@@ -175,8 +176,8 @@ export function SignUp() {
     password: useRef<TextInput>(null),
     password_confirm: useRef<TextInput>(null),
     street: useRef<TextInput>(null),
-    city: useRef<TextInput>(null),
-    state: useRef<TextInput>(null),
+    //city: useRef<TextInput>(null),
+    //state: useRef<TextInput>(null),
     postalCode: useRef<TextInput>(null),
   }
 
@@ -210,7 +211,7 @@ export function SignUp() {
         const locationResponse = await api.get(`/users/${user.id}/location`)
         const { latitude, longitude } = locationResponse.data
         if (latitude && longitude) {
-          navigation.navigate('home', { userId })
+          navigation.navigate('home')
         } else {
           // navigation.navigate('localization', { userId: user.id })
         }
@@ -477,36 +478,6 @@ export function SignUp() {
                   onChangeText={onChange}
                   value={value}
                   errorMessage={errors.street?.message}
-                />
-              )}
-            />
-
-            <Controller
-              control={control}
-              name="city"
-              render={({ field: { onChange, value } }) => (
-                <Input
-                  ref={refs.city}
-                  placeholder="Cidade"
-                  returnKeyType="next"
-                  onChangeText={onChange}
-                  value={value}
-                  errorMessage={errors.city?.message}
-                />
-              )}
-            />
-
-            <Controller
-              control={control}
-              name="state"
-              render={({ field: { onChange, value } }) => (
-                <Input
-                  ref={refs.state}
-                  placeholder="Estado"
-                  returnKeyType="next"
-                  onChangeText={onChange}
-                  value={value}
-                  errorMessage={errors.state?.message}
                 />
               )}
             />

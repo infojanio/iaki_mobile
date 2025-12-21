@@ -1,43 +1,42 @@
-// src/screens/Redirect.tsx
-import { useEffect } from 'react'
+import { useEffect, useContext, useRef } from 'react'
 import { useNavigation } from '@react-navigation/native'
+import { NativeStackNavigationProp } from '@react-navigation/native-stack'
+
 import { useAuth } from '@hooks/useAuth'
-import { api } from '@services/api'
-import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { CityContext } from '@contexts/CityContext'
+import { RootStackParamList } from '@routes/types'
 import { Loading } from '@components/Loading'
+
+type RedirectNavigationProps = NativeStackNavigationProp<RootStackParamList>
 
 export function Redirect() {
   const { user } = useAuth()
-  const navigation = useNavigation<AppNavigatorRoutesProps>()
+  const { city, isLoading } = useContext(CityContext)
+  const navigation = useNavigation<RedirectNavigationProps>()
+
+  const hasRedirected = useRef(false)
 
   useEffect(() => {
-    async function checkLocation() {
-      try {
-        const response = await api.get(`/users/${user.id}/location`)
+    if (!user) return
+    if (isLoading) return
+    if (hasRedirected.current) return
 
-        if (response.data?.latitude && response.data?.longitude) {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'home', params: { userId: user.id } }],
-          })
-        } else {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'home', params: { userId: user.id } }],
-            // routes: [{ name: 'localization', params: { userId: user.id } }],
-          })
-        }
-      } catch (error) {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'home', params: { userId: user.id } }],
-          //routes: [{ name: 'localization', params: { userId: user.id } }],
-        })
-      }
+    hasRedirected.current = true
+
+    if (!city) {
+      console.log('➡️ indo para SelectCity')
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'selectCity' }],
+      })
+    } else {
+      console.log('➡️ indo para AppRoutes')
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'appRoutes' }],
+      })
     }
-
-    checkLocation()
-  }, [])
+  }, [user, city, isLoading])
 
   return <Loading />
 }

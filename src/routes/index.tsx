@@ -1,19 +1,19 @@
-import { useContext, useEffect } from 'react'
-//contexto de navegação
 import { Box, useTheme } from 'native-base'
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
 import { useAuth } from '@hooks/useAuth'
-
 import { AuthRoutes } from './auth.routes'
 import { AppRoutes } from './app.routes'
+import { Redirect } from '@screens/Redirect'
+import { SelectCity } from '@screens/SelectCity'
 import { Loading } from '@components/Loading'
+
+const Stack = createNativeStackNavigator()
 
 export function Routes() {
   const { colors } = useTheme()
   const { user, isLoadingUserStorageData } = useAuth()
-
-  console.log('Usuário logado =>', user)
 
   const theme = {
     ...DefaultTheme,
@@ -23,27 +23,27 @@ export function Routes() {
     },
   }
 
-  useEffect(() => {
-    //console.log('Usuário logado =>', user.name)
-  }, [user])
-
-  //verifica se os dados do user estão sendo carregados
   if (isLoadingUserStorageData) {
     return <Loading />
   }
 
   return (
     <Box flex={1} bg="green.50">
-      {' '}
-      {/*garante não aparecer fundo branco na trasição da tela */}
       <NavigationContainer theme={theme}>
-        {
-          user && user.id ? (
-            <AppRoutes />
+        <Stack.Navigator
+          initialRouteName="redirect"
+          screenOptions={{ headerShown: false }}
+        >
+          {!user || !user.id ? (
+            <Stack.Screen name="authRoutes" component={AuthRoutes} />
           ) : (
-            <AuthRoutes />
-          ) /*se não tiver logado vai p/ rota StackRoutes*/
-        }
+            <>
+              <Stack.Screen name="redirect" component={Redirect} />
+              <Stack.Screen name="selectCity" component={SelectCity} />
+              <Stack.Screen name="appRoutes" component={AppRoutes} />
+            </>
+          )}
+        </Stack.Navigator>
       </NavigationContainer>
     </Box>
   )

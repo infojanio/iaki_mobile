@@ -8,8 +8,8 @@ import {
 import { signOutApp } from './authHelpers'
 
 const api = axios.create({
-  //baseURL: 'http://192.168.1.42:3333', // substitua pelo seu IP http://192.168.3.70:3333
-  baseURL: 'https://iaki-backend-production.up.railway.app', // use https!
+  baseURL: 'http://192.168.1.43:3333', // substitua pelo seu IP http://192.168.3.70:3333
+  //baseURL: 'https://iaki-backend-production.up.railway.app', // use https!
   timeout: 10000,
 })
 

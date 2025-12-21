@@ -9,28 +9,32 @@ import {
 
 import { Loading } from '@components/Loading'
 import { Routes } from './src/routes'
+
 import { AuthContextProvider } from '@contexts/AuthContext'
+import { CityProvider } from '@contexts/CityContext'
 import { CartProvider } from '@contexts/CartContext'
+
 import { useEffect } from 'react'
 import * as NavigationBar from 'expo-navigation-bar'
 import { checkAndApplyOtaNow, wireOtaOnAppState } from 'src/lib/updates'
 
 export default function App() {
-  const [fontsLoaded] = useFonts({ Roboto_400Regular, Roboto_700Bold })
+  const [fontsLoaded] = useFonts({
+    Roboto_400Regular,
+    Roboto_700Bold,
+  })
 
   useEffect(() => {
-    checkAndApplyOtaNow() // checa atualizações no launch
-    const unwire = wireOtaOnAppState() // checa quando volta ao foco
+    checkAndApplyOtaNow()
+    const unwire = wireOtaOnAppState()
     return () => unwire()
   }, [])
 
   useEffect(() => {
     const hideNavBar = async () => {
       if (Platform.OS === 'android') {
-        // Deixa a barra oculta e só aparece ao deslizar a borda
         await NavigationBar.setVisibilityAsync('hidden')
         await NavigationBar.setBehaviorAsync('overlay-swipe')
-        // cor transparente quando aparecer
         await NavigationBar.setBackgroundColorAsync('transparent')
       }
     }
@@ -40,16 +44,19 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <NativeBaseProvider>
-        <CartProvider>
-          <StatusBar
-            barStyle="dark-content"
-            translucent
-            backgroundColor="transparent"
-          />
-          <AuthContextProvider>
-            {fontsLoaded ? <Routes /> : <Loading />}
-          </AuthContextProvider>
-        </CartProvider>
+        <StatusBar
+          barStyle="dark-content"
+          translucent
+          backgroundColor="transparent"
+        />
+
+        <AuthContextProvider>
+          <CityProvider>
+            <CartProvider>
+              {fontsLoaded ? <Routes /> : <Loading />}
+            </CartProvider>
+          </CityProvider>
+        </AuthContextProvider>
       </NativeBaseProvider>
     </SafeAreaProvider>
   )
