@@ -12,7 +12,15 @@ import { useForm, Controller } from 'react-hook-form'
 import * as yup from 'yup'
 import { yupResolver } from '@hookform/resolvers/yup'
 import * as ImagePicker from 'expo-image-picker'
-import { VStack, Center, Text, Icon, IconButton, useToast } from 'native-base'
+import {
+  VStack,
+  Center,
+  Text,
+  Icon,
+  IconButton,
+  useToast,
+  Box,
+} from 'native-base'
 import { Feather, MaterialIcons } from '@expo/vector-icons'
 import { TextInputMask } from 'react-native-masked-text'
 
@@ -34,7 +42,6 @@ type FormDataProps = {
   avatar?: string
   cpf: string
   street?: string
-  city?: string
   state?: string
   postalCode?: string
 }
@@ -48,8 +55,7 @@ const schema = yup.object({
     .required('CPF é obrigatório')
     .test('cpf-valido', 'CPF inválido', (value) => isValidCPF(value || '')),
   street: yup.string().optional(),
-  city: yup.string().optional(),
-  state: yup.string().optional(),
+  state: yup.string().optional(), //usar esse campo pra cidade
   postalCode: yup.string().optional(),
 })
 
@@ -121,9 +127,8 @@ export function ProfileEdit() {
       phone: (user as any)?.phone ?? '',
       avatar: user?.avatar ?? '',
       cpf: user?.cpf ?? '',
+      state: user?.state ?? '', //usar esse campo pra cidade
       street: user?.street ?? '',
-      city: user?.city ?? '',
-      state: user?.state ?? '',
       postalCode: user?.postalCode ?? '',
     },
   })
@@ -145,7 +150,6 @@ export function ProfileEdit() {
           cpf: u?.cpf ?? '',
           avatar: u?.avatar ?? '',
           street: u?.street ?? '',
-          city: u?.city ?? '',
           state: u?.state ?? '',
           postalCode: u?.postalCode ?? '',
         })
@@ -419,24 +423,10 @@ export function ProfileEdit() {
 
             <Controller
               control={control}
-              name="city"
-              render={({ field: { onChange, value } }) => (
-                <Input
-                  placeholder="Cidade"
-                  leftIcon={<MaterialIcons name="location-city" size={20} />}
-                  onChangeText={onChange}
-                  value={value ?? ''}
-                  errorMessage={errors.city?.message}
-                />
-              )}
-            />
-
-            <Controller
-              control={control}
               name="state"
               render={({ field: { onChange, value } }) => (
                 <Input
-                  placeholder="Estado"
+                  placeholder="Cidade"
                   leftIcon={<MaterialIcons name="map" size={20} />}
                   onChangeText={onChange}
                   value={value ?? ''}

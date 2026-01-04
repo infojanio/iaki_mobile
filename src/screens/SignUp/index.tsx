@@ -72,7 +72,7 @@ type FormDataProps = {
   password_confirm: string
   street: string
   // city: string
-  // state: string
+  state: string //usar esse campo pra cidade
   postalCode: string
 }
 
@@ -96,7 +96,7 @@ const signUpSchema = yup.object({
     .required('Confirme a senha'),
   street: yup.string().required('Informe a rua'),
   //city: yup.string().required('Informe a cidade'),
-  //state: yup.string().required('Informe o estado'),
+  state: yup.string().required('Informe o estado'),
   postalCode: yup.string().required('Informe o CEP'),
 })
 
@@ -177,7 +177,7 @@ export function SignUp() {
     password_confirm: useRef<TextInput>(null),
     street: useRef<TextInput>(null),
     //city: useRef<TextInput>(null),
-    //state: useRef<TextInput>(null),
+    state: useRef<TextInput>(null), //usar esse campo pra cidade
     postalCode: useRef<TextInput>(null),
   }
 
@@ -213,7 +213,7 @@ export function SignUp() {
         if (latitude && longitude) {
           navigation.navigate('home')
         } else {
-          // navigation.navigate('localization', { userId: user.id })
+          navigation.navigate('', { userId: user.id })
         }
       } catch {
         //navigation.navigate('localization', { userId: user.id })
@@ -478,6 +478,21 @@ export function SignUp() {
                   onChangeText={onChange}
                   value={value}
                   errorMessage={errors.street?.message}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="state"
+              render={({ field: { onChange, value } }) => (
+                <Input
+                  ref={refs.state}
+                  placeholder="Cidade"
+                  returnKeyType="next"
+                  onChangeText={onChange}
+                  value={value}
+                  errorMessage={errors.state?.message}
                 />
               )}
             />

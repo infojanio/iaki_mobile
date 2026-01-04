@@ -9,6 +9,7 @@ import {
   IconButton,
   useTheme,
   HStack,
+  Icon,
 } from 'native-base'
 import { MaterialIcons } from '@expo/vector-icons'
 
@@ -107,14 +108,18 @@ export function SelectCity() {
         />
       </HStack>
 
-      <VStack space={4} mt={4}>
-        <Text fontSize="2xl" fontWeight="bold">
-          Onde você está?
-        </Text>
-
-        <Text fontSize="md" color="gray.500">
-          Selecione para ver as cidades disponíveis
-        </Text>
+      <VStack space={4} mt={4} ml={2}>
+        <HStack>
+          <Icon
+            as={MaterialIcons}
+            name="location-on"
+            size={sizes[2]}
+            color={colors.orange[600]}
+          />
+          <Text fontSize="2xl" fontWeight="bold">
+            Onde você está?
+          </Text>
+        </HStack>
 
         {/* ESTADOS */}
         <FlatList

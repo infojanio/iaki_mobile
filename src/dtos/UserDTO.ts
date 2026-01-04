@@ -1,3 +1,9 @@
+export type CityDTO = {
+  id: string
+  name: string
+  uf: string
+}
+
 export type UserDTO = {
   id: string
   name: string
@@ -7,7 +13,7 @@ export type UserDTO = {
   cpf?: string
   role: 'ADMIN' | 'USER' // <- Adiciona isso
   street?: string
-  city?: string
   state?: string
   postalCode?: string
+  city?: CityDTO | null
 }

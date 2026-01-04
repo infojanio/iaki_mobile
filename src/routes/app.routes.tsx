@@ -38,6 +38,8 @@ import { TermsOfUse } from '@screens/TermsOfUse'
 
 import { StorageCartProps } from '@storage/storageCart'
 import { CartTabIcon } from '@components/CartTabIcon.tsx'
+import { ProductsByStore } from '@screens/Product/ProductsByStore'
+import { StoresByBusiness } from '@screens/StoresByBusiness'
 
 /* =======================
    TIPAGEM DAS ROTAS
@@ -62,7 +64,10 @@ type AppRoutes = {
   productList: undefined
   productDetails: { productId: string }
   productsBySubCategory: { categoryId: string; subcategoryId?: string }
+  productsByStore: { businessCategoryId: string; storeId?: string }
   productBySubCategory: { categoryId: string }
+  storeByCategory: { businessCategoryId: string }
+  storesByBusiness: { businessCategoryId: string }
   category: undefined
   allProductsQuantity: undefined
   allProductsCashback: undefined
@@ -197,6 +202,19 @@ export function AppRoutes() {
         component={ProductList}
         options={{ tabBarButton: () => null }}
       />
+
+      <Screen
+        name="storeByCategory"
+        component={StoresByBusiness}
+        options={{ tabBarButton: () => null }}
+      />
+
+      <Screen
+        name="storesByBusiness"
+        component={StoresByBusiness}
+        options={{ tabBarButton: () => null }}
+      />
+
       <Screen
         name="productDetails"
         component={ProductDetails}
@@ -207,6 +225,13 @@ export function AppRoutes() {
         component={ProductsBySubCategory}
         options={{ tabBarButton: () => null }}
       />
+
+      <Screen
+        name="productsByStore"
+        component={ProductsByStore}
+        options={{ tabBarButton: () => null }}
+      />
+
       <Screen
         name="productBySubCategory"
         component={ProductBySubCategory}

@@ -11,9 +11,11 @@ import { ProductDTO } from '@dtos/ProductDTO'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
 import { HomeHeader } from '@components/HomeHeader'
+import { Category } from '@components/Category'
 import { Promotion } from '@components/Promotion'
 import { Loading } from '@components/Loading'
 
+import { InstagramReelsCarousel } from './InstagramReelsCarousel'
 import { CashbackRegulationCard } from './CashbackRegulationCard'
 import { CartContext } from '@contexts/CartContext'
 import { Reel } from '@components/Reel'
@@ -21,8 +23,6 @@ import { CategoryList } from './CategoryList'
 import { ProductCashback } from './Product/ProductCashback'
 import { ProductQuantity } from './Product/ProductQuantity'
 import { LocationSelector } from '@components/LocationSelector'
-import { BusinessCategory } from '@components/BusinessCategory'
-import { Category } from '@components/Category'
 
 export function Home() {
   const { fetchCart } = useContext(CartContext)
@@ -87,9 +87,7 @@ export function Home() {
       ) : (
         <ScrollView flex={1} showsVerticalScrollIndicator={false}>
           <VStack flex={1} pt={1} bg="gray.100" pb={8}>
-            <BusinessCategory />
             <Category />
-
             <Promotion />
 
             {/* Aqui passamos produtos para os componentes */}
