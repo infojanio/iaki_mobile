@@ -12,10 +12,12 @@ import {
   Divider,
 } from 'native-base'
 import { MaterialIcons } from '@expo/vector-icons'
-import MarketPng from '@assets/rahdar_white.png'
+import MarketPng from '@assets/logoiaki.png'
 import { useAuth } from '@hooks/useAuth'
-import { Saldo } from './Saldo'
+
 import { useCart } from '@hooks/useCart'
+
+import { LocationSelector } from '@components/LocationSelector'
 
 export function HomeHeader() {
   const { user, signOut } = useAuth()
@@ -33,93 +35,98 @@ export function HomeHeader() {
   }
 
   return (
-    <Box
-      bg={'green.600'}
-      px={4}
-      ml={1.5}
-      mr={0.5}
-      borderTopRadius={'3xl'}
-      borderBottomWidth={1}
-      borderBottomColor="gray.300"
-      shadow={3}
-    >
-      {/* Primeira Linha - Saudação e Botão Sair */}
-      <HStack justifyContent="space-between" alignItems="center" mb={2}>
-        <VStack>
-          <Text fontSize="md" color="white" fontWeight="medium" opacity={0.9}>
-            Olá,
-          </Text>
-          <Text
-            fontSize="14"
-            color="white"
-            fontWeight="bold"
-            numberOfLines={1}
-            maxW="180"
-            textTransform="capitalize"
-          >
-            {user.name}
-          </Text>
-        </VStack>
-
-        <TouchableOpacity onPress={handleLogout}>
-          <HStack
-            alignItems="center"
-            px={2}
-            py={1}
-            mt={4}
-            borderRadius={'lg'}
-            borderColor={'gray.100'}
-          >
-            <Icon
-              as={<MaterialIcons name="logout" />}
-              size={6}
-              color="white"
-              mr={1}
-              opacity={0.9}
-            />
-            <Text color="white" fontSize="sm" fontWeight={'bold'} opacity={0.9}>
-              Sair
-            </Text>
-          </HStack>
-        </TouchableOpacity>
-      </HStack>
-
+    <VStack safeArea>
       <Box
-        ml={-4}
-        mr={-4}
-        flex={1}
-        borderBottomColor={'gray.100'}
-        borderBottomWidth={2}
-      ></Box>
-
-      {/* Segunda Linha - Saldo e Logo */}
-      <HStack
-        justifyContent="space-between"
-        alignItems="flex-end"
-        borderRadius={'lg'}
-        borderColor={'gray.50'}
-        bg={'green.600'}
-        ml={-4}
-        mr={-4}
+        bg={'blue.700'}
+        px={4}
+        ml={1.5}
+        mr={0.5}
+        borderTopRadius={'3xl'}
+        borderBottomWidth={1.0}
+        borderBottomColor="gray.300"
+        shadow={3}
       >
-        <Center>
-          <Saldo />
-        </Center>
+        {/* Primeira Linha - Saudação e Botão Sair */}
+        <HStack justifyContent="space-between" alignItems="center" mb={2}>
+          <VStack>
+            <Text fontSize="md" color="white" fontWeight="medium" opacity={0.9}>
+              Olá,
+            </Text>
+            <Text
+              fontSize="14"
+              color="white"
+              fontWeight="bold"
+              numberOfLines={1}
+              maxW="180"
+              textTransform="capitalize"
+            >
+              {user.name}
+            </Text>
+          </VStack>
 
-        <HStack>
-          <Box borderRadius="3xl">
-            <Center mb={4} mr={4}>
+          <TouchableOpacity onPress={handleLogout}>
+            <HStack
+              alignItems="center"
+              px={2}
+              py={1}
+              mt={4}
+              borderRadius={'lg'}
+              borderColor={'gray.100'}
+            >
+              <Icon
+                as={<MaterialIcons name="logout" />}
+                size={6}
+                color="white"
+                mr={1}
+                opacity={0.9}
+              />
+              <Text
+                color="white"
+                fontSize="sm"
+                fontWeight={'bold'}
+                opacity={0.9}
+              >
+                Sair
+              </Text>
+            </HStack>
+          </TouchableOpacity>
+        </HStack>
+
+        <Box
+          ml={-4}
+          mr={-4}
+          flex={1}
+          borderBottomColor={'gray.100'}
+          borderBottomWidth={2}
+        ></Box>
+
+        {/* Segunda Linha - Saldo e Logo */}
+        <HStack
+          justifyContent="space-between"
+          alignItems="flex-end"
+          borderWidth={1}
+          borderColor={'gray.50'}
+          bg={'gray.100'}
+          ml={-4}
+          mr={-4}
+        >
+          <Center>
+            <LocationSelector />
+          </Center>
+
+          <HStack>
+            <Box mb={2}>
               <Image
                 alt="Logo"
                 source={MarketPng}
-                h={8}
+                h={12}
                 w={130}
                 resizeMode="contain"
               />
-            </Center>
-          </Box>
+            </Box>
+          </HStack>
         </HStack>
-      </HStack>
-    </Box>
+      </Box>
+    </VStack>
   )
 }

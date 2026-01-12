@@ -40,6 +40,7 @@ import { StorageCartProps } from '@storage/storageCart'
 import { CartTabIcon } from '@components/CartTabIcon.tsx'
 import { ProductsByStore } from '@screens/Product/ProductsByStore'
 import { StoresByBusiness } from '@screens/StoresByBusiness'
+import { StoreProducts } from '@screens/StoreProducts'
 
 /* =======================
    TIPAGEM DAS ROTAS
@@ -48,6 +49,7 @@ import { StoresByBusiness } from '@screens/StoresByBusiness'
 type AppRoutes = {
   home: undefined //{ userId: string }
   searchProducts: undefined
+  storeProducts: { storeId: string }
   cart: undefined
   orderHistory: undefined
   orderValidation: { orderId: string } | undefined
@@ -200,6 +202,12 @@ export function AppRoutes() {
       <Screen
         name="productList"
         component={ProductList}
+        options={{ tabBarButton: () => null }}
+      />
+
+      <Screen
+        name="storeProducts"
+        component={StoreProducts}
         options={{ tabBarButton: () => null }}
       />
 

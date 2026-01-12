@@ -8,15 +8,15 @@ import { AppError } from '@utils/AppError'
 import { StoreDTO } from '@dtos/StoreDTO'
 import { Loading } from '@components/Loading'
 import { HomeScreen } from '@components/HomeScreen'
-import { StoreCard } from '@components/Store/StoreCard'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CityContext } from '@contexts/CityContext'
+import { StoreCard } from '@components/Store/StoreCard'
 
 type RouteParams = {
   businessCategoryId: string
 }
 
-export function StoresByBusiness() {
+export function StoreView() {
   const toast = useToast()
   const navigation = useNavigation<AppNavigatorRoutesProps>()
   const route = useRoute()
@@ -72,8 +72,6 @@ export function StoresByBusiness() {
 
   return (
     <VStack flex={1} bg="gray.100" safeArea>
-      <HomeScreen title="Estabelecimentos" />
-
       {isLoading ? (
         <Loading />
       ) : (

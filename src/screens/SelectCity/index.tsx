@@ -11,7 +11,12 @@ import {
   HStack,
   Icon,
 } from 'native-base'
+
+import { ImageBackground } from 'react-native'
+
 import { MaterialIcons } from '@expo/vector-icons'
+
+import MapBackground from '@assets/selectCity.png'
 
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -93,101 +98,121 @@ export function SelectCity() {
   }, [])
 
   return (
-    <Box flex={1} bg="gray.50" px={6} pt={10}>
-      {/* VOLTAR */}
-      <HStack alignItems="flex-start" ml={-4}>
-        <IconButton
-          icon={
-            <MaterialIcons
-              name="arrow-back"
-              size={sizes[6]}
-              color={colors.gray[700]}
+    <ImageBackground
+      source={MapBackground}
+      style={{ flex: 1 }}
+      resizeMode="stretch"
+    >
+      {/* OVERLAY */}
+      <Box flex={1} bg="white" opacity={0.92}>
+        <Box flex={1} px={6} pt={10}>
+          {/* VOLTAR */}
+          <HStack alignItems="flex-start" ml={-4}>
+            <IconButton
+              icon={
+                <MaterialIcons
+                  name="arrow-back"
+                  size={sizes[6]}
+                  color={colors.gray[700]}
+                />
+              }
+              onPress={handleBackToLogin}
             />
-          }
-          onPress={handleBackToLogin}
-        />
-      </HStack>
+          </HStack>
 
-      <VStack space={4} mt={4} ml={2}>
-        <HStack>
-          <Icon
-            as={MaterialIcons}
-            name="location-on"
-            size={sizes[2]}
-            color={colors.orange[600]}
-          />
-          <Text fontSize="2xl" fontWeight="bold">
-            Onde você está?
-          </Text>
-        </HStack>
-
-        {/* ESTADOS */}
-        <FlatList
-          data={states}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ marginVertical: 16 }}
-          renderItem={({ item }) => {
-            const active = selectedState?.id === item.id
-
-            return (
-              <Pressable
-                onPress={() => loadCities(item)}
-                mr={2}
-                px={5}
-                py={2}
-                borderRadius="full"
-                bg={active ? 'green.600' : 'gray.200'}
-              >
-                <Text color={active ? 'white' : 'gray.800'} fontWeight="bold">
-                  {item.name}
-                </Text>
-              </Pressable>
-            )
-          }}
-        />
-
-        <Text fontSize="lg" fontWeight="bold">
-          Selecione sua cidade
-        </Text>
-
-        {loading ? (
-          <Spinner size="lg" mt={6} />
-        ) : (
-          <FlatList
-            data={cities}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => handleSelectCity(item)}
-                bg="white"
-                borderRadius="md"
-                p={4}
-                mb={2}
-                borderWidth={1}
-                borderColor="gray.200"
-              >
-                <Text fontSize="md" fontWeight="semibold">
-                  {item.name}
-                </Text>
-                <Text fontSize="xs" color="gray.500">
-                  {selectedState?.uf}
-                </Text>
-              </Pressable>
-            )}
-            ListEmptyComponent={
-              <Text mt={4} color="gray.500">
-                {selectedState
-                  ? 'Nenhuma cidade encontrada.'
-                  : 'Selecione um estado acima.'}
+          <VStack space={4} mt={4} ml={2}>
+            <HStack>
+              <Icon
+                as={MaterialIcons}
+                name="location-on"
+                size={sizes[2]}
+                color={colors.orange[600]}
+              />
+              <Text fontSize="2xl" fontWeight="bold">
+                Onde você está?
               </Text>
-            }
-          />
-        )}
+            </HStack>
 
-        {selectingCity && <Spinner mt={4} />}
-      </VStack>
-    </Box>
+            {/* ESTADOS */}
+            <FlatList
+              data={states}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ marginVertical: 16 }}
+              renderItem={({ item }) => {
+                const active = selectedState?.id === item.id
+
+                return (
+                  <Pressable
+                    onPress={() => loadCities(item)}
+                    mr={2}
+                    px={5}
+                    py={2}
+                    borderRadius="full"
+                    bg={active ? 'green.600' : 'gray.200'}
+                  >
+                    <Text
+                      color={active ? 'white' : 'gray.800'}
+                      fontWeight="bold"
+                    >
+                      {item.name}
+                    </Text>
+                  </Pressable>
+                )
+              }}
+            />
+
+            <Text fontSize="lg" fontWeight="bold">
+              Selecione sua cidade
+            </Text>
+
+            {loading ? (
+              <Spinner size="lg" mt={6} />
+            ) : (
+              <FlatList
+                data={cities}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <Pressable
+                    onPress={() => handleSelectCity(item)}
+                    bg="gray.100"
+                    borderRadius="md"
+                    p={2}
+                    mb={2}
+                    borderWidth={1}
+                    borderColor="gray.300"
+                  >
+                    <HStack justifyContent={'space-between'}>
+                      <Box>
+                        <Text
+                          fontSize="md"
+                          color="gray.700"
+                          fontWeight="semibold"
+                        >
+                          {item.name}
+                        </Text>
+                      </Box>
+                      <Box justifyContent={'right'}>
+                        <Text fontSize="xs" color="gray.700">
+                          {selectedState?.uf}
+                        </Text>
+                      </Box>
+                    </HStack>
+                  </Pressable>
+                )}
+                ListEmptyComponent={
+                  <Text mt={4} color="gray.700">
+                    {selectedState
+                      ? 'Nenhuma cidade encontrada.'
+                      : 'Selecione um estado acima.'}
+                  </Text>
+                }
+              />
+            )}
+          </VStack>
+        </Box>
+      </Box>
+    </ImageBackground>
   )
 }

@@ -4,13 +4,13 @@ import { FlatList, HStack, VStack, useToast } from 'native-base'
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 
-import { BusinessCategoryCard } from '@components/BusinessCategory/BusinessCategoryCard'
 import { BusinessCategoryDTO } from '@dtos/BusinessCategoryDTO'
 import { Loading } from '@components/Loading'
 
 import { CityContext } from '@contexts/CityContext'
 import { useNavigation } from '@react-navigation/native'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { BusinessCategoryCard } from './BusinessCategoryCard'
 
 type RouteParamsProps = {
   businessCategoryId: string

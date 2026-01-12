@@ -21,8 +21,9 @@ import { CategoryList } from './CategoryList'
 import { ProductCashback } from './Product/ProductCashback'
 import { ProductQuantity } from './Product/ProductQuantity'
 import { LocationSelector } from '@components/LocationSelector'
-import { BusinessCategory } from '@components/BusinessCategory'
+import { BusinessCategory } from '@screens/BusinessCategory'
 import { Category } from '@components/Category'
+import { StoreList } from './StoreList'
 
 export function Home() {
   const { fetchCart } = useContext(CartContext)
@@ -79,24 +80,22 @@ export function Home() {
       <Box>
         <HomeHeader />
       </Box>
-      <HStack mt={2} ml={2}>
-        <LocationSelector />
-      </HStack>
+      <HStack mt={2} ml={2}></HStack>
       {isLoading ? (
         <Loading />
       ) : (
         <ScrollView flex={1} showsVerticalScrollIndicator={false}>
           <VStack flex={1} pt={1} bg="gray.100" pb={8}>
             <BusinessCategory />
-            <Category />
-
             <Promotion />
+
+            <StoreList category={''} data={[]} />
 
             {/* Aqui passamos produtos para os componentes */}
             <ProductCashback />
-            <ProductQuantity />
             <Reel />
-            <CategoryList />
+            <ProductQuantity />
+
             <CashbackRegulationCard />
           </VStack>
         </ScrollView>

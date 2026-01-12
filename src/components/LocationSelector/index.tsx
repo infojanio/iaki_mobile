@@ -2,6 +2,7 @@ import { Pressable } from 'react-native'
 import { HStack, Text, Icon, useTheme } from 'native-base'
 import { MaterialIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
+import MarketPng from '@assets/logoiaki.png'
 
 import { useContext } from 'react'
 import { CityContext } from '@contexts/CityContext'
@@ -25,8 +26,8 @@ export function LocationSelector() {
         <Icon
           as={MaterialIcons}
           name="location-on"
-          size={sizes[2]}
-          color={colors.green[600]}
+          size={sizes[1.5]}
+          color={colors.red[700]}
         />
 
         <Text

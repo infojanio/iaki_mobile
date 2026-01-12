@@ -6,72 +6,60 @@ import {
   StyleSheet,
   Linking,
 } from 'react-native'
-import { Box, View, Image, Spinner, useToast } from 'native-base'
-import { FlatList } from 'react-native' // ✅ usa o RN puro p/ ref sem dor de cabeça
+import { Box, View, Image, useToast } from 'native-base'
+import { FlatList } from 'react-native'
 import type { FlatList as RNFlatList } from 'react-native'
-import { api } from '@services/api'
 
-type BannerDTO = {
-  id: string
-  title: string
-  image_url: string
-  link?: string | null
-}
+import { BannerDTO } from '@dtos/BannerDTO'
 
 type PromoBanner = {
   id: string
   imageUrl: string
+  position: number
+  storeId?: string
   link?: string | null
 }
 
+type Props = {
+  banners: BannerDTO[]
+}
+
 const { width } = Dimensions.get('window')
-// ✅ Deixe o card ocupar quase a tela inteira (com folga de 24)
+
+// Card quase tela cheia (padrão iFood / Uber Eats)
 const CARD_W = Math.min(320, width - 24)
 const CARD_H = 120
-const CARD_GAP = 14 // soma das margens laterais (12 + 2) do seu Pressable
+const CARD_GAP = 14
 
-export function Promotion() {
+export function Promotion({ banners: bannersFromProps }: Props) {
   const toast = useToast()
   const listRef = useRef<RNFlatList<PromoBanner>>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
 
-  const [banners, setBanners] = useState<PromoBanner[]>([])
-  const [loading, setLoading] = useState(true)
-  const [activeIndex, setActiveIndex] = useState<number>(0)
+  // 🔹 Normaliza banners recebidos
+  const banners: PromoBanner[] = (bannersFromProps ?? []).map((b) => ({
+    id: b.id,
+    imageUrl: b.imageUrl,
+    position: b.position,
+    storeId: b.storeId,
+    link: b.link ?? undefined,
+  }))
 
-  async function fetchBanners() {
-    try {
-      setLoading(true)
-      const { data } = await api.get<BannerDTO[]>('/banners')
-      const mapped: PromoBanner[] = (data ?? []).map((b) => ({
-        id: b.id,
-        imageUrl: b.image_url,
-        link: b.link ?? undefined,
-      }))
-      setBanners(mapped)
-    } catch {
-      toast.show({
-        title: 'Não foi possível carregar os banners.',
-        placement: 'top',
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchBanners()
-  }, [])
-
-  // ✅ Autoplay
+  // 🔹 Autoplay (mantido)
   useEffect(() => {
     if (banners.length <= 1) return
+
     const timer = setInterval(() => {
       setActiveIndex((prev) => {
         const next = (prev + 1) % banners.length
-        listRef.current?.scrollToIndex({ index: next, animated: true })
+        listRef.current?.scrollToIndex({
+          index: next,
+          animated: true,
+        })
         return next
       })
     }, 5000)
+
     return () => clearInterval(timer)
   }, [banners.length])
 
@@ -80,21 +68,15 @@ export function Promotion() {
 
     let formattedLink = link.trim()
 
-    // Se não começa com http:// ou https://, adiciona https://
     if (!/^https?:\/\//i.test(formattedLink)) {
       formattedLink = `https://${formattedLink}`
     }
 
     Linking.openURL(formattedLink).catch(() =>
-      toast.show({ title: 'Link inválido.', placement: 'top' }),
-    )
-  }
-
-  if (loading) {
-    return (
-      <Box alignItems="center" justifyContent="center" h={CARD_H}>
-        <Spinner accessibilityLabel="Carregando banners" />
-      </Box>
+      toast.show({
+        title: 'Link inválido.',
+        placement: 'top',
+      }),
     )
   }
 
@@ -108,16 +90,14 @@ export function Promotion() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => String(item.id)}
+        keyExtractor={(item, index) => item.id ?? `banner-${index}`}
         style={{ maxHeight: CARD_H + 12 }}
-        // ✅ diz ao FlatList exatamente o tamanho de cada item (facilita scrollToIndex)
         getItemLayout={(_, index) => ({
           length: CARD_W + CARD_GAP,
           offset: (CARD_W + CARD_GAP) * index,
           index,
         })}
         onScrollToIndexFailed={(info) => {
-          // tenta de novo rapidamente
           setTimeout(() => {
             listRef.current?.scrollToIndex({
               index: info.index,
@@ -125,7 +105,6 @@ export function Promotion() {
             })
           }, 250)
         }}
-        // ✅ calcula o índice com base no CARD_W + GAP, não no width da tela
         onMomentumScrollEnd={(event) => {
           const x = event.nativeEvent.contentOffset.x
           const idx = Math.round(x / (CARD_W + CARD_GAP))
@@ -148,7 +127,7 @@ export function Promotion() {
         )}
       />
 
-      {banners.length > 1 ? (
+      {banners.length > 1 && (
         <Box flexDirection="row" justifyContent="center" mt={2}>
           {banners.map((_, i) => (
             <View
@@ -157,7 +136,7 @@ export function Promotion() {
             />
           ))}
         </Box>
-      ) : null}
+      )}
     </SafeAreaView>
   )
 }
