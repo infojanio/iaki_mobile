@@ -175,9 +175,10 @@ export function StoreProducts() {
       ListHeaderComponent={
         <StorePromotionHeader store={store} banners={banners} />
       }
-      contentContainerStyle={{ paddingBottom: 32 }}
+      contentContainerStyle={{ paddingBottom: 24 }}
+      showsVerticalScrollIndicator={false}
       renderItem={({ item }) => (
-        <Box bg="gray.100">
+        <Box bg={'gray.100'} borderRadius={'2xl'} borderBottomWidth={0.21}>
           <StoreCategoryList
             data={[item]}
             onPress={() => {
@@ -187,7 +188,14 @@ export function StoreProducts() {
           />
 
           {categorySelected === item.id && (
-            <VStack mt={2} mb={6}>
+            <VStack
+              ml={3}
+              mr={3}
+              mt={-2}
+              bg="white"
+              borderRadius="lg"
+              shadow={1}
+            >
               {subCategories.length > 0 ? (
                 <FlatList
                   data={subCategories}
@@ -205,9 +213,9 @@ export function StoreProducts() {
                   )}
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  _contentContainerStyle={{ px: 6 }}
-                  mt={2}
-                  mb={3}
+                  _contentContainerStyle={{ px: 2 }}
+                  mt={1}
+                  mb={1}
                   maxH={12}
                 />
               ) : (
@@ -225,7 +233,7 @@ export function StoreProducts() {
                     keyExtractor={(prod, index) => prod.id ?? `prod-${index}`}
                     numColumns={2}
                     renderItem={({ item: prod }) => (
-                      <Box ml={2}>
+                      <Box mt={-2} ml={2}>
                         <ProductCard
                           product={prod}
                           onPress={() =>
@@ -238,7 +246,7 @@ export function StoreProducts() {
                     )}
                     _contentContainerStyle={{
                       paddingX: 8,
-                      paddingBottom: 32,
+                      paddingBottom: 24,
                     }}
                     showsVerticalScrollIndicator={false}
                   />

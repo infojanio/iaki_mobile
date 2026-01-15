@@ -16,7 +16,7 @@ export function ProductCard({ product, ...rest }: ProductCardProps) {
         mt={3}
         bg="white"
         alignItems={'normal'}
-        w={150}
+        w={120}
         h={180}
         minW={24}
         rounded="md"
