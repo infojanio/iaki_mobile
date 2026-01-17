@@ -49,6 +49,7 @@ export function ProductDetails() {
 
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isAdding, setIsAdding] = useState(false)
 
   //voltar a tela anterior
   function handleGoBack() {
@@ -85,26 +86,39 @@ export function ProductDetails() {
     fetchProduct()
   }, [productId])
 
-  function handleAddToCart() {
-    if (!product) return
+  async function handleAddToCart() {
+    if (!product || isAdding) return
 
-    addProductCart({
-      productId: product.id,
-      name: product.name,
-      image: product.image,
-      price: product.price,
-      quantity: 1,
-      cashback_percentage: product.cashback_percentage,
-      storeId: product.store.id,
-    })
+    try {
+      setIsAdding(true)
 
-    toast.show({
-      title: 'Produto adicionado ao carrinho!',
-      placement: 'top',
-      bgColor: 'green.500',
-    })
+      await addProductCart({
+        productId: product.id,
+        storeId: product.store.id,
+        quantity: 1,
+      })
 
-    navigation.navigate('cart') // se desejar ir direto ao carrinho
+      toast.show({
+        title: 'Produto adicionado ao carrinho!',
+        placement: 'top',
+        bgColor: 'green.500',
+      })
+
+      navigation.navigate('cart')
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message ??
+        'Não foi possível adicionar o produto ao carrinho'
+
+      toast.show({
+        title: 'Erro',
+        description: message,
+        placement: 'top',
+        bgColor: 'red.500',
+      })
+    } finally {
+      setIsAdding(false)
+    }
   }
 
   if (loading || !product) return <Loading />
@@ -116,7 +130,7 @@ export function ProductDetails() {
         <Box bg="white" borderRadius="3xl" shadow={5} mt={4} ml={4} mr={4}>
           <Image
             source={{ uri: product.image }}
-            alt="Imagem do produto"
+            alt={product.name}
             w="full"
             h={200}
             resizeMode="contain"
@@ -148,7 +162,12 @@ export function ProductDetails() {
             </Text>
           </Box>
 
-          <Button title="Adicionar ao Carrinho" onPress={handleAddToCart} />
+          <Button
+            title="Adicionar ao Carrinho"
+            onPress={handleAddToCart}
+            isLoading={isAdding}
+            isDisabled={isAdding}
+          />
         </VStack>
       </ScrollView>
     </VStack>

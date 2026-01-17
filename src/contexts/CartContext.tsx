@@ -13,244 +13,136 @@ type CartItem = {
   storeId: string
 }
 
-type StockInfo = {
-  totalStock: number
-  reservedInCart: number
-  availableToAdd: number // Novo campo
+type AddToCartInput = {
+  productId: string
+  storeId: string
+  quantity: number
 }
 
 type CartContextData = {
   cartItems: CartItem[]
-  stockInfo: Record<string, StockInfo>
-  addProductCart: (
-    item: Omit<CartItem, 'quantity'> & { quantity?: number },
-    availableStock?: number,
-  ) => Promise<void>
+  currentStoreId: string | null
+  setCurrentStoreId: (storeId: string) => void
+  fetchCart: (storeId?: string) => Promise<void>
+  addProductCart: (data: AddToCartInput) => Promise<void>
+  incrementProduct: (productId: string) => Promise<void>
+  decrementProduct: (productId: string) => Promise<void>
   removeProductCart: (productId: string) => Promise<void>
-  updateProductQuantity: (
-    productId: string,
-    quantity: number,
-    availableStock?: number,
-  ) => Promise<void>
-  clearCart: () => Promise<void>
-  fetchCart: () => Promise<void>
-  fetchProductStock: (productId: string) => Promise<number>
-  getAvailableStock: (productId: string) => number
-  getStockCalculation: (
-    productId: string,
-  ) => { total: number; inCart: number; available: number } // Nova função
+  checkout: () => Promise<void>
 }
 
 export const CartContext = createContext({} as CartContextData)
 
-type CartProviderProps = {
-  children: ReactNode
-}
-
-export function CartProvider({ children }: CartProviderProps) {
-  const [cartItems, setCartItems] = useState<CartItem[]>([])
-  const [stockInfo, setStockInfo] = useState<Record<string, StockInfo>>({})
-
+export function CartProvider({ children }: { children: ReactNode }) {
   const { userId } = useAuth()
 
-  // Carrega o carrinho e estoque inicial
-  async function fetchCart() {
-    try {
-      const backendCart = await cartService.getCartFromBackend()
+  const [cartItems, setCartItems] = useState<CartItem[]>([])
+  const [currentStoreId, setCurrentStoreId] = useState<string | null>(null)
 
-      const formattedCart = backendCart.items.map((item: any) => ({
-        productId: item.productId,
-        name: item.name,
-        image: item.image,
-        price: item.price,
+  async function fetchCart(storeIdParam?: string) {
+    const storeId = storeIdParam ?? currentStoreId
+    if (!storeId) return
+
+    const cart = await cartService.getCartFromBackend(storeId)
+
+    const baseURL = api.defaults.baseURL
+
+    const normalizedItems: CartItem[] = cart.items.map((item: any) => {
+      const rawImage = item.product?.image
+
+      const image =
+        rawImage && rawImage.startsWith('http')
+          ? rawImage
+          : rawImage
+          ? `${baseURL}/uploads/${rawImage}`
+          : 'https://via.placeholder.com/150'
+
+      return {
+        productId: item.product.id,
+        name: item.product.name,
+        image,
+        price: Number(item.priceSnapshot),
         quantity: item.quantity,
-        cashback_percentage: item.cashback_percentage ?? 0,
-        storeId: item.storeId ?? '',
-      }))
-
-      setCartItems(formattedCart)
-
-      // Carrega o estoque para todos os itens do carrinho
-      await loadStockInfo(formattedCart)
-    } catch (error) {
-      //     console.error('Erro ao carregar o carrinho:', error)
-      console.log('Erro ao carregar o carrinho:', error)
-      setCartItems([])
-    }
-  }
-
-  // Carrega informações de estoque para os produtos
-  async function loadStockInfo(items: CartItem[]) {
-    const newStockInfo: Record<string, StockInfo> = {}
-
-    await Promise.all(
-      items.map(async (item) => {
-        try {
-          const stock = await fetchProductStock(item.productId)
-          newStockInfo[item.productId] = {
-            totalStock: stock,
-            reservedInCart: item.quantity,
-            availableToAdd: Math.max(stock - item.quantity, 0), // Cálculo aqui
-          }
-        } catch (error) {
-          console.error(
-            `Erro ao carregar estoque do produto ${item.productId}:`,
-            error,
-          )
-          newStockInfo[item.productId] = {
-            totalStock: 0,
-            reservedInCart: item.quantity,
-            availableToAdd: 0,
-          }
-        }
-      }),
-    )
-
-    setStockInfo(newStockInfo)
-  }
-  // Busca o estoque de um produto específico
-  async function fetchProductStock(productId: string): Promise<number> {
-    try {
-      const response = await api.get(`/products/${productId}/stock`)
-      return response.data?.data?.stock ?? response.data?.stock ?? 0
-    } catch (error) {
-      console.error(`Erro ao buscar estoque do produto ${productId}:`, error)
-      return 0
-    }
-  }
-
-  function getStockCalculation(productId: string) {
-    const info = stockInfo[productId]
-    if (!info) return { total: 0, inCart: 0, available: 0 }
-
-    return {
-      total: info.totalStock,
-      inCart: info.reservedInCart,
-      available: info.availableToAdd,
-    }
-  }
-
-  // Calcula o estoque disponível
-  function getAvailableStock(productId: string): number {
-    const info = stockInfo[productId]
-    if (!info) return 0
-    return info.availableToAdd // Agora retornamos o valor pré-calculado
-  }
-  // Adiciona produto ao carrinho com verificação de estoque
-  async function addProductCart(
-    item: Omit<CartItem, 'quantity'> & { quantity?: number },
-    availableStock?: number,
-  ) {
-    try {
-      const quantity = item.quantity ?? 1
-
-      // Verifica estoque se disponível
-      if (availableStock !== undefined && quantity > availableStock) {
-        throw new Error('Estoque insuficiente')
+        cashback_percentage: Number(item.cashbackSnapshot),
+        storeId,
       }
+    })
 
-      await cartService.addToCart(item.productId, quantity)
-
-      // Atualiza o carrinho e estoque
-      await fetchCart()
-    } catch (error) {
-      console.error('Erro ao adicionar item ao carrinho:', error)
-      throw error // Rejeita a promise para tratamento no componente
-    }
+    setCartItems(normalizedItems)
   }
 
-  // Remove produto do carrinho
+  async function addProductCart({
+    productId,
+    storeId,
+    quantity,
+  }: AddToCartInput) {
+    // 🔒 define loja antes de qualquer coisa
+    setCurrentStoreId(storeId)
+
+    await cartService.addToCart({
+      storeId,
+      productId,
+      quantity,
+    })
+
+    await fetchCart(storeId)
+  }
+
+  async function incrementProduct(productId: string) {
+    if (!currentStoreId) return
+
+    await cartService.incrementItem({
+      storeId: currentStoreId,
+      productId,
+    })
+
+    await fetchCart()
+  }
+
+  async function decrementProduct(productId: string) {
+    if (!currentStoreId) return
+
+    await cartService.decrementItem({
+      storeId: currentStoreId,
+      productId,
+    })
+
+    await fetchCart()
+  }
+
   async function removeProductCart(productId: string) {
-    try {
-      await cartService.removeFromCart(productId)
+    if (!currentStoreId) return
 
-      // Atualiza o carrinho e remove do controle de estoque
-      setStockInfo((prev) => {
-        const { [productId]: _, ...rest } = prev
-        return rest
-      })
-      await fetchCart()
-    } catch (error) {
-      console.error('Erro ao remover item do carrinho:', error)
-      throw error
-    }
+    await cartService.removeFromCart(currentStoreId, productId)
+
+    await fetchCart()
   }
 
-  // Atualiza quantidade com verificação de estoque
-  async function updateProductQuantity(
-    productId: string,
-    quantity: number,
-    availableStock?: number,
-  ) {
-    try {
-      if (availableStock !== undefined) {
-        const currentItem = cartItems.find(
-          (item) => item.productId === productId,
-        )
-        const quantityDifference = quantity - (currentItem?.quantity ?? 0)
+  async function checkout() {
+    if (!currentStoreId) return
 
-        if (quantityDifference > availableStock) {
-          throw new Error('Estoque insuficiente')
-        }
-      }
-
-      await cartService.updateCartItem(productId, quantity)
-
-      // Atualiza o estoque reservado E o disponível
-      setStockInfo((prev) => ({
-        ...prev,
-        [productId]: {
-          ...prev[productId],
-          reservedInCart: quantity,
-          availableToAdd: Math.max(
-            (prev[productId]?.totalStock || 0) - quantity,
-            0,
-          ),
-        },
-      }))
-
-      setCartItems((prevItems) =>
-        prevItems.map((item) =>
-          item.productId === productId ? { ...item, quantity } : item,
-        ),
-      )
-    } catch (error) {
-      console.error('Erro ao atualizar quantidade do item:', error)
-      throw error
-    }
-  }
-  // Limpa o carrinho completamente
-  async function clearCart() {
-    try {
-      await cartService.clearCart()
-      setCartItems([])
-      setStockInfo({})
-    } catch (error) {
-      console.error('Erro ao limpar carrinho:', error)
-      throw error
-    }
+    await cartService.checkoutCart(currentStoreId)
+    setCartItems([])
   }
 
-  // Efeito para carregar o carrinho inicial
   useEffect(() => {
-    if (userId) {
+    if (userId && currentStoreId) {
       fetchCart()
     }
-  }, [userId])
+  }, [userId, currentStoreId])
 
   return (
     <CartContext.Provider
       value={{
         cartItems,
-        stockInfo,
-        addProductCart,
-        removeProductCart,
-        updateProductQuantity,
-        clearCart,
+        currentStoreId,
+        setCurrentStoreId,
         fetchCart,
-        fetchProductStock,
-        getAvailableStock,
-        getStockCalculation, // Adicionado aqui
+        addProductCart,
+        incrementProduct,
+        decrementProduct,
+        removeProductCart,
+        checkout,
       }}
     >
       {children}

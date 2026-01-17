@@ -1,54 +1,57 @@
-import { HeaderList } from '../HeaderList'
-import { FlatList, VStack, useToast, Box } from 'native-base'
+import { FlatList, VStack, Text, useToast } from 'native-base'
+import { useContext } from 'react'
 
-import { useCart } from '@hooks/useCart'
-
+import { CartContext } from '@contexts/CartContext'
 import { ItemCartCard } from '@components/Cart/ItemCartCard'
-import { Button } from '@components/Button'
 
 export function ItemsCart() {
-  const { cart, removeProductCart } = useCart()
+  const { cartItems, removeProductCart, incrementProduct, decrementProduct } =
+    useContext(CartContext)
+
   const toast = useToast()
 
-  async function handleItemRemove(productId: string) {
+  async function handleRemove(productId: string) {
     try {
       await removeProductCart(productId)
-
       toast.show({
         title: 'Produto removido',
         placement: 'top',
         bgColor: 'green.500',
       })
-    } catch (error) {
+    } catch {
       toast.show({
-        title: 'Não foi possível remover o produto',
+        title: 'Erro ao remover produto',
         placement: 'top',
-        bgColor: 'reed.500',
+        bgColor: 'red.500',
       })
     }
   }
 
   return (
     <VStack flex={1}>
-      <HeaderList title="Produtos" counter={cart.length} />
+      <Text fontSize="lg" fontWeight="bold" mb={3}>
+        Produtos ({cartItems.length})
+      </Text>
 
       <FlatList
-        data={cart}
-        keyExtractor={(item) => item.id}
+        data={cartItems}
+        keyExtractor={(item, index) =>
+          item.productId ? `${item.productId}-${index}` : String(index)
+        }
         renderItem={({ item }) => (
           <ItemCartCard
             data={item}
-            onRemove={() => handleItemRemove(item.id)}
+            onIncrement={() =>
+              item.productId && incrementProduct(item.productId)
+            }
+            onDecrement={() =>
+              item.productId && decrementProduct(item.productId)
+            }
+            onRemove={() => item.productId && handleRemove(item.productId)}
           />
         )}
-        _contentContainerStyle={{ alignItems: 'center', paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
-        px={8}
-        mt={2}
       />
-      <Box p={4} alignItems={'center'}>
-        {cart.length > 0 && <Button title="Finalizar compra" mx={8} my={3} />}
-      </Box>
     </VStack>
   )
 }

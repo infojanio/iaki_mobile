@@ -6,12 +6,18 @@ import {
   storageAuthTokenRemove,
 } from '@storage/storageAuthToken'
 import { signOutApp } from './authHelpers'
+import { Platform } from 'react-native'
+
+const baseURL =
+  Platform.OS === 'android'
+    ? 'http://10.0.2.2:3333'
+    : 'http://192.168.1.43:3333' // ou localhost no iOS
 
 const api = axios.create({
-  baseURL: 'http://192.168.1.43:3333', // substitua pelo seu IP http://192.168.3.70:3333
-  //baseURL: 'https://iaki-backend-production.up.railway.app', // use https!
-  timeout: 10000,
+  baseURL,
 })
+//baseURL: 'http://192.168.1.43:3333', // substitua pelo seu IP http://192.168.3.70:3333
+//baseURL: 'https://iaki-backend-production.up.railway.app', // use https!
 
 let isRefreshing = false
 let failedQueue: any[] = []

@@ -1,44 +1,60 @@
 import { Feather } from '@expo/vector-icons'
 import { Platform, TouchableOpacity } from 'react-native'
-import { HStack, Image, Heading, Text, VStack, Icon } from 'native-base'
-
-import { StorageCartProps } from '@storage/storageCart'
+import { HStack, Image, Text, VStack, Icon } from 'native-base'
+import { formatCurrency } from '@utils/format'
 
 type Props = {
+  data: {
+    productId: string
+    name: string
+    image: string
+    price: number
+    quantity: number
+  }
+  onIncrement: () => void
+  onDecrement: () => void
   onRemove: () => void
-  data: StorageCartProps
 }
 
-export function ItemCartCard({ data, onRemove }: Props) {
+export function ItemCartCard({
+  data,
+  onIncrement,
+  onDecrement,
+  onRemove,
+}: Props) {
   return (
     <HStack
       w="full"
-      h={20}
-      bgColor="gray.500"
+      bg="white"
       rounded="md"
       alignItems="center"
       px={4}
+      py={3}
       mb={2}
     >
       <Image
         w={16}
         h={16}
-        source={data.image}
-        alt="Imagem do produto"
+        source={{ uri: data.image }}
+        alt={data.name}
         resizeMode={Platform.OS === 'android' ? 'contain' : 'cover'}
       />
 
-      <VStack flex={1} ml={2}>
-        <Heading color="gray.200" fontSize="14" fontFamily="heading">
-          R$ 25,50
-        </Heading>
-        <Heading color="white" fontFamily="heading" fontSize="14" mt={2}>
-          {data.name}
-        </Heading>
+      <VStack flex={1} ml={3}>
+        <Text bold>{data.name}</Text>
+        <Text color="gray.500">{formatCurrency(data.price)}</Text>
 
-        <Text color="gray.200" fontSize="sm">
-          {data.quantity} unidade(s)
-        </Text>
+        <HStack mt={2} alignItems="center" space={3}>
+          <TouchableOpacity onPress={onDecrement}>
+            <Icon as={Feather} name="minus-circle" size={5} />
+          </TouchableOpacity>
+
+          <Text>{data.quantity}</Text>
+
+          <TouchableOpacity onPress={onIncrement}>
+            <Icon as={Feather} name="plus-circle" size={5} />
+          </TouchableOpacity>
+        </HStack>
       </VStack>
 
       <TouchableOpacity onPress={onRemove}>
