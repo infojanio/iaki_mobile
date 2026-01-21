@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useContext, useEffect, useRef, useState } from 'react'
 import {
   Dimensions,
   Pressable,
@@ -21,7 +21,7 @@ type PromoBanner = {
 }
 
 type Props = {
-  banners: BannerDTO[]
+  banners?: BannerDTO[]
 }
 
 const { width } = Dimensions.get('window')
@@ -33,6 +33,7 @@ const CARD_GAP = 14
 
 export function Promotion({ banners: bannersFromProps }: Props) {
   const toast = useToast()
+
   const listRef = useRef<RNFlatList<PromoBanner>>(null)
   const [activeIndex, setActiveIndex] = useState(0)
 

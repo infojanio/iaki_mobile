@@ -13,33 +13,35 @@ export function HomeScreen({ title }: Props) {
   const navigation = useNavigation<AppNavigatorRoutesProps>()
 
   return (
-    <Box bg="white" shadow={2} mb={2} ml={1}>
-      <HStack
-        px={2}
-        alignItems="center"
-        justifyContent="space-between"
-        bg="white"
-      >
-        <IconButton
-          icon={
-            <MaterialIcons
-              name="arrow-back"
-              size={sizes[6]}
-              color={colors.gray[700]}
-            />
-          }
-          onPress={() => navigation.goBack()}
-        />
+    <VStack safeArea>
+      <Box bg="white" shadow={2} mb={2} ml={1}>
+        <HStack
+          px={2}
+          alignItems="center"
+          justifyContent="space-between"
+          bg="white"
+        >
+          <IconButton
+            icon={
+              <MaterialIcons
+                name="arrow-back"
+                size={sizes[6]}
+                color={colors.gray[700]}
+              />
+            }
+            onPress={() => navigation.goBack()}
+          />
 
-        <VStack flex={1} alignItems="center" ml={-8}>
-          <Text fontSize="16" fontWeight="normal" color="gray.500">
-            {title || 'Categoria'}
-          </Text>
-        </VStack>
+          <VStack flex={1} alignItems="center" ml={-8}>
+            <Text fontSize="16" fontWeight="normal" color="gray.500">
+              {title || 'Categoria'}
+            </Text>
+          </VStack>
 
-        {/* Espaço reservado à direita para manter alinhamento */}
-        <Box w={sizes[6]} />
-      </HStack>
-    </Box>
+          {/* Espaço reservado à direita para manter alinhamento */}
+          <Box w={sizes[6]} />
+        </HStack>
+      </Box>
+    </VStack>
   )
 }

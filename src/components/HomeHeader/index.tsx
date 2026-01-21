@@ -21,7 +21,6 @@ import { LocationSelector } from '@components/LocationSelector'
 
 export function HomeHeader() {
   const { user, signOut } = useAuth()
-  const { clearCart } = useCart()
 
   const { colors, sizes } = useTheme()
 

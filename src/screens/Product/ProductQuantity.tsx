@@ -1,32 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useContext, useMemo } from 'react'
 import { VStack, Text, FlatList, useToast, Box, HStack } from 'native-base'
-import { useNavigation } from '@react-navigation/native'
-import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { TouchableOpacity } from 'react-native'
 
 import { ProductDTO } from '@dtos/ProductDTO'
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
+
 import { ProductCard } from '@components/Product/ProductCard'
-import { TouchableOpacity } from 'react-native'
+import { CityContext } from '@contexts/CityContext'
 
-export function ProductQuantity() {
+type Props = {
+  onPressProduct: (product: ProductDTO) => void
+}
+
+export function ProductQuantity({ onPressProduct }: Props) {
   const [products, setProducts] = useState<ProductDTO[]>([])
-  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const navigation = useNavigation<AppNavigatorRoutesProps>()
-
+  const { city } = useContext(CityContext)
   const toast = useToast()
 
-  function handleOpenProductDetails(productId: string) {
-    navigation.navigate('productDetails', { productId })
-  }
-
-  function handleViewAllByQuantity() {
-    // Aqui você pode redirecionar para uma tela de "todos os produtos com cashback", se quiser
-    navigation.navigate('allProductsQuantity')
-  }
-
-  //listar as subcategories no select
   async function fetchProductByQuantity() {
     try {
       setIsLoading(true)
@@ -34,10 +27,10 @@ export function ProductQuantity() {
       const response = await api.get('/products/quantity')
       setProducts(response.data)
     } catch (error) {
-      const isAppError = error instanceof AppError
-      const title = isAppError
-        ? error.message
-        : 'Não foi possível carregar os produtos que estão esgotando!'
+      const title =
+        error instanceof AppError
+          ? error.message
+          : 'Não foi possível carregar os produtos que estão acabando.'
 
       toast.show({
         title,
@@ -53,58 +46,62 @@ export function ProductQuantity() {
     fetchProductByQuantity()
   }, [])
 
+  /**
+   * 🔹 Filtra produtos pela cidade selecionada
+   */
+  const filteredProducts = useMemo(() => {
+    if (!city) return []
+
+    return products.filter((product) => product.store?.cityId === city.id)
+  }, [products, city])
+
+  if (!city || filteredProducts.length === 0) {
+    return null
+  }
+
   return (
-    <VStack flex={1} bg={'gray.100'} alignItems={'initial'} h={240}>
+    <VStack bg="gray.100" h={240}>
       <VStack>
-        <VStack justifyContent={'space-between'} ml={1} mb={1}>
-          <HStack justifyContent={'space-between'} mr={2}>
-            <Text
-              fontSize={'md'}
-              color={'black.200'}
-              fontWeight={'semibold'}
-              ml={'2'}
-            >
+        <VStack ml={1} mb={1}>
+          <HStack justifyContent="space-between" mr={2}>
+            <Text fontSize="md" fontWeight="semibold" ml={2}>
               Tá acabando
             </Text>
-            <TouchableOpacity onPress={handleViewAllByQuantity}>
+
+            <TouchableOpacity>
               <Box
                 mr={6}
-                borderBottomWidth={'3.5'}
-                borderColor={'yellow.300'}
-                borderRadius={'md'}
+                borderBottomWidth={3}
+                borderColor="yellow.300"
+                borderRadius="md"
               >
                 <Text
-                  fontSize={'sm'}
-                  color={'green.700'}
-                  fontWeight={'semibold'}
-                  ml={'2'}
+                  fontSize="sm"
+                  color="green.700"
+                  fontWeight="semibold"
+                  ml={2}
                 >
                   Ver todos
                 </Text>
               </Box>
             </TouchableOpacity>
           </HStack>
-          <Box ml={2} width={20} height={1} bg={'yellow.300'}>
-            {''}
-          </Box>
+
+          <Box ml={2} width={20} height={1} bg="yellow.300" />
         </VStack>
 
         <FlatList
-          data={products}
+          data={filteredProducts}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <ProductCard
-              product={item}
-              onPress={() => handleOpenProductDetails(item.id)}
-            />
+            <ProductCard product={item} onPress={() => onPressProduct(item)} />
           )}
-          numColumns={1}
-          _contentContainerStyle={{
-            marginLeft: 3,
-            paddingBottom: 32,
-          }}
           horizontal
           showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            marginLeft: 12,
+            paddingBottom: 32,
+          }}
         />
       </VStack>
     </VStack>

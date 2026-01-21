@@ -1,6 +1,6 @@
 import { VStack, Text, Button, Divider, HStack, useToast } from 'native-base'
-import { useContext, useMemo, useState } from 'react'
-import { useNavigation } from '@react-navigation/native'
+import { useCallback, useContext, useMemo, useState } from 'react'
+import { useFocusEffect, useNavigation } from '@react-navigation/native'
 
 import { CartContext } from '@contexts/CartContext'
 import { HomeScreen } from '@components/HomeScreen'
@@ -9,7 +9,8 @@ import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { formatCurrency } from '@utils/format'
 
 export function Cart() {
-  const { cartItems, checkout } = useContext(CartContext)
+  const { cartItems, checkout, fetchCart, currentStoreId } =
+    useContext(CartContext)
 
   const toast = useToast()
   const navigation = useNavigation<AppNavigatorRoutesProps>()
@@ -18,6 +19,14 @@ export function Cart() {
   const subtotal = useMemo(() => {
     return cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0)
   }, [cartItems])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (currentStoreId) {
+        fetchCart(currentStoreId)
+      }
+    }, [currentStoreId]),
+  )
 
   async function handleCheckout() {
     if (cartItems.length === 0 || isSubmitting) return
@@ -50,8 +59,6 @@ export function Cart() {
         ) : (
           <>
             <ItemsCart />
-
-            <Divider my={4} />
 
             <HStack justifyContent="space-between" mb={4}>
               <Text bold fontSize="lg">

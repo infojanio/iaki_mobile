@@ -24,6 +24,11 @@ async function incrementItem(data: CartItemActionDTO) {
   return api.patch('/cart/items/increment', data)
 }
 
+export async function getOpenCart() {
+  const response = await api.get('/cart/open')
+  return response.data
+}
+
 async function decrementItem(data: CartItemActionDTO) {
   return api.patch('/cart/items/decrement', data)
 }
@@ -41,6 +46,7 @@ async function checkoutCart(storeId: string) {
 export const cartService = {
   getCartFromBackend,
   addToCart,
+  getOpenCart,
   incrementItem,
   decrementItem,
   removeFromCart,

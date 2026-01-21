@@ -24,33 +24,51 @@ import { LocationSelector } from '@components/LocationSelector'
 import { BusinessCategory } from '@screens/BusinessCategory'
 import { Category } from '@components/Category'
 import { StoreList } from './StoreList'
+import { CityContext } from '@contexts/CityContext'
 
 export function Home() {
   const { fetchCart } = useContext(CartContext)
+  const { setCurrentStoreId } = useContext(CartContext)
 
+  const { cityBanners } = useContext(CityContext)
   const navigation = useNavigation<AppNavigatorRoutesProps>()
   const toast = useToast()
+
+  const { city } = useContext(CityContext)
+  const { syncOpenCart } = useContext(CartContext)
 
   const [products, setProducts] = useState<ProductDTO[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const { userId } = useAuth()
 
-  function handleOpenProductDetails(productId: string) {
-    navigation.navigate('productDetails', { productId })
+  function handleOpenProductDetails(product: ProductDTO) {
+    const storeId = product.store_id
+
+    if (!storeId) {
+      toast.show({
+        title: 'Erro',
+        description: 'Não foi possível identificar a loja do produto.',
+        placement: 'top',
+        bgColor: 'red.500',
+      })
+      return
+    }
+
+    setCurrentStoreId(storeId)
+    navigation.navigate('productDetails', { productId: product.id })
   }
 
   async function fetchProducts() {
     try {
       setIsLoading(true)
-
       const response = await api.get('/products')
       setProducts(response.data)
     } catch (error) {
-      const isAppError = error instanceof AppError
-      const title = isAppError
-        ? error.message
-        : 'Não foi possível carregar os produtos.'
+      const title =
+        error instanceof AppError
+          ? error.message
+          : 'Não foi possível carregar os produtos.'
 
       toast.show({
         title,
@@ -62,39 +80,41 @@ export function Home() {
     }
   }
 
+  useEffect(() => {
+    console.log('[Home] city:', city)
+  }, [city])
+
+  // Efeito para carregar o carrinho inicial
+  useEffect(() => {
+    syncOpenCart()
+  }, [])
+
   useFocusEffect(
     useCallback(() => {
       fetchProducts()
     }, []),
   )
 
-  // Efeito para carregar o carrinho inicial
-  useEffect(() => {
-    if (userId) {
-      fetchCart()
-    }
-  }, [userId])
-
   return (
     <VStack flex={1} bg="gray.100">
       <Box>
         <HomeHeader />
       </Box>
-      <HStack mt={2} ml={2}></HStack>
+
       {isLoading ? (
         <Loading />
       ) : (
         <ScrollView flex={1} showsVerticalScrollIndicator={false}>
           <VStack flex={1} pt={1} bg="gray.100" pb={8}>
             <BusinessCategory />
-            <Promotion />
+            <Promotion banners={cityBanners} />
 
             <StoreList category={''} data={[]} />
 
-            {/* Aqui passamos produtos para os componentes */}
-            <ProductCashback />
+            {/* IMPORTANTE: componentes abaixo devem usar handleOpenProductDetails */}
+            <ProductCashback onPressProduct={handleOpenProductDetails} />
             <Reel />
-            <ProductQuantity />
+            <ProductQuantity onPressProduct={handleOpenProductDetails} />
 
             <CashbackRegulationCard />
           </VStack>

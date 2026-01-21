@@ -74,21 +74,25 @@ export function SelectCity() {
 
   async function handleSelectCity(city: City) {
     try {
+      setSelectingCity(true)
+
       await setUserCity({
         id: city.id,
         name: city.name,
         uf: city.uf,
       })
 
-      // ✅ AGORA SIM: navega para o App
       navigation.reset({
         index: 0,
         routes: [{ name: 'appRoutes' as never }],
       })
     } catch (error) {
       console.error('Erro ao selecionar cidade', error)
+    } finally {
+      setSelectingCity(false)
     }
   }
+
   async function handleBackToLogin() {
     await signOut()
   }
@@ -175,7 +179,8 @@ export function SelectCity() {
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
                   <Pressable
-                    onPress={() => handleSelectCity(item)}
+                    onPress={() => !selectingCity && handleSelectCity(item)}
+                    disabled={selectingCity}
                     bg="gray.100"
                     borderRadius="md"
                     p={2}

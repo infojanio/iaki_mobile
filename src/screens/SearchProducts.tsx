@@ -1,8 +1,25 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { Box, FlatList, HStack, Text, VStack, useToast } from 'native-base'
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  useContext,
+} from 'react'
+import {
+  Box,
+  FlatList,
+  HStack,
+  Text,
+  VStack,
+  useToast,
+  Modal,
+  Button,
+} from 'native-base'
 import { TextInput, StyleSheet } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { MaterialIcons } from '@expo/vector-icons'
+import debounce from 'lodash.debounce'
+
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 import { ProductDTO } from '@dtos/ProductDTO'
@@ -10,7 +27,8 @@ import { ProductCard } from '@components/Product/ProductCard'
 import { Loading } from '@components/Loading'
 import { HomeScreen } from '@components/HomeScreen'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
-import debounce from 'lodash.debounce'
+import { CityContext } from '@contexts/CityContext'
+import { CartContext } from '@contexts/CartContext'
 
 // remove acentos
 const removeAccents = (str: string) =>
@@ -19,14 +37,12 @@ const removeAccents = (str: string) =>
 const INITIAL_SUGGESTIONS = 5
 const PAGE_SIZE = 10
 
-// gera id fallback estável
 const makeTmpId = (seed: string, page: number, idx: number) =>
   `tmp-${page}-${idx}-${(seed || 'x').slice(0, 6)}`
 
-// normaliza e garante id
 const normalizeProducts = (raw: ProductDTO[], currentPage: number) =>
   (raw || []).map((p, idx) => {
-    const base = String((p as any)?.id ?? (p as any)?._id ?? '')
+    const base = String((p as any)?.id ?? '')
     const safeId = base || makeTmpId(p?.name ?? '', currentPage, idx)
     return { ...p, id: safeId }
   })
@@ -35,6 +51,9 @@ export function SearchProducts() {
   const toast = useToast()
   const navigation = useNavigation<AppNavigatorRoutesProps>()
   const inputRef = useRef<TextInput>(null)
+
+  const { city } = useContext(CityContext)
+  const { setCurrentStoreId } = useContext(CartContext)
 
   const [searchTerm, setSearchTerm] = useState('')
   const [products, setProducts] = useState<ProductDTO[]>([])
@@ -45,43 +64,48 @@ export function SearchProducts() {
   const [hasMore, setHasMore] = useState(true)
   const [isSearching, setIsSearching] = useState(false)
 
-  // foca no input ao abrir
+  const [isCityModalOpen, setIsCityModalOpen] = useState(false)
+
+  // foco automático
   useFocusEffect(
     useCallback(() => {
       setTimeout(() => inputRef.current?.focus(), 100)
     }, []),
   )
 
-  const handleOpenProductDetails = (productId: string) => {
-    navigation.navigate('productDetails', { productId })
+  function handleSelectProduct(product: ProductDTO) {
+    if (!city) {
+      toast.show({
+        title: 'Selecione uma cidade',
+        placement: 'top',
+        bgColor: 'orange.500',
+      })
+      return
+    }
+
+    const productCityId = product.store?.cityId
+
+    if (productCityId && productCityId !== city.id) {
+      setIsCityModalOpen(true)
+      return
+    }
+
+    const storeId = product.store?.id ?? product.store_id
+    setCurrentStoreId(storeId)
+
+    navigation.navigate('productDetails', { productId: product.id })
   }
 
-  // busca ativa (com fallback)
   const fetchInitialSuggestions = useCallback(async () => {
     setIsLoading(true)
     setHasMore(true)
+
     try {
-      // 1) tenta ativos
       const res = await api.get('/products/active', {
         params: { page: 1, limit: INITIAL_SUGGESTIONS },
       })
-      let fetched = normalizeProducts(res.data?.products || [], 1)
 
-      // 2) fallback: tenta retornar “algo”
-      if (fetched.length === 0) {
-        try {
-          const res2 = await api.get('/products/search', {
-            params: { query: 'a' },
-          })
-          fetched = normalizeProducts(res2.data?.products || [], 1).slice(
-            0,
-            INITIAL_SUGGESTIONS,
-          )
-        } catch {
-          // ignora erro do fallback
-        }
-      }
-
+      const fetched = normalizeProducts(res.data?.products || [], 1)
       setProducts(fetched)
       setHasMore(fetched.length >= INITIAL_SUGGESTIONS)
     } catch (error) {
@@ -96,7 +120,6 @@ export function SearchProducts() {
     }
   }, [toast])
 
-  // paginação padrão (ativos)
   const fetchMore = useCallback(async (currentPage: number) => {
     try {
       const res = await api.get('/products/active', {
@@ -112,7 +135,6 @@ export function SearchProducts() {
     }
   }, [])
 
-  // busca por texto
   const searchProducts = useCallback(
     debounce(async (query: string) => {
       try {
@@ -124,7 +146,16 @@ export function SearchProducts() {
         })
         const fetched = normalizeProducts(response.data?.products || [], 1)
         setProducts(fetched)
-        setHasMore(false) // sem paginação no modo busca
+
+        //debugando filtro
+        console.log(
+          'DEBUG city:',
+          city?.id,
+          'sample:',
+          (fetched?.[0] as any)?.store,
+        )
+
+        setHasMore(false)
       } catch (error) {
         const title =
           error instanceof AppError ? error.message : 'Erro ao buscar produtos.'
@@ -139,13 +170,11 @@ export function SearchProducts() {
     [toast],
   )
 
-  // input change
   const handleSearchChange = (text: string) => {
     setSearchTerm(text)
     const formattedQuery = removeAccents(text.trim())
 
     if (formattedQuery === '') {
-      // volta p/ sugestões iniciais
       setIsSearching(false)
       setPage(1)
       setHasLoaded(false)
@@ -155,7 +184,6 @@ export function SearchProducts() {
     }
   }
 
-  // scroll infinito (somente quando NÃO está buscando)
   const handleLoadMore = () => {
     if (isLoadingMore || !hasMore || isSearching) return
     setIsLoadingMore(true)
@@ -164,26 +192,31 @@ export function SearchProducts() {
     fetchMore(next)
   }
 
-  // primeira carga → sugestões iniciais
   useEffect(() => {
     fetchInitialSuggestions()
   }, [fetchInitialSuggestions])
 
-  // loading inicial
+  const filteredProducts = city
+    ? products.filter((p) => {
+        const cityIdFromStore =
+          (p as any)?.store?.cityId ?? (p as any)?.store?.city_id
+        // se não tiver cityId da store, NÃO mostra (evita vazamento de outras cidades)
+        if (!cityIdFromStore) return false
+        return String(cityIdFromStore) === String(city.id)
+      })
+    : []
+
   if (!hasLoaded && isLoading) {
     return (
-      <VStack flex={1} bg="white" safeArea>
+      <VStack flex={1} bg="white">
         <HomeScreen title="Pesquisar" />
         <Box px={4} pt={4}>
           <TextInput
             ref={inputRef}
             style={styles.input}
             placeholder="Buscar produtos..."
-            placeholderTextColor="#777"
             value={searchTerm}
             onChangeText={handleSearchChange}
-            returnKeyType="search"
-            autoCorrect={false}
           />
         </Box>
         <Loading />
@@ -195,21 +228,16 @@ export function SearchProducts() {
     <VStack flex={1} bg="white">
       <HomeScreen title="Pesquisar" />
 
-      {/* Campo de busca */}
       <Box px={4} pt={4}>
         <TextInput
           ref={inputRef}
           style={styles.input}
           placeholder="Digite o nome do produto"
-          placeholderTextColor="#777"
           value={searchTerm}
           onChangeText={handleSearchChange}
-          returnKeyType="search"
-          autoCorrect={false}
         />
       </Box>
 
-      {/* Banner cashback */}
       <Box px={4} py={2} mx={4} mt={2} bg="primary.100" borderRadius="md">
         <HStack alignItems="center" space={1}>
           <MaterialIcons name="local-offer" size={18} color="#00875F" />
@@ -220,32 +248,43 @@ export function SearchProducts() {
       </Box>
 
       <FlatList
-        data={products}
-        keyExtractor={(item, index) =>
-          item?.id ? `prod-${item.id}` : `idx-${index}`
-        }
+        data={filteredProducts}
+        keyExtractor={(item) => `prod-${item.id}`}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={styles.contentContainer}
         renderItem={({ item }) => (
           <ProductCard
             product={item}
-            onPress={() => handleOpenProductDetails(item.id)}
+            onPress={() => handleSelectProduct(item)}
           />
         )}
         onEndReached={!isSearching ? handleLoadMore : null}
         onEndReachedThreshold={0.1}
-        ListEmptyComponent={
-          isLoading ? (
-            <Loading />
-          ) : (
-            <Text textAlign="center" mt={10}>
-              Nenhum produto encontrado.
-            </Text>
-          )
-        }
         ListFooterComponent={isLoadingMore ? <Loading /> : null}
+        ListEmptyComponent={
+          <Text textAlign="center" mt={10}>
+            Nenhum produto encontrado.
+          </Text>
+        }
       />
+
+      {/* Modal explicativo */}
+      <Modal isOpen={isCityModalOpen} onClose={() => setIsCityModalOpen(false)}>
+        <Modal.Content>
+          <Modal.CloseButton />
+          <Modal.Header>Produto indisponível</Modal.Header>
+          <Modal.Body>
+            <Text>Este produto pertence a uma loja de outra cidade.</Text>
+            <Text mt={2}>
+              Para visualizar ou comprar, altere sua cidade atual.
+            </Text>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button onPress={() => setIsCityModalOpen(false)}>Entendi</Button>
+          </Modal.Footer>
+        </Modal.Content>
+      </Modal>
     </VStack>
   )
 }

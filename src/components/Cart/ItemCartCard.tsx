@@ -28,8 +28,8 @@ export function ItemCartCard({
       bg="white"
       rounded="md"
       alignItems="center"
-      px={4}
-      py={3}
+      px={3}
+      py={1}
       mb={2}
     >
       <Image
@@ -46,13 +46,13 @@ export function ItemCartCard({
 
         <HStack mt={2} alignItems="center" space={3}>
           <TouchableOpacity onPress={onDecrement}>
-            <Icon as={Feather} name="minus-circle" size={5} />
+            <Icon as={Feather} name="minus-circle" size={6} />
           </TouchableOpacity>
 
           <Text>{data.quantity}</Text>
 
           <TouchableOpacity onPress={onIncrement}>
-            <Icon as={Feather} name="plus-circle" size={5} />
+            <Icon as={Feather} name="plus-circle" size={6} />
           </TouchableOpacity>
         </HStack>
       </VStack>

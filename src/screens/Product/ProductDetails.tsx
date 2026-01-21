@@ -23,11 +23,13 @@ import { useCart } from '../../hooks/useCart'
 
 import { Input } from '../../components/Input'
 import { Button } from '../../components/Button'
+import { CartConflictModal } from '@components/CartConflictModal'
 import { AppError } from '@utils/AppError'
 
 import { api } from '@services/api'
 import { ProductDTO } from '@dtos/ProductDTO'
 import { Loading } from '@components/Loading'
+import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
 type RouteParamsProps = {
   productId: string
@@ -42,8 +44,16 @@ export function ProductDetails() {
   const [productSelected, setProductSelected] = useState(product.id)
 
   const toast = useToast()
-  const { navigate } = useNavigation()
-  const { addProductCart } = useCart()
+  const navigation = useNavigation<AppNavigatorRoutesProps>()
+
+  const { addProductCart, forceAddProductCart } = useCart()
+
+  const [showConflictModal, setShowConflictModal] = useState(false)
+  const [pendingProduct, setPendingProduct] = useState<{
+    productId: string
+    storeId: string
+    quantity: number
+  } | null>(null)
 
   const route = useRoute()
   const { productId } = route.params as RouteParamsProps
@@ -75,14 +85,17 @@ export function ProductDetails() {
 
   async function handleAddProductToCart() {
     try {
-      await addProductCart({
-        id: product.id,
-        name: product.name,
-        image: product.image,
-        quantity: Number(product.quantity),
-        price: Number(product.price),
-        //size: product.size,
-      })
+      if (!product.id || !product.store_id) {
+        throw new Error('Produto inválido')
+      }
+
+      const payload = {
+        productId: product.id,
+        storeId: product.store_id,
+        quantity: Number(quantity),
+      }
+
+      await addProductCart(payload)
 
       toast.show({
         title: 'Produto adicionado no carrinho',
@@ -90,12 +103,47 @@ export function ProductDetails() {
         bgColor: 'green.500',
       })
 
-      navigate('cart')
-    } catch (error) {
+      navigation.navigate('cart')
+    } catch (error: any) {
+      const status = error?.response?.status
+
+      // 🔥 CONFLITO DE LOJA
+      if (status === 409) {
+        setPendingProduct({
+          productId: product.id,
+          storeId: product.store_id,
+          quantity: Number(quantity),
+        })
+        setShowConflictModal(true)
+        return
+      }
+
       toast.show({
-        title: 'Não foi possível adicionar o produto no carrinho',
+        title: 'Erro',
+        description:
+          error?.response?.data?.message ??
+          'Não foi possível adicionar o produto no carrinho',
         placement: 'top',
-        bgColor: 'reed.500',
+        bgColor: 'red.500',
+      })
+    }
+  }
+
+  async function handleConfirmChangeStore() {
+    if (!pendingProduct) return
+
+    try {
+      await forceAddProductCart(pendingProduct)
+
+      setShowConflictModal(false)
+      setPendingProduct(null)
+
+      navigation.navigate('cart')
+    } catch {
+      toast.show({
+        title: 'Erro ao trocar de loja',
+        placement: 'top',
+        bgColor: 'red.500',
       })
     }
   }
@@ -155,7 +203,7 @@ export function ProductDetails() {
                   keyboardType="numeric"
                   textAlign="center"
                   value={quantity}
-                  w={24}
+                  placeholder="quantidade"
                 />
               </VStack>
             </VStack>

@@ -29,25 +29,19 @@ export function ItemsCart() {
 
   return (
     <VStack flex={1}>
-      <Text fontSize="lg" fontWeight="bold" mb={3}>
+      <Text fontSize="15" fontWeight="bold" mb={2}>
         Produtos ({cartItems.length})
       </Text>
 
       <FlatList
         data={cartItems}
-        keyExtractor={(item, index) =>
-          item.productId ? `${item.productId}-${index}` : String(index)
-        }
+        keyExtractor={(item) => item.productId}
         renderItem={({ item }) => (
           <ItemCartCard
             data={item}
-            onIncrement={() =>
-              item.productId && incrementProduct(item.productId)
-            }
-            onDecrement={() =>
-              item.productId && decrementProduct(item.productId)
-            }
-            onRemove={() => item.productId && handleRemove(item.productId)}
+            onIncrement={() => incrementProduct(item.productId)}
+            onDecrement={() => decrementProduct(item.productId)}
+            onRemove={() => handleRemove(item.productId)}
           />
         )}
         showsVerticalScrollIndicator={false}

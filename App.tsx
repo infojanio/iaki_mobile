@@ -51,11 +51,11 @@ export default function App() {
         />
 
         <AuthContextProvider>
-          <CityProvider>
-            <CartProvider>
+          <CartProvider>
+            <CityProvider>
               {fontsLoaded ? <Routes /> : <Loading />}
-            </CartProvider>
-          </CityProvider>
+            </CityProvider>
+          </CartProvider>
         </AuthContextProvider>
       </NativeBaseProvider>
     </SafeAreaProvider>
