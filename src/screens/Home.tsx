@@ -84,10 +84,11 @@ export function Home() {
     console.log('[Home] city:', city)
   }, [city])
 
-  // Efeito para carregar o carrinho inicial
+  /* Efeito para carregar o carrinho inicial
   useEffect(() => {
     syncOpenCart()
   }, [])
+*/
 
   useFocusEffect(
     useCallback(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useContext } from 'react'
 import { Box, Text, FlatList, VStack, useToast, Center } from 'native-base'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import { LayoutAnimation, UIManager, Platform } from 'react-native'
@@ -19,6 +19,8 @@ import { SubCategoryDTO } from '@dtos/SubCategoryDTO'
 import { ProductDTO } from '@dtos/ProductDTO'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
+import { CartContext } from '@contexts/CartContext'
+
 type RouteParams = {
   storeId: string
 }
@@ -35,6 +37,8 @@ export function StoreProducts() {
   const navigation = useNavigation<AppNavigatorRoutesProps>()
   const route = useRoute()
   const { storeId } = route.params as RouteParams
+
+  const { fetchCart, setCurrentStoreId } = useContext(CartContext)
 
   const [store, setStore] = useState<StoreDTO | null>(null)
   const [banners, setBanners] = useState<BannerDTO[]>([])
@@ -144,6 +148,14 @@ export function StoreProducts() {
     }
   }
 
+  // 🔥 CARREGA O CARRINHO SOMENTE AO ENTRAR NA LOJA
+  useEffect(() => {
+    if (!storeId) return
+
+    setCurrentStoreId(storeId)
+    fetchCart(storeId)
+  }, [storeId])
+
   useEffect(() => {
     Promise.all([
       fetchStore(),
@@ -178,7 +190,7 @@ export function StoreProducts() {
       contentContainerStyle={{ paddingBottom: 24 }}
       showsVerticalScrollIndicator={false}
       renderItem={({ item }) => (
-        <Box bg={'gray.100'} borderRadius={'2xl'} borderBottomWidth={0.21}>
+        <Box bg="gray.100" borderRadius="2xl" borderBottomWidth={0.21}>
           <StoreCategoryList
             data={[item]}
             onPress={() => {

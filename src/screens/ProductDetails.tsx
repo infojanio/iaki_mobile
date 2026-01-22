@@ -1,7 +1,7 @@
 // src/screens/ProductDetailsScreen.tsx
 
 import { useRoute, useNavigation } from '@react-navigation/native'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useContext } from 'react'
 import {
   VStack,
   ScrollView,
@@ -17,11 +17,12 @@ import {
 
 import { Button } from '@components/Button'
 import { Loading } from '@components/Loading'
-import { useCart } from '@hooks/useCart'
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { HomeScreen } from '@components/HomeScreen'
+
+import { CartContext } from '@contexts/CartContext'
 
 type RouteParams = {
   productId: string
@@ -44,14 +45,16 @@ export function ProductDetails() {
   const route = useRoute()
   const navigation = useNavigation<AppNavigatorRoutesProps>()
   const { productId } = route.params as RouteParams
-  const { addProductCart } = useCart()
+
   const toast = useToast()
+
+  const { addProductCart, fetchCart, setCurrentStoreId } =
+    useContext(CartContext)
 
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [isAdding, setIsAdding] = useState(false)
 
-  //voltar a tela anterior
   function handleGoBack() {
     navigation.goBack()
   }
@@ -62,11 +65,19 @@ export function ProductDetails() {
         const res = await api.get(`/products/${productId}`)
         const data = res.data
 
-        setProduct({
+        const normalizedProduct: Product = {
           ...data,
           price: Number(data.price),
           cashback_percentage: Number(data.cashback_percentage),
-        })
+        }
+
+        setProduct(normalizedProduct)
+
+        // 🔥 INTENÇÃO EXPLÍCITA: entrou no produto → sincroniza carrinho da loja
+        if (normalizedProduct.store?.id) {
+          setCurrentStoreId(normalizedProduct.store.id)
+          await fetchCart(normalizedProduct.store.id)
+        }
       } catch (error) {
         const title =
           error instanceof AppError
@@ -125,9 +136,10 @@ export function ProductDetails() {
 
   return (
     <VStack flex={1} bg="white">
-      <HomeScreen title={' Detalhes do produto'} />
+      <HomeScreen title="Detalhes do produto" />
+
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-        <Box bg="white" borderRadius="3xl" shadow={5} mt={4} ml={4} mr={4}>
+        <Box bg="white" borderRadius="3xl" shadow={5} mt={4} mx={4}>
           <Image
             source={{ uri: product.image }}
             alt={product.name}
@@ -142,6 +154,7 @@ export function ProductDetails() {
             <Heading fontSize="xl" color="gray.800" mb={1}>
               {product.name}
             </Heading>
+
             <Text fontSize="sm" color="gray.500">
               Vendido por {product.store?.name}
             </Text>
@@ -152,6 +165,7 @@ export function ProductDetails() {
               <Text fontSize="20" fontWeight="bold" color="red.600">
                 R$ {product.price.toFixed(2)}
               </Text>
+
               <Text fontSize="16" color="green.600" fontWeight="medium">
                 {product.cashback_percentage}% de cashback
               </Text>

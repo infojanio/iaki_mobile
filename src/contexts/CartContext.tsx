@@ -1,6 +1,8 @@
 import { createContext, ReactNode, useEffect, useState } from 'react'
 import { cartService } from '@services/cartService'
 import { useAuth } from '@hooks/useAuth'
+import { useCity } from '@hooks/useCity'
+
 import { api } from '@services/api'
 
 type CartItem = {
@@ -38,6 +40,7 @@ export const CartContext = createContext({} as CartContextData)
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const { userId } = useAuth()
+  const { city } = useCity()
 
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [currentStoreId, setCurrentStoreId] = useState<string | null>(null)
@@ -112,27 +115,28 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   async function syncOpenCart() {
     try {
-      // 🔎 Busca carrinho OPEN do usuário
+      // 🔥 se não tem cidade, carrinho morre
+      if (!city?.id) {
+        resetCartContext()
+        return
+      }
+
       const openCart = await cartService.getOpenCart()
 
-      // 🧼 Não existe carrinho aberto
       if (!openCart) {
         resetCartContext()
         return
       }
 
-      const { storeId } = openCart
+      const { storeId, store } = openCart
 
-      // 🔐 Segurança extra
-      if (!storeId) {
+      // 🔐 proteção CRÍTICA
+      if (!storeId || store?.cityId !== city.id) {
         resetCartContext()
         return
       }
 
-      // 🔥 Define a loja atual do carrinho
       setCurrentStoreId(storeId)
-
-      // 🔄 Carrega os itens do carrinho dessa loja
       await fetchCart(storeId)
     } catch (error) {
       console.error('[CartContext] syncOpenCart error:', error)
@@ -202,12 +206,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
     await fetchCart(storeId)
   }
 
-  //carregar carrinho
+  /*carregar carrinho
   useEffect(() => {
     if (currentStoreId) {
       fetchCart(currentStoreId)
     }
   }, [currentStoreId])
+*/
 
   // 🔐 segurança: logout limpa carrinho visual
   useEffect(() => {
