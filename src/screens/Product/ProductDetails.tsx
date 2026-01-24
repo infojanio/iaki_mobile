@@ -1,12 +1,7 @@
 import { HomeScreen } from '@components/HomeScreen'
-
 import { Platform } from 'react-native'
-import { useCallback, useEffect, useState } from 'react'
-import {
-  useFocusEffect,
-  useNavigation,
-  useRoute,
-} from '@react-navigation/native'
+import { useEffect, useState, useContext } from 'react'
+import { useNavigation, useRoute } from '@react-navigation/native'
 import {
   Heading,
   Image,
@@ -14,64 +9,51 @@ import {
   Text,
   VStack,
   useToast,
-  HStack,
   Center,
   Box,
 } from 'native-base'
 
-import { useCart } from '../../hooks/useCart'
-
-import { Input } from '../../components/Input'
-import { Button } from '../../components/Button'
-import { CartConflictModal } from '@components/CartConflictModal'
-import { AppError } from '@utils/AppError'
+import { Input } from '@components/Input'
+import { Button } from '@components/Button'
+import { Loading } from '@components/Loading'
 
 import { api } from '@services/api'
-import { ProductDTO } from '@dtos/ProductDTO'
-import { Loading } from '@components/Loading'
+import { AppError } from '@utils/AppError'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { ProductDTO } from '@dtos/ProductDTO'
+
+import { CartContext } from '@contexts/CartContext'
 
 type RouteParamsProps = {
   productId: string
 }
 
 export function ProductDetails() {
+  const route = useRoute()
+  const navigation = useNavigation<AppNavigatorRoutesProps>()
+  const { productId } = route.params as RouteParamsProps
+
+  const toast = useToast()
+  const { ensureStoreContext, addProductCart } = useContext(CartContext)
+
   const [isLoading, setIsLoading] = useState(true)
-  const [size, setSize] = useState('35')
   const [quantity, setQuantity] = useState('1')
   const [product, setProduct] = useState<ProductDTO>({} as ProductDTO)
 
-  const [productSelected, setProductSelected] = useState(product.id)
-
-  const toast = useToast()
-  const navigation = useNavigation<AppNavigatorRoutesProps>()
-
-  const { addProductCart, forceAddProductCart } = useCart()
-
-  const [showConflictModal, setShowConflictModal] = useState(false)
-  const [pendingProduct, setPendingProduct] = useState<{
-    productId: string
-    storeId: string
-    quantity: number
-  } | null>(null)
-
-  const route = useRoute()
-  const { productId } = route.params as RouteParamsProps
-  console.log('ID =>', productId)
-
-  //listar as subcategories no select
+  /* ==============================
+     📦 FETCH PRODUTO
+  ============================== */
   async function fetchProductDetails() {
     try {
       setIsLoading(true)
 
       const response = await api.get(`/products/${productId}`)
       setProduct(response.data)
-      console.log(response.data)
     } catch (error) {
-      const isAppError = error instanceof AppError
-      const title = isAppError
-        ? error.message
-        : 'Não foi possível carregar os detalhes do produto'
+      const title =
+        error instanceof AppError
+          ? error.message
+          : 'Não foi possível carregar os detalhes do produto'
 
       toast.show({
         title,
@@ -83,75 +65,56 @@ export function ProductDetails() {
     }
   }
 
-  async function handleAddProductToCart() {
-    try {
-      if (!product.id || !product.store_id) {
-        throw new Error('Produto inválido')
-      }
+  useEffect(() => {
+    fetchProductDetails()
+  }, [productId])
 
-      const payload = {
+  /* ==============================
+     ➕ ADD AO CARRINHO
+     (ÚNICO ponto que garante loja)
+  ============================== */
+  async function handleAddProductToCart() {
+    if (!product.id || !product.store_id) {
+      toast.show({
+        title: 'Produto inválido',
+        placement: 'top',
+        bgColor: 'red.500',
+      })
+      return
+    }
+
+    const canProceed = await ensureStoreContext(product.store_id)
+    if (!canProceed) return
+
+    try {
+      await addProductCart({
         productId: product.id,
         storeId: product.store_id,
         quantity: Number(quantity),
-      }
-
-      await addProductCart(payload)
+      })
 
       toast.show({
-        title: 'Produto adicionado no carrinho',
+        title: 'Produto adicionado ao carrinho',
         placement: 'top',
         bgColor: 'green.500',
       })
 
       navigation.navigate('cart')
     } catch (error: any) {
-      const status = error?.response?.status
-
-      // 🔥 CONFLITO DE LOJA
-      if (status === 409) {
-        setPendingProduct({
-          productId: product.id,
-          storeId: product.store_id,
-          quantity: Number(quantity),
-        })
-        setShowConflictModal(true)
-        return
-      }
-
       toast.show({
         title: 'Erro',
         description:
           error?.response?.data?.message ??
-          'Não foi possível adicionar o produto no carrinho',
+          'Não foi possível adicionar o produto ao carrinho',
         placement: 'top',
         bgColor: 'red.500',
       })
     }
   }
 
-  async function handleConfirmChangeStore() {
-    if (!pendingProduct) return
-
-    try {
-      await forceAddProductCart(pendingProduct)
-
-      setShowConflictModal(false)
-      setPendingProduct(null)
-
-      navigation.navigate('cart')
-    } catch {
-      toast.show({
-        title: 'Erro ao trocar de loja',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    }
-  }
-
-  useEffect(() => {
-    fetchProductDetails()
-  }, [productId])
-
+  /* ==============================
+     🖥️ RENDER
+  ============================== */
   return (
     <VStack flex={1}>
       <HomeScreen title="Detalhes do produto" />
@@ -161,69 +124,41 @@ export function ProductDetails() {
       ) : (
         <ScrollView>
           <Center mt={4}>
-            <Heading color="green.700" fontFamily="body" fontSize="18" mb={2}>
+            <Heading color="green.700" fontSize="18" mb={2}>
               {product.name}
             </Heading>
           </Center>
-          <Box alignItems={'center'} rounded="lg" mb={2} overflow={'hidden'}>
+
+          <Box alignItems="center" rounded="lg" mb={2}>
             <Image
-              key={String(new Date().getTime())}
-              source={{
-                uri: product.image, //busca a URL da imagem
-                //uri: `${api.defaults.baseURL}/images/thumb/${data.image}`, //busca o arquivo salvo no banco
-              }}
+              source={{ uri: product.image }}
               w={48}
               h={48}
               resizeMode={Platform.OS === 'android' ? 'contain' : 'cover'}
               alt="Imagem do produto"
-              rounded={'lg'}
+              rounded="lg"
             />
           </Box>
 
-          <VStack ml={4} mr={4}>
-            <VStack w="full" justifyContent="space-between" alignItems="center">
-              <VStack padding={4}>
-                <Text
-                  color="red.500"
-                  fontSize="18"
-                  fontFamily="heading"
-                  fontWeight={'bold'}
-                >
-                  R$ {product.price}
-                </Text>
-              </VStack>
+          <VStack mx={4}>
+            <VStack alignItems="center">
+              <Text color="red.500" fontSize="18" fontWeight="bold" mb={2}>
+                R$ {product.price}
+              </Text>
 
-              <VStack alignItems="flex-end">
-                <Text color="gray.700" fontSize="16" textAlign="justify" pt={2}>
-                  Quantidade
-                </Text>
+              <Text mb={1}>Quantidade</Text>
 
-                <Input
-                  onChangeText={setQuantity}
-                  keyboardType="numeric"
-                  textAlign="center"
-                  value={quantity}
-                  placeholder="quantidade"
-                />
-              </VStack>
+              <Input
+                onChangeText={setQuantity}
+                keyboardType="numeric"
+                textAlign="center"
+                value={quantity}
+                placeholder="Quantidade"
+              />
             </VStack>
 
-            <Text
-              color="gray.700"
-              fontSize="md"
-              textAlign="justify"
-              pt={2}
-              mb={2}
-            >
-              {productSelected /*product.available*/}
-            </Text>
-
-            {/*  colocar condição: se if(categoria === sapato)
-
-          <Sizes onSelect={setSize} selected={size} />
-          
-          */}
             <Button
+              mt={4}
               title="Adicionar ao carrinho"
               onPress={handleAddProductToCart}
             />

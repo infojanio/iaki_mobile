@@ -6,6 +6,8 @@ import {
   Roboto_400Regular,
   Roboto_700Bold,
 } from '@expo-google-fonts/roboto'
+import { useEffect } from 'react'
+import * as NavigationBar from 'expo-navigation-bar'
 
 import { Loading } from '@components/Loading'
 import { Routes } from './src/routes'
@@ -14,8 +16,8 @@ import { AuthContextProvider } from '@contexts/AuthContext'
 import { CityProvider } from '@contexts/CityContext'
 import { CartProvider } from '@contexts/CartContext'
 
-import { useEffect } from 'react'
-import * as NavigationBar from 'expo-navigation-bar'
+import { AppModalRoot } from '@components/AppModalRoot'
+
 import { checkAndApplyOtaNow, wireOtaOnAppState } from 'src/lib/updates'
 
 export default function App() {
@@ -24,20 +26,27 @@ export default function App() {
     Roboto_700Bold,
   })
 
+  /* ==============================
+     🔄 OTA Updates
+  ============================== */
   useEffect(() => {
     checkAndApplyOtaNow()
     const unwire = wireOtaOnAppState()
     return () => unwire()
   }, [])
 
+  /* ==============================
+     🤖 ANDROID NAV BAR
+  ============================== */
   useEffect(() => {
-    const hideNavBar = async () => {
+    async function hideNavBar() {
       if (Platform.OS === 'android') {
         await NavigationBar.setVisibilityAsync('hidden')
         await NavigationBar.setBehaviorAsync('overlay-swipe')
         await NavigationBar.setBackgroundColorAsync('transparent')
       }
     }
+
     hideNavBar()
   }, [])
 
@@ -51,11 +60,15 @@ export default function App() {
         />
 
         <AuthContextProvider>
-          <CartProvider>
-            <CityProvider>
+          <CityProvider>
+            <CartProvider>
+              {/* 🔄 Loading protegido pelo NativeBase */}
               {fontsLoaded ? <Routes /> : <Loading />}
-            </CityProvider>
-          </CartProvider>
+
+              {/* 🧠 Modais globais */}
+              <AppModalRoot />
+            </CartProvider>
+          </CityProvider>
         </AuthContextProvider>
       </NativeBaseProvider>
     </SafeAreaProvider>

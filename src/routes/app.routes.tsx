@@ -5,6 +5,7 @@ import {
   createBottomTabNavigator,
   BottomTabNavigationProp,
 } from '@react-navigation/bottom-tabs'
+import { useContext } from 'react'
 
 import HomeSvg from '@assets/home.svg'
 import SearchSvg from '@assets/search.svg'
@@ -20,8 +21,9 @@ import { OrderValidation } from '@screens/OrderValidation'
 import { SearchProducts } from '@screens/SearchProducts'
 
 import { useAuth } from '@hooks/useAuth'
+import { CartContext } from '@contexts/CartContext'
 
-/* telas fora da tab bar (stack, mas acessadas a partir das tabs) */
+/* telas fora da tab bar */
 import { Checkout } from '@screens/Checkout'
 import { OrderConfirmation } from '@screens/OrderConfirmation'
 import { ProfileEdit } from '@screens/ProfileEdit'
@@ -37,17 +39,18 @@ import { PrivacyPolicy } from '@screens/PrivacyPolicy'
 import { TermsOfUse } from '@screens/TermsOfUse'
 
 import { StorageCartProps } from '@storage/storageCart'
-import { CartTabIcon } from '@components/CartTabIcon.tsx'
+
 import { ProductsByStore } from '@screens/Product/ProductsByStore'
 import { StoresByBusiness } from '@screens/StoresByBusiness'
 import { StoreProducts } from '@screens/StoreProducts'
+import { CartTabIcon } from '@components/CartTabIcon'
 
 /* =======================
    TIPAGEM DAS ROTAS
 ======================= */
 
 type AppRoutes = {
-  home: undefined //{ userId: string }
+  home: undefined
   searchProducts: undefined
   storeProducts: { storeId: string }
   cart: undefined
@@ -55,7 +58,6 @@ type AppRoutes = {
   orderValidation: { orderId: string } | undefined
   profile: undefined
 
-  // rotas auxiliares (não aparecem na tab bar)
   checkout: { cart: StorageCartProps[] }
   orderConfirmation: {
     orderId: string
@@ -65,9 +67,13 @@ type AppRoutes = {
   profileEdit: undefined
   productList: undefined
   productDetails: { productId: string }
-  productsBySubCategory: { categoryId: string; subcategoryId?: string }
+  productsBySubCategory: {
+    storeId: string
+    categoryId: string
+    subcategoryId?: string
+  }
   productsByStore: { businessCategoryId: string; storeId?: string }
-  productBySubCategory: { categoryId: string }
+  productBySubCategory: { categoryId: string; storeId: string }
   storeByCategory: { businessCategoryId: string }
   storesByBusiness: { businessCategoryId: string }
   category: undefined
@@ -91,6 +97,9 @@ export function AppRoutes() {
   const iconSize = sizes[5]
   const insets = useSafeAreaInsets()
   const { isAdmin } = useAuth()
+
+  // 🔥 AQUI ESTÁ O AJUSTE PRINCIPAL
+  const { cartBadgeCount } = useContext(CartContext)
 
   return (
     <Navigator
@@ -140,7 +149,12 @@ export function AppRoutes() {
         component={Cart}
         options={{
           title: 'Carrinho',
-          tabBarIcon: ({ color }) => <CartTabIcon color={color} />,
+          tabBarIcon: ({ color }) => (
+            <CartTabIcon
+              color={color}
+              badgeCount={cartBadgeCount} // 🔥 AQUI
+            />
+          ),
         }}
       />
 
@@ -182,8 +196,7 @@ export function AppRoutes() {
         }}
       />
 
-      {/* ===== ROTAS OCULTAS (STACK-LIKE) ===== */}
-
+      {/* ===== ROTAS OCULTAS ===== */}
       <Screen
         name="checkout"
         component={Checkout}
@@ -204,25 +217,21 @@ export function AppRoutes() {
         component={ProductList}
         options={{ tabBarButton: () => null }}
       />
-
       <Screen
         name="storeProducts"
         component={StoreProducts}
         options={{ tabBarButton: () => null }}
       />
-
       <Screen
         name="storeByCategory"
         component={StoresByBusiness}
         options={{ tabBarButton: () => null }}
       />
-
       <Screen
         name="storesByBusiness"
         component={StoresByBusiness}
         options={{ tabBarButton: () => null }}
       />
-
       <Screen
         name="productDetails"
         component={ProductDetails}
@@ -233,13 +242,11 @@ export function AppRoutes() {
         component={ProductsBySubCategory}
         options={{ tabBarButton: () => null }}
       />
-
       <Screen
         name="productsByStore"
         component={ProductsByStore}
         options={{ tabBarButton: () => null }}
       />
-
       <Screen
         name="productBySubCategory"
         component={ProductBySubCategory}
@@ -260,7 +267,6 @@ export function AppRoutes() {
         component={AllProductsCashback}
         options={{ tabBarButton: () => null }}
       />
-
       <Screen
         name="about"
         component={About}

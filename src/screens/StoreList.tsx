@@ -82,9 +82,17 @@ export function StoreList({ insideScrollView = true }: Props) {
     // navigation.navigate('subcategoriesByCategory', { storeId, categoryId })
   }
 
-  function handleOpenSubCategories(categoryId: string, subcategoryId?: string) {
+  function handleOpenSubCategories(
+    storeId: string,
+    categoryId: string,
+    subcategoryId?: string,
+  ) {
     setSelectedCategoryId(categoryId)
-    navigation.navigate('productsBySubCategory', { categoryId, subcategoryId })
+    navigation.navigate('productsBySubCategory', {
+      categoryId,
+      subcategoryId,
+      storeId,
+    })
   }
 
   if (isLoading) return <Loading />

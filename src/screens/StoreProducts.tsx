@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from 'react'
+import { useEffect, useState } from 'react'
 import { Box, Text, FlatList, VStack, useToast, Center } from 'native-base'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import { LayoutAnimation, UIManager, Platform } from 'react-native'
@@ -19,8 +19,6 @@ import { SubCategoryDTO } from '@dtos/SubCategoryDTO'
 import { ProductDTO } from '@dtos/ProductDTO'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
-import { CartContext } from '@contexts/CartContext'
-
 type RouteParams = {
   storeId: string
 }
@@ -37,8 +35,6 @@ export function StoreProducts() {
   const navigation = useNavigation<AppNavigatorRoutesProps>()
   const route = useRoute()
   const { storeId } = route.params as RouteParams
-
-  const { fetchCart, setCurrentStoreId } = useContext(CartContext)
 
   const [store, setStore] = useState<StoreDTO | null>(null)
   const [banners, setBanners] = useState<BannerDTO[]>([])
@@ -57,133 +53,168 @@ export function StoreProducts() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
   }
 
-  async function fetchStore() {
-    try {
-      const response = await api.get(`/stores/${storeId}`)
-      setStore(response.data)
-    } catch {
-      toast.show({
-        title: 'Erro ao carregar loja',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    }
-  }
-
-  async function fetchCategories() {
-    try {
-      const response = await api.get(`/stores/${storeId}/categories`)
-      setCategories(response.data)
-    } catch {
-      toast.show({
-        title: 'Erro ao carregar categorias',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    }
-  }
-
-  async function fetchBannersByStore() {
-    try {
-      const response = await api.get(`/banners/store/${storeId}`)
-      setBanners(response.data)
-    } catch (error) {
-      toast.show({
-        title:
-          error instanceof AppError
-            ? error.message
-            : 'Erro ao carregar banners da loja',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    }
-  }
-
-  async function fetchSubCategoriesByCategory(categoryId: string) {
-    try {
-      setIsLoadingProducts(true)
-
-      const response = await api.get(
-        `/subcategories/category?categoryId=${categoryId}`,
-      )
-
-      setSubCategories(response.data)
-      setSubCategorySelected(response.data?.[0]?.id ?? '')
-    } catch (error) {
-      toast.show({
-        title:
-          error instanceof AppError
-            ? error.message
-            : 'Erro ao carregar subcategorias',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setIsLoadingProducts(false)
-    }
-  }
-
-  async function fetchProductsBySubcategory(subcategoryId: string) {
-    if (!subcategoryId) return
-
-    try {
-      setIsLoadingProducts(true)
-
-      const response = await api.get(
-        `/products/subcategory?subcategoryId=${subcategoryId}`,
-      )
-
-      setProducts(response.data)
-    } catch (error) {
-      toast.show({
-        title:
-          error instanceof AppError
-            ? error.message
-            : 'Erro ao carregar produtos',
-        placement: 'bottom-left',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setIsLoadingProducts(false)
-    }
-  }
-
-  // 🔥 CARREGA O CARRINHO SOMENTE AO ENTRAR NA LOJA
+  /* =====================================================
+     🔥 FETCH INICIAL — RESET TOTAL AO TROCAR DE LOJA
+  ===================================================== */
   useEffect(() => {
-    if (!storeId) return
+    let isActive = true
 
-    setCurrentStoreId(storeId)
-    fetchCart(storeId)
+    async function loadStoreData() {
+      try {
+        setIsLoading(true)
+
+        // 🔥 RESET COMPLETO (ESSENCIAL PARA TROCA DE LOJA)
+        setStore(null)
+        setBanners([])
+        setCategories([])
+        setCategorySelected(null)
+        setSubCategories([])
+        setSubCategorySelected('')
+        setProducts([])
+
+        const [storeRes, catRes, bannerRes] = await Promise.all([
+          api.get(`/stores/${storeId}`),
+          api.get(`/stores/${storeId}/categories`),
+          api.get(`/banners/store/${storeId}`),
+        ])
+
+        if (!isActive) return
+
+        setStore(storeRes.data)
+        setCategories(catRes.data)
+        setBanners(bannerRes.data)
+
+        if (catRes.data?.length > 0) {
+          setCategorySelected(catRes.data[0].id)
+        }
+      } catch (error) {
+        if (!isActive) return
+
+        toast.show({
+          title:
+            error instanceof AppError
+              ? error.message
+              : 'Erro ao carregar dados da loja',
+          placement: 'top',
+          bgColor: 'red.500',
+        })
+      } finally {
+        if (isActive) setIsLoading(false)
+      }
+    }
+
+    loadStoreData()
+
+    return () => {
+      isActive = false
+    }
   }, [storeId])
 
+  /* ==============================
+     🧩 SUBCATEGORIAS
+  ============================== */
   useEffect(() => {
-    Promise.all([
-      fetchStore(),
-      fetchCategories(),
-      fetchBannersByStore(),
-    ]).finally(() => setIsLoading(false))
-  }, [])
+    let isActive = true
 
-  useEffect(() => {
-    if (categorySelected) {
-      fetchSubCategoriesByCategory(categorySelected)
+    async function loadSubCategories() {
+      if (!categorySelected) return
+
+      try {
+        setIsLoadingProducts(true)
+
+        const response = await api.get(
+          `/subcategories/category?categoryId=${categorySelected}`,
+        )
+
+        if (!isActive) return
+
+        setSubCategories(response.data)
+
+        if (response.data?.length > 0) {
+          setSubCategorySelected(response.data[0].id)
+        } else {
+          setSubCategorySelected('')
+          setProducts([])
+        }
+      } catch (error) {
+        if (!isActive) return
+
+        toast.show({
+          title:
+            error instanceof AppError
+              ? error.message
+              : 'Erro ao carregar subcategorias',
+          placement: 'top',
+          bgColor: 'red.500',
+        })
+      } finally {
+        if (isActive) setIsLoadingProducts(false)
+      }
+    }
+
+    loadSubCategories()
+
+    return () => {
+      isActive = false
     }
   }, [categorySelected])
 
+  /* ==============================
+     🛒 PRODUTOS
+  ============================== */
   useEffect(() => {
-    if (subCategorySelected) {
-      fetchProductsBySubcategory(subCategorySelected)
-    }
-  }, [subCategorySelected])
+    let isActive = true
 
+    async function loadProducts() {
+      if (!subCategorySelected) return
+
+      try {
+        setIsLoadingProducts(true)
+
+        const response = await api.get(
+          `/products/subcategory?subcategoryId=${subCategorySelected}&storeId=${storeId}`,
+        )
+
+        if (!isActive) return
+
+        setProducts(response.data)
+      } catch (error) {
+        if (!isActive) return
+
+        toast.show({
+          title:
+            error instanceof AppError
+              ? error.message
+              : 'Erro ao carregar produtos',
+          placement: 'bottom-left',
+          bgColor: 'red.500',
+        })
+      } finally {
+        if (isActive) setIsLoadingProducts(false)
+      }
+    }
+
+    loadProducts()
+
+    return () => {
+      isActive = false
+    }
+  }, [subCategorySelected, storeId])
+
+  /* ==============================
+     🖥️ LOADING
+  ============================== */
   if (isLoading || !store) {
     return <Loading />
   }
 
+  /* ==============================
+     🧾 RENDER (EXPANSÃO INLINE MANTIDA)
+  ============================== */
   return (
     <FlatList
       data={categories}
-      keyExtractor={(item, index) => item.id ?? `category-${index}`}
+      keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <StorePromotionHeader store={store} banners={banners} />
       }
@@ -211,7 +242,7 @@ export function StoreProducts() {
               {subCategories.length > 0 ? (
                 <FlatList
                   data={subCategories}
-                  keyExtractor={(sub, index) => sub.id ?? `sub-${index}`}
+                  keyExtractor={(sub) => sub.id}
                   renderItem={({ item: sub }) => (
                     <Group
                       name={sub.name}
@@ -242,7 +273,7 @@ export function StoreProducts() {
                 ) : (
                   <FlatList
                     data={products}
-                    keyExtractor={(prod, index) => prod.id ?? `prod-${index}`}
+                    keyExtractor={(prod) => prod.id}
                     numColumns={2}
                     renderItem={({ item: prod }) => (
                       <Box mt={-2} ml={2}>

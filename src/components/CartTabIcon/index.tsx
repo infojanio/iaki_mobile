@@ -1,18 +1,19 @@
 // CartTabIcon.tsx
-import React, { useContext } from 'react'
+import React from 'react'
 import { View, Text } from 'react-native'
-import { CartContext } from '@contexts/CartContext'
-
 import CartSvg from '@assets/cart.svg'
 
-export function CartTabIcon({ color }: { color: string }) {
-  const { cartItems } = useContext(CartContext)
-  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
+type Props = {
+  color: string
+  badgeCount?: number
+}
 
+export function CartTabIcon({ color, badgeCount = 0 }: Props) {
   return (
     <View style={{ position: 'relative' }}>
       <CartSvg fill={color} width={24} height={24} />
-      {totalItems > 0 && (
+
+      {badgeCount > 0 && (
         <View
           style={{
             position: 'absolute',
@@ -20,8 +21,9 @@ export function CartTabIcon({ color }: { color: string }) {
             right: -6,
             backgroundColor: '#EF4444',
             borderRadius: 10,
-            width: 18,
+            minWidth: 18,
             height: 18,
+            paddingHorizontal: 4,
             justifyContent: 'center',
             alignItems: 'center',
           }}
@@ -33,7 +35,7 @@ export function CartTabIcon({ color }: { color: string }) {
               fontWeight: 'bold',
             }}
           >
-            {totalItems}
+            {badgeCount}
           </Text>
         </View>
       )}

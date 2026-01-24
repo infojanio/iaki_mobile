@@ -1,6 +1,5 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
-import { Box, VStack, useToast, ScrollView, HStack } from 'native-base'
-
+import { Box, VStack, useToast, ScrollView } from 'native-base'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 
 import { AppError } from '@utils/AppError'
@@ -15,50 +14,52 @@ import { Promotion } from '@components/Promotion'
 import { Loading } from '@components/Loading'
 
 import { CashbackRegulationCard } from './CashbackRegulationCard'
-import { CartContext } from '@contexts/CartContext'
 import { Reel } from '@components/Reel'
 import { CategoryList } from './CategoryList'
 import { ProductCashback } from './Product/ProductCashback'
 import { ProductQuantity } from './Product/ProductQuantity'
-import { LocationSelector } from '@components/LocationSelector'
 import { BusinessCategory } from '@screens/BusinessCategory'
-import { Category } from '@components/Category'
 import { StoreList } from './StoreList'
+
 import { CityContext } from '@contexts/CityContext'
+import { CartContext } from '@contexts/CartContext'
 
 export function Home() {
-  const { fetchCart } = useContext(CartContext)
-  const { setCurrentStoreId } = useContext(CartContext)
-
+  const { city } = useContext(CityContext)
+  const { syncCartBadge } = useContext(CartContext)
   const { cityBanners } = useContext(CityContext)
+
   const navigation = useNavigation<AppNavigatorRoutesProps>()
   const toast = useToast()
-
-  const { city } = useContext(CityContext)
-  const { syncOpenCart } = useContext(CartContext)
 
   const [products, setProducts] = useState<ProductDTO[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const { userId } = useAuth()
 
+  /* ==============================
+     🔗 ABRIR PRODUTO
+     (SEM lógica de loja/carrinho)
+  ============================== */
   function handleOpenProductDetails(product: ProductDTO) {
-    const storeId = product.store_id
-
-    if (!storeId) {
+    if (!product.id) {
       toast.show({
         title: 'Erro',
-        description: 'Não foi possível identificar a loja do produto.',
+        description: 'Produto inválido.',
         placement: 'top',
         bgColor: 'red.500',
       })
       return
     }
 
-    setCurrentStoreId(storeId)
-    navigation.navigate('productDetails', { productId: product.id })
+    navigation.navigate('productDetails', {
+      productId: product.id,
+    })
   }
 
+  /* ==============================
+     📦 FETCH PRODUTOS HOME
+  ============================== */
   async function fetchProducts() {
     try {
       setIsLoading(true)
@@ -80,22 +81,24 @@ export function Home() {
     }
   }
 
-  useEffect(() => {
-    console.log('[Home] city:', city)
-  }, [city])
-
-  /* Efeito para carregar o carrinho inicial
-  useEffect(() => {
-    syncOpenCart()
-  }, [])
-*/
-
+  /* ==============================
+     🔄 CARREGAMENTO AO FOCUS
+  ============================== */
   useFocusEffect(
     useCallback(() => {
       fetchProducts()
     }, []),
   )
 
+  useFocusEffect(
+    useCallback(() => {
+      syncCartBadge()
+    }, [city?.id]),
+  )
+
+  /* ==============================
+     🖥️ RENDER
+  ============================== */
   return (
     <VStack flex={1} bg="gray.100">
       <Box>
@@ -112,7 +115,7 @@ export function Home() {
 
             <StoreList category={''} data={[]} />
 
-            {/* IMPORTANTE: componentes abaixo devem usar handleOpenProductDetails */}
+            {/* Produtos clicáveis */}
             <ProductCashback onPressProduct={handleOpenProductDetails} />
             <Reel />
             <ProductQuantity onPressProduct={handleOpenProductDetails} />

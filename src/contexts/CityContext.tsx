@@ -1,16 +1,13 @@
-import {
-  createContext,
-  ReactNode,
-  useState,
-  useContext,
-  useEffect,
-} from 'react'
+import { createContext, ReactNode, useState, useEffect } from 'react'
 import { api } from '@services/api'
 import { useToast } from 'native-base'
 
 import { useAuth } from '@hooks/useAuth'
-import { CartContext } from '@contexts/CartContext'
 import { BannerDTO } from '@dtos/BannerDTO'
+
+/* ==============================
+   🧱 TIPOS
+============================== */
 
 type City = {
   id: string
@@ -30,20 +27,25 @@ type CityContextData = {
 
 export const CityContext = createContext({} as CityContextData)
 
+/* ==============================
+   🏙️ PROVIDER
+============================== */
+
 type CityProviderProps = {
   children: ReactNode
 }
 
 export function CityProvider({ children }: CityProviderProps) {
   const { userId } = useAuth()
-  const { resetCartContext } = useContext(CartContext)
   const toast = useToast()
 
   const [city, setCity] = useState<City | null>(null)
   const [cityBanners, setCityBanners] = useState<BannerDTO[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
-  // ✅ EFEITO CORRETO: reage à mudança da cidade
+  /* ==============================
+     🔄 BANNERS DA CIDADE
+  ============================== */
   useEffect(() => {
     async function loadCityBanners() {
       if (!city?.id) {
@@ -55,6 +57,7 @@ export function CityProvider({ children }: CityProviderProps) {
         const res = await api.get('/banners', {
           params: { cityId: city.id },
         })
+
         setCityBanners(res.data)
       } catch (error) {
         console.error('[CityContext] Erro ao carregar banners', error)
@@ -65,6 +68,9 @@ export function CityProvider({ children }: CityProviderProps) {
     loadCityBanners()
   }, [city?.id])
 
+  /* ==============================
+     🏙️ DEFINIR CIDADE
+  ============================== */
   async function setUserCity(selectedCity: City) {
     try {
       setIsLoading(true)
@@ -73,18 +79,14 @@ export function CityProvider({ children }: CityProviderProps) {
         cityId: selectedCity.id,
       })
 
-      // 🔥 regra: mudou a cidade → limpa carrinho visual
-      resetCartContext()
-
       setCity(selectedCity)
 
       /*
       toast.show({
         title: 'Cidade alterada',
-        description: 'Seu carrinho foi salvo.',
         placement: 'top',
       })
-        */
+      */
     } catch (error) {
       console.error('[CityContext] Erro ao salvar cidade:', error)
       throw error
@@ -93,16 +95,42 @@ export function CityProvider({ children }: CityProviderProps) {
     }
   }
 
+  /* ==============================
+     🔄 BUSCAR CIDADE DO USUÁRIO
+     (hidratação futura)
+  ============================== */
+  async function fetchUserCity() {
+    try {
+      const { data } = await api.get('/users/me')
+
+      if (data?.city) {
+        setCity(data.city)
+      }
+    } catch (error) {
+      console.error('[CityContext] Erro ao buscar cidade do usuário', error)
+    }
+  }
+
+  /* ==============================
+     🧹 LIMPAR CIDADE (LOGOUT)
+  ============================== */
   function clearCity() {
-    resetCartContext()
     setCity(null)
     setCityBanners([])
   }
 
-  async function fetchUserCity() {
-    // futuro
-  }
+  /* ==============================
+     🔐 REAGE AO LOGOUT
+  ============================== */
+  useEffect(() => {
+    if (!userId) {
+      clearCity()
+    }
+  }, [userId])
 
+  /* ==============================
+     📦 CONTEXT
+  ============================== */
   return (
     <CityContext.Provider
       value={{

@@ -1,4 +1,4 @@
-import { VStack, Text, Button, Divider, HStack, useToast } from 'native-base'
+import { VStack, Text, Button, HStack, useToast } from 'native-base'
 import { useCallback, useContext, useMemo, useState } from 'react'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 
@@ -9,7 +9,7 @@ import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { formatCurrency } from '@utils/format'
 
 export function Cart() {
-  const { cartItems, checkout, fetchCart, currentStoreId } =
+  const { cartItems, checkout, activeStoreId, syncOpenCart } =
     useContext(CartContext)
 
   const toast = useToast()
@@ -19,14 +19,6 @@ export function Cart() {
   const subtotal = useMemo(() => {
     return cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0)
   }, [cartItems])
-
-  useFocusEffect(
-    useCallback(() => {
-      if (currentStoreId) {
-        fetchCart(currentStoreId)
-      }
-    }, [currentStoreId]),
-  )
 
   async function handleCheckout() {
     if (cartItems.length === 0 || isSubmitting) return

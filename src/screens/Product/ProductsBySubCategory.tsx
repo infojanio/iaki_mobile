@@ -9,6 +9,7 @@ import {
   useToast,
 } from 'native-base'
 import { useNavigation, useRoute } from '@react-navigation/native'
+
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 
@@ -21,19 +22,29 @@ import { Loading } from '@components/Loading'
 import { HomeScreen } from '@components/HomeScreen'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
+/* ==============================
+   🧾 ROTAS
+============================== */
 type RouteParams = {
   categoryId: string
-  subcategoryId?: string // <-- aceita opcional para já abrir filtrado
+  storeId: string
+  subcategoryId?: string // opcional para já abrir filtrado
 }
 
 export function ProductsBySubCategory() {
   const toast = useToast()
   const route = useRoute()
+  const navigation = useNavigation<AppNavigatorRoutesProps>()
+
   const {
+    storeId,
     categoryId,
     subcategoryId: initialSubcategoryId,
   } = route.params as RouteParams
 
+  /* ==============================
+     🧠 ESTADOS
+  ============================== */
   const [subCategories, setSubCategories] = useState<SubCategoryDTO[]>([])
   const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(
     null,
@@ -42,12 +53,16 @@ export function ProductsBySubCategory() {
   const [products, setProducts] = useState<ProductDTO[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  const navigation = useNavigation<AppNavigatorRoutesProps>()
-
+  /* ==============================
+     🔗 ABRIR PRODUTO
+  ============================== */
   function handleOpenProductDetails(productId: string) {
     navigation.navigate('productDetails', { productId })
   }
 
+  /* ==============================
+     📦 SUBCATEGORIAS DA CATEGORIA
+  ============================== */
   async function fetchSubCategories() {
     try {
       const { data } = await api.get<SubCategoryDTO[]>(
@@ -59,9 +74,9 @@ export function ProductsBySubCategory() {
 
       setSubCategories(data)
 
-      // define a subcategoria selecionada:
-      // 1) se veio pela rota e existe nessa categoria -> usa ela
-      // 2) senão, usa a primeira da lista
+      // 🔑 define subcategoria selecionada:
+      // 1) se veio pela rota e existe → usa
+      // 2) senão, usa a primeira
       const existsFromRoute = initialSubcategoryId
         ? data.some((s) => s.id === initialSubcategoryId)
         : false
@@ -79,41 +94,60 @@ export function ProductsBySubCategory() {
     }
   }
 
+  /* ==============================
+     🛒 PRODUTOS (SUBCATEGORIA + LOJA)
+  ============================== */
   async function fetchProductsBySubCategory(subcategoryId: string) {
     try {
       setIsLoading(true)
+
       const response = await api.get<ProductDTO[]>('/products/subcategory', {
-        params: { subcategoryId },
+        params: {
+          subcategoryId,
+          storeId, // 🔥 FILTRO ESSENCIAL
+        },
       })
+
       setProducts(response.data)
     } catch (error) {
       const title =
         error instanceof AppError ? error.message : 'Erro ao buscar produtos.'
-      toast.show({ title, placement: 'top', bgColor: 'red.500' })
+
+      toast.show({
+        title,
+        placement: 'top',
+        bgColor: 'red.500',
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
-  // 1) carrega subcategorias quando a categoria muda
+  /* ==============================
+     🔄 EFEITOS
+  ============================== */
+
+  // 1️⃣ Carrega subcategorias ao mudar a categoria
   useEffect(() => {
     fetchSubCategories()
-    // limpa produtos enquanto decide a subcategoria selecionada
     setProducts([])
   }, [categoryId])
 
-  // 2) sempre que a subcategoria selecionada mudar, busca os produtos
+  // 2️⃣ Carrega produtos ao mudar subcategoria
   useEffect(() => {
     if (selectedSubCategory) {
       fetchProductsBySubCategory(selectedSubCategory)
     }
   }, [selectedSubCategory])
 
+  /* ==============================
+     🖥️ RENDER
+  ============================== */
   return (
     <VStack flex={1} bg="white" safeArea>
       <HomeScreen title="Produtos" />
 
-      {/* Filtros de subcategorias (horizontal) */}
+      {/* 🔍 Filtro de subcategorias */}
       <Box px={4} pt={4}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <HStack space={3}>
@@ -129,6 +163,7 @@ export function ProductsBySubCategory() {
         </ScrollView>
       </Box>
 
+      {/* 📦 LISTA DE PRODUTOS */}
       {isLoading ? (
         <Loading />
       ) : (
