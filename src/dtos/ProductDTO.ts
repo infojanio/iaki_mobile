@@ -3,22 +3,25 @@
 export type ProductDTO = {
   id: string
   name: string
-  description: string
+
+  description?: string | null
   price: number
   quantity: number
-  image: string
+  image?: string
   cashback_percentage: number
-  store_id: string
-  subcategory_id: string
   status: boolean
 
-  // 🔹 NOVO: relação mínima da loja (ESSENCIAL)
+  // 🔑 loja (backend novo)
   store?: {
     id: string
     name?: string
     cityId: string
   }
 
+  // 🔁 compatibilidade (backend antigo)
+  store_id?: string
+
+  subcategory_id?: string
   subcategory?: {
     id: string
     name: string

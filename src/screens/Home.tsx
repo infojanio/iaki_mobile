@@ -113,7 +113,7 @@ export function Home() {
             <BusinessCategory />
             <Promotion banners={cityBanners} />
 
-            <StoreList category={''} data={[]} />
+            <StoreList />
 
             {/* Produtos clicáveis */}
             <ProductCashback onPressProduct={handleOpenProductDetails} />

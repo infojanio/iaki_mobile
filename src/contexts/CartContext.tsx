@@ -43,15 +43,12 @@ type CartContextData = {
 
   cartBadgeCount: number
   syncCartBadge: () => Promise<void>
-
   ensureStoreContext: (storeId: string) => Promise<boolean>
-
   addProductCart: (data: AddToCartInput) => Promise<void>
   incrementProduct: (productId: string) => Promise<void>
   decrementProduct: (productId: string) => Promise<void>
   removeProductCart: (productId: string) => Promise<void>
   fetchCart: (storeId: string) => Promise<void>
-
   checkout: () => Promise<void>
   resetCartContext: () => void
 
@@ -296,12 +293,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       value={{
         cartItems,
         activeStoreId,
-
         cartBadgeCount,
         syncCartBadge,
-
         ensureStoreContext,
-
         addProductCart,
         incrementProduct,
         decrementProduct,
@@ -310,7 +304,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
         checkout,
         resetCartContext,
         syncOpenCart,
-
         confirmStoreChange,
       }}
     >

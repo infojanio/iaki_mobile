@@ -28,17 +28,24 @@ import { AppNavigatorRoutesProps } from '@routes/app.routes'
 type RouteParams = {
   categoryId: string
   storeId: string
+  screenkey: string
   subcategoryId?: string // opcional para já abrir filtrado
+}
+
+type FetchProductsParams = {
+  subcategoryId: string
+  storeId: string
 }
 
 export function ProductsBySubCategory() {
   const toast = useToast()
-  const route = useRoute()
   const navigation = useNavigation<AppNavigatorRoutesProps>()
+  const route = useRoute()
 
   const {
     storeId,
     categoryId,
+    screenkey,
     subcategoryId: initialSubcategoryId,
   } = route.params as RouteParams
 
@@ -97,7 +104,10 @@ export function ProductsBySubCategory() {
   /* ==============================
      🛒 PRODUTOS (SUBCATEGORIA + LOJA)
   ============================== */
-  async function fetchProductsBySubCategory(subcategoryId: string) {
+  async function fetchProductsBySubCategory({
+    subcategoryId,
+    storeId,
+  }: FetchProductsParams) {
     try {
       setIsLoading(true)
 
@@ -129,16 +139,23 @@ export function ProductsBySubCategory() {
 
   // 1️⃣ Carrega subcategorias ao mudar a categoria
   useEffect(() => {
-    fetchSubCategories()
+    // 🔥 reset completo da tela
+    setSubCategories([])
     setProducts([])
-  }, [categoryId])
+    setSelectedSubCategory(null)
+
+    fetchSubCategories()
+  }, [categoryId, storeId, screenkey])
 
   // 2️⃣ Carrega produtos ao mudar subcategoria
   useEffect(() => {
-    if (selectedSubCategory) {
-      fetchProductsBySubCategory(selectedSubCategory)
-    }
-  }, [selectedSubCategory])
+    if (!selectedSubCategory) return
+
+    fetchProductsBySubCategory({
+      subcategoryId: selectedSubCategory,
+      storeId,
+    })
+  }, [selectedSubCategory, storeId])
 
   /* ==============================
      🖥️ RENDER

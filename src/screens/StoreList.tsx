@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { useCallback, useContext, useEffect, useState } from 'react'
 import { RefreshControl, FlatList as RNFlatList } from 'react-native'
 import {
   VStack,
@@ -8,7 +8,6 @@ import {
   Icon,
   useToast,
   Image,
-  Center,
 } from 'native-base'
 import { useNavigation } from '@react-navigation/native'
 import { Image as ImageIcon } from 'lucide-react-native'
@@ -23,9 +22,6 @@ import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CategoryDTO } from '@dtos/CategoryDTO'
 
 type Props = {
-  category: string
-  data: CategoryDTO[]
-  /** defina true quando esta lista estiver DENTRO de um ScrollView pai */
   insideScrollView?: boolean
 }
 
@@ -33,36 +29,33 @@ export function StoreList({ insideScrollView = true }: Props) {
   const [stores, setStores] = useState<StoreDTO[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
-    null,
-  )
 
   const { city } = useContext(CityContext)
-
   const navigation = useNavigation<AppNavigatorRoutesProps>()
   const toast = useToast()
 
   async function loadStores(showLoader = true) {
-    if (showLoader) setIsLoading(true)
-
     if (!city?.id) {
       setStores([])
       return
     }
+
     try {
       if (showLoader) setIsLoading(true)
 
       const response = await api.get(`/stores/city/${city.id}`)
-      setStores(response.data)
-
-      console.log('lojas', response.data)
       setStores(response.data)
     } catch (error) {
       const title =
         error instanceof AppError
           ? error.message
           : 'Não foi possível carregar lojas.'
-      toast.show({ title, placement: 'top', bgColor: 'red.500' })
+
+      toast.show({
+        title,
+        placement: 'top',
+        bgColor: 'red.500',
+      })
     } finally {
       if (showLoader) setIsLoading(false)
     }
@@ -76,23 +69,19 @@ export function StoreList({ insideScrollView = true }: Props) {
     setRefreshing(true)
     await loadStores(false)
     setRefreshing(false)
-  }, [])
+  }, [city?.id])
 
-  function handleOpenCategory(storeId: string, categoryId: string) {
-    // navigation.navigate('subcategoriesByCategory', { storeId, categoryId })
-  }
-
-  function handleOpenSubCategories(
-    storeId: string,
-    categoryId: string,
-    subcategoryId?: string,
-  ) {
-    setSelectedCategoryId(categoryId)
+  function handleOpenSubCategories(storeId: string, categoryId: string) {
+    /**
+     * 🔥 FORÇA REMOUNT DA TELA
+     * Isso garante que ProductsBySubCategory
+     * atualize corretamente ao trocar de loja
+     */
     navigation.navigate('productsBySubCategory', {
-      categoryId,
-      subcategoryId,
       storeId,
-    })
+      categoryId,
+      screenkey: `${storeId}-${categoryId}-${Date.now()}`, // 👈 chave única
+    } as any)
   }
 
   if (isLoading) return <Loading />
@@ -111,20 +100,19 @@ export function StoreList({ insideScrollView = true }: Props) {
         }
         renderItem={({ item: store }) => (
           <Box bg="white" rounded="2xl" shadow="1" px={3} py={3} mb={3}>
-            <Text fontSize="14" fontStyle={'italic'} fontWeight="700" mb={2}>
+            <Text fontSize="14" fontStyle="italic" fontWeight="700" mb={2}>
               {store.name}
             </Text>
 
-            {store.categories && store.categories.length > 0 ? (
+            {store.categories?.length ? (
               <RNFlatList
                 data={store.categories}
-                keyExtractor={(cat) => cat.id}
+                keyExtractor={(cat: CategoryDTO) => cat.id}
                 horizontal
-                nestedScrollEnabled
                 showsHorizontalScrollIndicator={false}
                 renderItem={({ item: cat }) => (
                   <Pressable
-                    onPress={() => handleOpenSubCategories(cat.id)} //handleOpenCategory(store.id, cat.id)
+                    onPress={() => handleOpenSubCategories(store.id, cat.id)}
                   >
                     <VStack mr={6} width={84} alignItems="center">
                       <Box
@@ -141,7 +129,7 @@ export function StoreList({ insideScrollView = true }: Props) {
                             alt={cat.name}
                             width="100%"
                             height="100%"
-                            borderRadius={'3xl'}
+                            borderRadius="3xl"
                             resizeMode="cover"
                           />
                         ) : (
