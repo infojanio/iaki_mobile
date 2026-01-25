@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { HomeProduct } from '@components/Product/HomeProduct'
 import { VStack, Text, FlatList, useToast, Box, HStack } from 'native-base'
 
-import { Group } from '@components/Product/Group'
+import { Group } from '@components/Product/SubcategoryCard'
 
 import { ProductCategoryVertical } from '@utils/ProductCategoryVertical'
 import { useNavigation } from '@react-navigation/native'

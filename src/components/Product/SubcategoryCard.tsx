@@ -1,21 +1,21 @@
-import { Pressable, Text, Box } from 'native-base'
+import { Text, Pressable, IPressableProps, Box } from 'native-base'
 import { useEffect, useRef } from 'react'
 import { Animated } from 'react-native'
 
-type Props = {
-  title: string
-  isActive?: boolean
-  onPress: () => void
+type Props = IPressableProps & {
+  name: string
+  subcategory: string
+  isActive: boolean
 }
 
-export function SubCategoryFilter({ title, isActive = false, onPress }: Props) {
+export function SubcategoryCard({ name, isActive, ...rest }: Props) {
   const underlineAnim = useRef(new Animated.Value(isActive ? 1 : 0)).current
 
   useEffect(() => {
     Animated.timing(underlineAnim, {
       toValue: isActive ? 1 : 0,
       duration: 220,
-      useNativeDriver: false, // width não suporta native driver
+      useNativeDriver: false,
     }).start()
   }, [isActive])
 
@@ -30,13 +30,22 @@ export function SubCategoryFilter({ title, isActive = false, onPress }: Props) {
   })
 
   return (
-    <Pressable onPress={onPress} px={3} py={2} mr={3}>
+    <Pressable
+      px={3}
+      py={2}
+      mr={3}
+      alignItems="center"
+      justifyContent="center"
+      _pressed={{ opacity: 0.7 }}
+      {...rest}
+    >
       <Text
-        fontSize="16"
+        fontSize="xs"
+        textTransform="uppercase"
         fontWeight={isActive ? 'bold' : 'medium'}
         color={isActive ? 'green.600' : 'coolGray.600'}
       >
-        {title}
+        {name}
       </Text>
 
       {/* 🔥 Underline animado */}

@@ -1,17 +1,11 @@
-import { useEffect, useState } from 'react'
-import {
-  Box,
-  FlatList,
-  HStack,
-  ScrollView,
-  Text,
-  VStack,
-  useToast,
-} from 'native-base'
+import { useEffect, useRef, useState } from 'react'
+import { Animated, Dimensions } from 'react-native'
+import { Box, HStack, ScrollView, Text, VStack, useToast } from 'native-base'
 import { useNavigation, useRoute } from '@react-navigation/native'
 
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
+import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
 import { SubCategoryDTO } from '@dtos/SubCategoryDTO'
 import { ProductDTO } from '@dtos/ProductDTO'
@@ -20,7 +14,16 @@ import { SubCategoryFilter } from '@components/Category/SubCategoryFilter'
 import { ProductCard } from '@components/Product/ProductCard'
 import { Loading } from '@components/Loading'
 import { HomeScreen } from '@components/HomeScreen'
-import { AppNavigatorRoutesProps } from '@routes/app.routes'
+
+/* ==============================
+   📐 LAYOUT (CARROSSEL)
+============================== */
+const { width } = Dimensions.get('window')
+
+const CARD_WIDTH = 160
+const CARD_SPACING = 4
+const SNAP_INTERVAL = CARD_WIDTH + CARD_SPACING
+const SIDE_PADDING = (width - CARD_WIDTH) / 2
 
 /* ==============================
    🧾 ROTAS
@@ -29,7 +32,8 @@ type RouteParams = {
   categoryId: string
   storeId: string
   screenkey: string
-  subcategoryId?: string // opcional para já abrir filtrado
+  subcategoryId?: string
+  storeName?: string
 }
 
 type FetchProductsParams = {
@@ -47,6 +51,7 @@ export function ProductsBySubCategory() {
     categoryId,
     screenkey,
     subcategoryId: initialSubcategoryId,
+    storeName,
   } = route.params as RouteParams
 
   /* ==============================
@@ -56,9 +61,10 @@ export function ProductsBySubCategory() {
   const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(
     null,
   )
-
   const [products, setProducts] = useState<ProductDTO[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  const scrollX = useRef(new Animated.Value(0)).current
 
   /* ==============================
      🔗 ABRIR PRODUTO
@@ -68,31 +74,29 @@ export function ProductsBySubCategory() {
   }
 
   /* ==============================
-     📦 SUBCATEGORIAS DA CATEGORIA
+     📦 SUBCATEGORIAS
   ============================== */
   async function fetchSubCategories() {
     try {
       const { data } = await api.get<SubCategoryDTO[]>(
         '/subcategories/category',
-        {
-          params: { categoryId },
-        },
+        { params: { categoryId } },
       )
 
       setSubCategories(data)
 
-      // 🔑 define subcategoria selecionada:
-      // 1) se veio pela rota e existe → usa
-      // 2) senão, usa a primeira
       const existsFromRoute = initialSubcategoryId
         ? data.some((s) => s.id === initialSubcategoryId)
         : false
 
-      const nextSelected =
-        (existsFromRoute ? initialSubcategoryId : data[0]?.id) ?? null
+      const nextSelected = existsFromRoute
+        ? initialSubcategoryId!
+        : data.length > 0
+        ? data[0].id
+        : null
 
       setSelectedSubCategory(nextSelected)
-    } catch (error) {
+    } catch {
       toast.show({
         title: 'Erro ao carregar subcategorias.',
         placement: 'top',
@@ -102,7 +106,7 @@ export function ProductsBySubCategory() {
   }
 
   /* ==============================
-     🛒 PRODUTOS (SUBCATEGORIA + LOJA)
+     🛒 PRODUTOS
   ============================== */
   async function fetchProductsBySubCategory({
     subcategoryId,
@@ -111,14 +115,11 @@ export function ProductsBySubCategory() {
     try {
       setIsLoading(true)
 
-      const response = await api.get<ProductDTO[]>('/products/subcategory', {
-        params: {
-          subcategoryId,
-          storeId, // 🔥 FILTRO ESSENCIAL
-        },
+      const { data } = await api.get<ProductDTO[]>('/products/subcategory', {
+        params: { subcategoryId, storeId },
       })
 
-      setProducts(response.data)
+      setProducts(data)
     } catch (error) {
       const title =
         error instanceof AppError ? error.message : 'Erro ao buscar produtos.'
@@ -136,10 +137,7 @@ export function ProductsBySubCategory() {
   /* ==============================
      🔄 EFEITOS
   ============================== */
-
-  // 1️⃣ Carrega subcategorias ao mudar a categoria
   useEffect(() => {
-    // 🔥 reset completo da tela
     setSubCategories([])
     setProducts([])
     setSelectedSubCategory(null)
@@ -147,7 +145,6 @@ export function ProductsBySubCategory() {
     fetchSubCategories()
   }, [categoryId, storeId, screenkey])
 
-  // 2️⃣ Carrega produtos ao mudar subcategoria
   useEffect(() => {
     if (!selectedSubCategory) return
 
@@ -161,11 +158,29 @@ export function ProductsBySubCategory() {
      🖥️ RENDER
   ============================== */
   return (
-    <VStack flex={1} bg="white" safeArea>
+    <VStack flex={1} bg="white">
       <HomeScreen title="Produtos" />
 
-      {/* 🔍 Filtro de subcategorias */}
-      <Box px={4} pt={4}>
+      {/* 🔒 HEADER FIXO — NOME DA LOJA */}
+      {storeName && (
+        <Box
+          bg="white"
+          px={4}
+          py={2}
+          borderBottomWidth={1}
+          borderColor="coolGray.100"
+        >
+          <Text fontSize="sm" fontWeight="bold" color="coolGray.600">
+            Loja
+          </Text>
+          <Text fontSize="md" fontWeight="700">
+            {storeName}
+          </Text>
+        </Box>
+      )}
+
+      {/* 🔍 SUBCATEGORIAS */}
+      <Box px={4} pt={3}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <HStack space={3}>
             {subCategories.map((sub) => (
@@ -180,25 +195,65 @@ export function ProductsBySubCategory() {
         </ScrollView>
       </Box>
 
-      {/* 📦 LISTA DE PRODUTOS */}
+      {/* 📦 PRODUTOS */}
       {isLoading ? (
         <Loading />
       ) : (
-        <FlatList
+        <Animated.FlatList
           data={products}
           keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={{
-            justifyContent: 'space-between',
-            paddingHorizontal: 16,
+          horizontal
+          snapToInterval={SNAP_INTERVAL}
+          decelerationRate="fast"
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: SIDE_PADDING,
+            paddingTop: 16,
+            paddingBottom: 32,
           }}
-          contentContainerStyle={{ paddingBottom: 16, paddingTop: 8 }}
-          renderItem={({ item }) => (
-            <ProductCard
-              product={item}
-              onPress={() => handleOpenProductDetails(item.id)}
-            />
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+            { useNativeDriver: true },
           )}
+          renderItem={({ item, index }) => {
+            const inputRange = [
+              (index - 1) * SNAP_INTERVAL,
+              index * SNAP_INTERVAL,
+              (index + 1) * SNAP_INTERVAL,
+            ]
+
+            const scale = scrollX.interpolate({
+              inputRange,
+              outputRange: [0.9, 1, 0.9],
+              extrapolate: 'clamp',
+            })
+
+            const shadowOpacity = scrollX.interpolate({
+              inputRange,
+              outputRange: [0.15, 0.35, 0.15],
+              extrapolate: 'clamp',
+            })
+
+            return (
+              <Animated.View
+                style={{
+                  width: CARD_WIDTH,
+                  marginRight: CARD_SPACING,
+                  transform: [{ scale }],
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowRadius: 10,
+                  shadowOpacity,
+                  elevation: 6,
+                }}
+              >
+                <ProductCard
+                  product={item}
+                  onPress={() => handleOpenProductDetails(item.id)}
+                />
+              </Animated.View>
+            )
+          }}
           ListEmptyComponent={
             <Text textAlign="center" mt={10}>
               Nenhum produto encontrado para essa subcategoria.

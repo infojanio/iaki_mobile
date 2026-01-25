@@ -6,6 +6,7 @@ import { RatingStars } from '@components/RatingStars'
 
 type Props = TouchableOpacityProps & {
   store: StoreDTO
+  onRate?: () => void
 }
 
 export function StoreCard({ store, ...rest }: Props) {
@@ -56,7 +57,7 @@ export function StoreCard({ store, ...rest }: Props) {
             </HStack>
           </VStack>
           <Box marginRight={2}>
-            <Text>Avaliação</Text>
+            <Text>⭐</Text>
             <RatingStars rating={store.rating} count={store.ratingCount} />
           </Box>
         </HStack>

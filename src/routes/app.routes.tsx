@@ -44,6 +44,7 @@ import { ProductsByStore } from '@screens/Product/ProductsByStore'
 import { StoresByBusiness } from '@screens/StoresByBusiness'
 import { StoreProducts } from '@screens/StoreProducts'
 import { CartTabIcon } from '@components/CartTabIcon'
+import { StoreRatings } from '@screens/StoreRatings'
 
 /* =======================
    TIPAGEM DAS ROTAS
@@ -82,6 +83,7 @@ type AppRoutes = {
   about: undefined
   privacy: undefined
   terms: undefined
+  storeRatings: { storeId: string; storeName: string }
 }
 
 export type AppNavigatorRoutesProps = BottomTabNavigationProp<AppRoutes>
@@ -280,6 +282,12 @@ export function AppRoutes() {
       <Screen
         name="terms"
         component={TermsOfUse}
+        options={{ tabBarButton: () => null }}
+      />
+
+      <Screen
+        name="storeRatings"
+        component={StoreRatings}
         options={{ tabBarButton: () => null }}
       />
     </Navigator>

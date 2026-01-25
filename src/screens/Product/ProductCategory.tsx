@@ -20,7 +20,7 @@ import {
 import { AppError } from '@utils/AppError'
 import { api } from '@services/api'
 
-import { Group } from '@components/Product/Group'
+import { Group } from '@components/Product/SubcategoryCard'
 
 import { ProductDTO } from '@dtos/ProductDTO'
 import { SubCategoryDTO } from '@dtos/SubCategoryDTO'

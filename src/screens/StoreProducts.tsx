@@ -1,14 +1,28 @@
-import { useEffect, useState } from 'react'
-import { Box, Text, FlatList, VStack, useToast, Center } from 'native-base'
+import { useEffect, useRef, useState } from 'react'
+import {
+  Box,
+  Text,
+  FlatList,
+  VStack,
+  useToast,
+  Center,
+  HStack,
+} from 'native-base'
 import { useNavigation, useRoute } from '@react-navigation/native'
-import { LayoutAnimation, UIManager, Platform } from 'react-native'
+import {
+  LayoutAnimation,
+  UIManager,
+  Platform,
+  Animated,
+  Dimensions,
+} from 'react-native'
 
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 
 import { StorePromotionHeader } from '@components/Store/StorePromotionHeader'
 import { StoreCategoryList } from '@components/Store/StoreCategoryList'
-import { Group } from '@components/Product/Group'
+import { SubcategoryCard } from '@components/Product/SubcategoryCard'
 import { ProductCard } from '@components/Product/ProductCard'
 import { Loading } from '@components/Loading'
 
@@ -18,6 +32,16 @@ import { CategoryDTO } from '@dtos/CategoryDTO'
 import { SubCategoryDTO } from '@dtos/SubCategoryDTO'
 import { ProductDTO } from '@dtos/ProductDTO'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
+
+/* ==============================
+   📐 CARROSSEL
+============================== */
+const { width } = Dimensions.get('window')
+
+const CARD_WIDTH = 150
+const CARD_SPACING = 6
+const SNAP_INTERVAL = CARD_WIDTH + CARD_SPACING
+const SIDE_PADDING = (width - CARD_WIDTH) / 2
 
 type RouteParams = {
   storeId: string
@@ -36,6 +60,8 @@ export function StoreProducts() {
   const route = useRoute()
   const { storeId } = route.params as RouteParams
 
+  const scrollX = useRef(new Animated.Value(0)).current
+
   const [store, setStore] = useState<StoreDTO | null>(null)
   const [banners, setBanners] = useState<BannerDTO[]>([])
 
@@ -43,7 +69,9 @@ export function StoreProducts() {
   const [categorySelected, setCategorySelected] = useState<string | null>(null)
 
   const [subCategories, setSubCategories] = useState<SubCategoryDTO[]>([])
-  const [subCategorySelected, setSubCategorySelected] = useState<string>('')
+  const [subCategorySelected, setSubCategorySelected] = useState<string | null>(
+    null,
+  )
 
   const [products, setProducts] = useState<ProductDTO[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -57,20 +85,9 @@ export function StoreProducts() {
      🔥 FETCH INICIAL — RESET TOTAL AO TROCAR DE LOJA
   ===================================================== */
   useEffect(() => {
-    let isActive = true
-
-    async function loadStoreData() {
+    async function loadInitialData() {
       try {
         setIsLoading(true)
-
-        // 🔥 RESET COMPLETO (ESSENCIAL PARA TROCA DE LOJA)
-        setStore(null)
-        setBanners([])
-        setCategories([])
-        setCategorySelected(null)
-        setSubCategories([])
-        setSubCategorySelected('')
-        setProducts([])
 
         const [storeRes, catRes, bannerRes] = await Promise.all([
           api.get(`/stores/${storeId}`),
@@ -78,43 +95,34 @@ export function StoreProducts() {
           api.get(`/banners/store/${storeId}`),
         ])
 
-        if (!isActive) return
-
         setStore(storeRes.data)
         setCategories(catRes.data)
         setBanners(bannerRes.data)
 
-        if (catRes.data?.length > 0) {
-          setCategorySelected(catRes.data[0].id)
-        }
-      } catch (error) {
-        if (!isActive) return
-
+        // reset completo
+        setCategorySelected(null)
+        setSubCategories([])
+        setSubCategorySelected(null)
+        setProducts([])
+      } catch {
         toast.show({
-          title:
-            error instanceof AppError
-              ? error.message
-              : 'Erro ao carregar dados da loja',
+          title: 'Erro ao carregar loja',
           placement: 'top',
           bgColor: 'red.500',
         })
       } finally {
-        if (isActive) setIsLoading(false)
+        setIsLoading(false)
       }
     }
 
-    loadStoreData()
-
-    return () => {
-      isActive = false
-    }
+    loadInitialData()
   }, [storeId])
 
   /* ==============================
      🧩 SUBCATEGORIAS
   ============================== */
   useEffect(() => {
-    let isActive = true
+    let active = true
 
     async function loadSubCategories() {
       if (!categorySelected) return
@@ -122,40 +130,34 @@ export function StoreProducts() {
       try {
         setIsLoadingProducts(true)
 
-        const response = await api.get(
-          `/subcategories/category?categoryId=${categorySelected}`,
+        const { data } = await api.get<SubCategoryDTO[]>(
+          '/subcategories/category',
+          { params: { categoryId: categorySelected } },
         )
 
-        if (!isActive) return
+        if (!active) return
 
-        setSubCategories(response.data)
+        setSubCategories(data)
 
-        if (response.data?.length > 0) {
-          setSubCategorySelected(response.data[0].id)
-        } else {
-          setSubCategorySelected('')
-          setProducts([])
-        }
-      } catch (error) {
-        if (!isActive) return
-
+        // 🔥 auto-seleciona primeira subcategoria
+        setSubCategorySelected(data.length > 0 ? data[0].id : null)
+        setProducts([])
+      } catch {
+        if (!active) return
         toast.show({
-          title:
-            error instanceof AppError
-              ? error.message
-              : 'Erro ao carregar subcategorias',
+          title: 'Erro ao carregar subcategorias',
           placement: 'top',
           bgColor: 'red.500',
         })
       } finally {
-        if (isActive) setIsLoadingProducts(false)
+        if (active) setIsLoadingProducts(false)
       }
     }
 
     loadSubCategories()
 
     return () => {
-      isActive = false
+      active = false
     }
   }, [categorySelected])
 
@@ -163,7 +165,7 @@ export function StoreProducts() {
      🛒 PRODUTOS
   ============================== */
   useEffect(() => {
-    let isActive = true
+    let active = true
 
     async function loadProducts() {
       if (!subCategorySelected) return
@@ -171,15 +173,17 @@ export function StoreProducts() {
       try {
         setIsLoadingProducts(true)
 
-        const response = await api.get(
-          `/products/subcategory?subcategoryId=${subCategorySelected}&storeId=${storeId}`,
-        )
+        const { data } = await api.get<ProductDTO[]>('/products/subcategory', {
+          params: {
+            subcategoryId: subCategorySelected,
+            storeId,
+          },
+        })
 
-        if (!isActive) return
-
-        setProducts(response.data)
+        if (!active) return
+        setProducts(data)
       } catch (error) {
-        if (!isActive) return
+        if (!active) return
 
         toast.show({
           title:
@@ -190,14 +194,14 @@ export function StoreProducts() {
           bgColor: 'red.500',
         })
       } finally {
-        if (isActive) setIsLoadingProducts(false)
+        if (active) setIsLoadingProducts(false)
       }
     }
 
     loadProducts()
 
     return () => {
-      isActive = false
+      active = false
     }
   }, [subCategorySelected, storeId])
 
@@ -209,7 +213,7 @@ export function StoreProducts() {
   }
 
   /* ==============================
-     🧾 RENDER (EXPANSÃO INLINE MANTIDA)
+     🧾 RENDER
   ============================== */
   return (
     <FlatList
@@ -221,7 +225,7 @@ export function StoreProducts() {
       contentContainerStyle={{ paddingBottom: 24 }}
       showsVerticalScrollIndicator={false}
       renderItem={({ item }) => (
-        <Box bg="gray.100" borderRadius="2xl" borderBottomWidth={0.21}>
+        <Box bg="gray.100" borderRadius="2xl">
           <StoreCategoryList
             data={[item]}
             onPress={() => {
@@ -232,19 +236,22 @@ export function StoreProducts() {
 
           {categorySelected === item.id && (
             <VStack
-              ml={3}
-              mr={3}
+              mx={3}
               mt={-2}
               bg="white"
               borderRadius="lg"
               shadow={1}
+              pb={3}
             >
+              {/* 🔹 SUBCATEGORIAS */}
               {subCategories.length > 0 ? (
                 <FlatList
                   data={subCategories}
                   keyExtractor={(sub) => sub.id}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
                   renderItem={({ item: sub }) => (
-                    <Group
+                    <SubcategoryCard
                       name={sub.name}
                       subcategory={sub.id}
                       isActive={subCategorySelected === sub.id}
@@ -254,29 +261,60 @@ export function StoreProducts() {
                       }}
                     />
                   )}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
                   _contentContainerStyle={{ px: 2 }}
-                  mt={1}
-                  mb={1}
+                  mt={2}
+                  mb={2}
                   maxH={12}
                 />
               ) : (
                 <Center mt={4}>
-                  <Text color="red.600">Nenhuma subcategoria encontrada</Text>
+                  <Text color="coolGray.500">
+                    Nenhuma subcategoria encontrada
+                  </Text>
                 </Center>
               )}
 
-              <VStack minH={120}>
-                {isLoadingProducts ? (
-                  <Loading />
-                ) : (
-                  <FlatList
-                    data={products}
-                    keyExtractor={(prod) => prod.id}
-                    numColumns={2}
-                    renderItem={({ item: prod }) => (
-                      <Box mt={-2} ml={2}>
+              {/* 🔥 PRODUTOS — CARROSSEL */}
+              {isLoadingProducts ? (
+                <Loading />
+              ) : (
+                <Animated.FlatList
+                  data={products}
+                  keyExtractor={(prod) => prod.id}
+                  horizontal
+                  snapToInterval={SNAP_INTERVAL}
+                  decelerationRate="fast"
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{
+                    paddingHorizontal: SIDE_PADDING,
+                    paddingTop: 8,
+                    paddingBottom: 16,
+                  }}
+                  onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                    { useNativeDriver: true },
+                  )}
+                  renderItem={({ item: prod, index }) => {
+                    const inputRange = [
+                      (index - 1) * SNAP_INTERVAL,
+                      index * SNAP_INTERVAL,
+                      (index + 1) * SNAP_INTERVAL,
+                    ]
+
+                    const scale = scrollX.interpolate({
+                      inputRange,
+                      outputRange: [0.9, 1, 0.9],
+                      extrapolate: 'clamp',
+                    })
+
+                    return (
+                      <Animated.View
+                        style={{
+                          width: CARD_WIDTH,
+                          marginRight: CARD_SPACING,
+                          transform: [{ scale }],
+                        }}
+                      >
                         <ProductCard
                           product={prod}
                           onPress={() =>
@@ -285,16 +323,16 @@ export function StoreProducts() {
                             })
                           }
                         />
-                      </Box>
-                    )}
-                    _contentContainerStyle={{
-                      paddingX: 8,
-                      paddingBottom: 24,
-                    }}
-                    showsVerticalScrollIndicator={false}
-                  />
-                )}
-              </VStack>
+                      </Animated.View>
+                    )
+                  }}
+                  ListEmptyComponent={
+                    <Text textAlign="center" mt={6}>
+                      Nenhum produto encontrado.
+                    </Text>
+                  }
+                />
+              )}
             </VStack>
           )}
         </Box>

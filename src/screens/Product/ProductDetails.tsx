@@ -161,7 +161,7 @@ export function ProductDetails() {
               {product.name}
             </Heading>
 
-            <Text fontSize="sm" color="gray.500">
+            <Text fontSize="14" color="blue.700">
               Vendido por {product.store?.name}
             </Text>
 
