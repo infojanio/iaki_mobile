@@ -45,21 +45,14 @@ export function StoreCard({ store, ...rest }: Props) {
               <Text fontSize="md"> {store.name}</Text>
             </HStack>
             <HStack>
-              <Box>
-                <Icon
-                  as={MaterialIcons}
-                  name="phone"
-                  size={sizes[1.5]}
-                  color={colors.green[600]}
-                />
+              <Box ml={4}>
+                <RatingStars rating={store.rating} count={store.ratingCount} />
               </Box>
-              <Text color="gray.600"> {store.phone}</Text>
+              <Box ml={2}>
+                <Text>Avaliações</Text>
+              </Box>
             </HStack>
           </VStack>
-          <Box marginRight={2}>
-            <Text>⭐</Text>
-            <RatingStars rating={store.rating} count={store.ratingCount} />
-          </Box>
         </HStack>
       </Box>
     </TouchableOpacity>

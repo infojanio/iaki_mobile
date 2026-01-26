@@ -8,6 +8,7 @@ import {
   Icon,
   useToast,
   Image,
+  HStack,
 } from 'native-base'
 import { useNavigation } from '@react-navigation/native'
 import { Image as ImageIcon } from 'lucide-react-native'
@@ -20,6 +21,7 @@ import { Loading } from '@components/Loading'
 import { StoreDTO } from '@dtos/StoreDTO'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CategoryDTO } from '@dtos/CategoryDTO'
+import { RatingStars } from '@components/RatingStars'
 
 type Props = {
   insideScrollView?: boolean
@@ -100,9 +102,22 @@ export function StoreList({ insideScrollView = true }: Props) {
         }
         renderItem={({ item: store }) => (
           <Box bg="white" rounded="2xl" shadow="1" px={3} py={3} mb={3}>
-            <Text fontSize="14" fontStyle="italic" fontWeight="700" mb={2}>
-              {store.name}
-            </Text>
+            <HStack>
+              <Text fontSize="14" fontStyle="italic" fontWeight="700" mb={2}>
+                {store.name}
+              </Text>
+              <HStack>
+                <Box ml={4}>
+                  <RatingStars
+                    rating={store.rating}
+                    count={store.ratingCount}
+                  />
+                </Box>
+                <Box ml={2}>
+                  <Text> ✨</Text>
+                </Box>
+              </HStack>
+            </HStack>
 
             {store.categories?.length ? (
               <RNFlatList

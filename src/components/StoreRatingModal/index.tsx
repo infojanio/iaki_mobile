@@ -1,16 +1,36 @@
 import { Modal } from 'react-native'
 import { useState } from 'react'
-import { Box, VStack, Text, HStack, IconButton, Button } from 'native-base'
+import {
+  Box,
+  VStack,
+  Text,
+  HStack,
+  IconButton,
+  Button,
+  useToast,
+} from 'native-base'
 import { MaterialIcons } from '@expo/vector-icons'
+import { api } from '@services/api'
+import { AppError } from '@utils/AppError'
 
 type Props = {
   isOpen: boolean
+  storeId: string
   storeName: string
   onClose: () => void
+  onSuccess: (rating: number) => void
 }
 
-export function StoreRatingModal({ isOpen, storeName, onClose }: Props) {
+export function StoreRatingModal({
+  isOpen,
+  storeId,
+  storeName,
+  onClose,
+  onSuccess,
+}: Props) {
+  const toast = useToast()
   const [rating, setRating] = useState(0)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   function renderStars(value: number) {
     return (
@@ -33,13 +53,41 @@ export function StoreRatingModal({ isOpen, storeName, onClose }: Props) {
     )
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (rating === 0) return
 
-    // 🔜 backend depois
-    console.log('Enviar avaliação:', rating)
+    try {
+      setIsSubmitting(true)
 
-    onClose()
+      await api.post(`/stores/${storeId}/evaluations`, {
+        rating,
+      })
+
+      onSuccess(rating)
+
+      toast.show({
+        title: 'Avaliação enviada!',
+        description: 'Obrigado por avaliar esta loja 😊',
+        placement: 'top',
+        bgColor: 'green.500',
+      })
+
+      onClose()
+      setRating(0)
+    } catch (error) {
+      const message =
+        error instanceof AppError
+          ? error.message
+          : 'Não foi possível enviar sua avaliação'
+
+      toast.show({
+        title: message,
+        placement: 'top',
+        bgColor: 'red.500',
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -65,7 +113,12 @@ export function StoreRatingModal({ isOpen, storeName, onClose }: Props) {
             {renderStars(rating)}
 
             <HStack space={3} mt={4} width="100%">
-              <Button flex={1} variant="outline" onPress={onClose}>
+              <Button
+                flex={1}
+                variant="outline"
+                onPress={onClose}
+                isDisabled={isSubmitting}
+              >
                 Cancelar
               </Button>
 
@@ -73,6 +126,7 @@ export function StoreRatingModal({ isOpen, storeName, onClose }: Props) {
                 flex={1}
                 colorScheme="green"
                 isDisabled={rating === 0}
+                isLoading={isSubmitting}
                 onPress={handleSubmit}
               >
                 Enviar

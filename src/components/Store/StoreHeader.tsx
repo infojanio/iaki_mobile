@@ -24,9 +24,10 @@ export function StoreHeader({ store }: Props) {
   const navigation = useNavigation<AppNavigatorRoutesProps>()
 
   const [showRatingModal, setShowRatingModal] = useState(false)
+  const [storeData, setStoreData] = useState(store)
 
-  const rating = store.rating ?? 0
-  const ratingCount = store.ratingCount ?? 0
+  const rating = storeData.rating ?? 0
+  const ratingCount = storeData.ratingCount ?? 0
 
   function renderStars() {
     const stars = []
@@ -43,6 +44,23 @@ export function StoreHeader({ store }: Props) {
     }
 
     return stars
+  }
+
+  function handleRatingSuccess(newRating: number) {
+    setStoreData((prev) => {
+      const currentRating = prev.rating ?? 0
+      const currentCount = prev.ratingCount ?? 0
+
+      const updatedCount = currentCount + 1
+      const updatedRating =
+        (currentRating * currentCount + newRating) / updatedCount
+
+      return {
+        ...prev,
+        rating: updatedRating,
+        ratingCount: updatedCount,
+      }
+    })
   }
 
   return (
@@ -98,6 +116,12 @@ export function StoreHeader({ store }: Props) {
               </Text>
             )}
 
+            {!!store.phone && (
+              <Text fontSize="sm" color="gray.600">
+                Telefone: {store.phone}
+              </Text>
+            )}
+
             {!!store.street && (
               <Text fontSize="sm" color="gray.600">
                 {store.street}
@@ -118,15 +142,15 @@ export function StoreHeader({ store }: Props) {
                     </Text>
                   </HStack>
                 ) : (
-                  <Box bg="yellow.50" borderRadius="full" px={3} py={1}>
-                    <Text fontSize="sm" color="gray.700">
-                      Avaliar loja
+                  <Box bg="green.100" borderRadius="full" px={3} py={1}>
+                    <Text fontSize="14" color="gray.700">
+                      👉 Avalie o Estabelecimento ✨
                     </Text>
                   </Box>
                 )}
               </Pressable>
 
-              {/* STATUS */}
+              {/* STATUS 
               <Text
                 fontSize="sm"
                 fontWeight="bold"
@@ -134,6 +158,7 @@ export function StoreHeader({ store }: Props) {
               >
                 {store.isActive ? 'Loja disponível' : 'Loja indisponível'}
               </Text>
+             */}
             </HStack>
           </VStack>
         </Box>
@@ -142,8 +167,10 @@ export function StoreHeader({ store }: Props) {
       {/* ⭐ MODAL DE AVALIAÇÃO */}
       <StoreRatingModal
         isOpen={showRatingModal}
-        storeName={store.name}
+        storeId={storeData.id}
+        storeName={storeData.name}
         onClose={() => setShowRatingModal(false)}
+        onSuccess={handleRatingSuccess}
       />
     </>
   )
