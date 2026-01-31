@@ -36,14 +36,31 @@ export function ItemsCart() {
       <FlatList
         data={cartItems}
         keyExtractor={(item) => item.productId}
-        renderItem={({ item }) => (
-          <ItemCartCard
-            data={item}
-            onIncrement={() => incrementProduct(item.productId)}
-            onDecrement={() => decrementProduct(item.productId)}
-            onRemove={() => handleRemove(item.productId)}
-          />
-        )}
+        renderItem={({ item }) => {
+          const isMaxReached = item.quantity >= item.stock
+
+          return (
+            <ItemCartCard
+              data={item}
+              isMaxReached={isMaxReached} // 🔥 NOVO
+              onIncrement={() => {
+                if (isMaxReached) {
+                  toast.show({
+                    title: 'Estoque insuficiente',
+                    description: 'Quantidade máxima disponível atingida',
+                    placement: 'top',
+                    bgColor: 'orange.500',
+                  })
+                  return
+                }
+
+                incrementProduct(item.productId)
+              }}
+              onDecrement={() => decrementProduct(item.productId)}
+              onRemove={() => handleRemove(item.productId)}
+            />
+          )
+        }}
         showsVerticalScrollIndicator={false}
       />
     </VStack>

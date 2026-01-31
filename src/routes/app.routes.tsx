@@ -59,7 +59,7 @@ type AppRoutes = {
   orderValidation: { orderId: string } | undefined
   profile: undefined
 
-  checkout: { cart: StorageCartProps[] }
+  checkout: undefined
   orderConfirmation: {
     orderId: string
     cashbackEarned?: number

@@ -23,6 +23,7 @@ type CartItem = {
   quantity: number
   cashback_percentage: number
   storeId: string
+  stock: number
 }
 
 type AddToCartInput = {
@@ -40,6 +41,7 @@ type ConfirmStoreChangeState = {
 type CartContextData = {
   cartItems: CartItem[]
   activeStoreId: string | null
+  activeStoreName: string | null
 
   cartBadgeCount: number
   syncCartBadge: () => Promise<void>
@@ -70,6 +72,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null)
+  const [activeStoreName, setActiveStoreName] = useState<string | null>(null)
 
   const [cartBadgeCount, setCartBadgeCount] = useState(0)
 
@@ -85,6 +88,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   ============================== */
   const fetchCart = useCallback(async (storeId: string) => {
     if (!storeId) return
+
+    setActiveStoreId(storeId) // 🔥 GARANTE CONTEXTO
 
     const cart = await cartService.getCartFromBackend(storeId)
     const baseURL = api.defaults.baseURL
@@ -112,6 +117,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             item.cashbackSnapshot ?? product.cashback_percentage ?? 0,
           ),
           storeId,
+          stock: Number(product.quantity ?? 0),
         }
       })
       .filter(Boolean)
@@ -246,8 +252,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   ============================== */
   async function checkout() {
     if (!activeStoreId) return
+
+    // 1️⃣ Backend fecha o carrinho
     await cartService.checkoutCart(activeStoreId)
+
+    // 2️⃣ Limpa estado local imediatamente (UX)
     resetCartContext()
+
+    // 3️⃣ 🔥 Sincroniza com a verdade do backend
+    await syncOpenCart()
+
+    // 4️⃣ 🔔 Atualiza badge final
     await syncCartBadge()
   }
 
@@ -258,12 +273,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (!city?.id) return
 
     const openCart = await cartService.getOpenCart()
-    if (!openCart) return
 
-    if (openCart.store?.cityId !== city.id) return
+    if (!openCart) {
+      // 🔥 LIMPA TUDO
+      setCartItems([])
+      setActiveStoreId(null)
+      setActiveStoreName(null)
+      setCartBadgeCount(0) // 🔥 GARANTE BADGE ZERADO
+      return
+    }
 
     setActiveStoreId(openCart.storeId)
+    setActiveStoreName(openCart.storeName) // ✅ AQUI ESTAVA O BUG
+
     await fetchCart(openCart.storeId)
+
     return openCart.storeId
   }
 
@@ -294,6 +318,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         cartItems,
         activeStoreId,
         cartBadgeCount,
+        activeStoreName,
         syncCartBadge,
         ensureStoreContext,
         addProductCart,

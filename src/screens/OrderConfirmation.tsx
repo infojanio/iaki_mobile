@@ -12,94 +12,70 @@ import {
   Divider,
 } from 'native-base'
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native'
+
 import { api } from '@services/api'
 import { formatCurrency } from '@utils/format'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { OrderDTO, OrderItemDTO } from '@dtos/OrderDTO'
 
 type RootStackParamList = {
   OrderConfirmation: { orderId: string }
 }
 
-interface Product {
-  id: string
-  name: string
-  price: number
-  image: string
-  cashback_percentage: number
-}
-
-interface OrderItem {
-  id: string
-  quantity: number
-  product: Product
-}
-
-interface OrderData {
-  id: string
-  totalAmount: number
-  discountApplied?: number
-  status: string
-  validated_at: string | null
-  createdAt: string
-  items: OrderItem[]
-}
+const DEFAULT_IMAGE = 'https://via.placeholder.com/80'
 
 export function OrderConfirmation() {
   const route = useRoute<RouteProp<RootStackParamList, 'OrderConfirmation'>>()
   const navigation = useNavigation<AppNavigatorRoutesProps>()
   const { orderId } = route.params
 
-  const [order, setOrder] = useState<OrderData | null>(null)
+  const [order, setOrder] = useState<OrderDTO | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchOrder() {
-      if (!orderId) {
-        console.error('ID do pedido não fornecido.')
-        return
-      }
+      if (!orderId) return
 
       setLoading(true)
 
       try {
         const res = await api.get(`/orders/${orderId}`)
-        console.log('Resposta da API:', res.data)
+        const data = res.data
 
-        // Ajuste para a estrutura de resposta esperada
-        const orderData = res.data.orders?.[0] // Acessa o primeiro pedido do array
+        // ✅ Mapper para OrderDTO (blindado para snake_case/camelCase)
+        const mapped: OrderDTO = {
+          id: data.id,
+          store: {
+            id: data.store?.id ?? data.store_id ?? '',
+            name: data.store?.name ?? data.storeName ?? 'Loja não identificada',
+          },
+          totalAmount: Number(data.totalAmount ?? 0),
+          discountApplied: Number(data.discountApplied ?? 0),
+          status: data.status,
+          created_at:
+            data.created_at ?? data.createdAt ?? new Date().toISOString(),
+          validated_at: data.validated_at ?? null,
+          qrCodeUrl: data.qrCodeUrl ?? null,
+          cashbackAmount: data.cashbackAmount,
 
-        if (!orderData) {
-          throw new Error('Pedido não encontrado na resposta')
+          items: (data.items ?? []).map(
+            (item: any): OrderItemDTO => ({
+              id: item.id ?? `${data.id}-item-${item.product?.id ?? ''}`,
+              quantity: Number(item.quantity ?? 0),
+              product: {
+                id: item.product?.id ?? item.productId ?? '',
+                name: item.product?.name ?? 'Produto desconhecido',
+                price: Number(item.product?.price ?? 0),
+                image: item.product?.image ?? DEFAULT_IMAGE,
+                cashback_percentage: Number(
+                  item.product?.cashback_percentage ?? 0,
+                ),
+              },
+            }),
+          ),
         }
 
-        setOrder({
-          id: orderData.id,
-          totalAmount: orderData.totalAmount,
-          discountApplied: orderData.discountApplied ?? 0,
-          status: orderData.status,
-          validated_at: orderData.validated_at,
-          createdAt: orderData.createdAt,
-          items: orderData.items.map((item: any) => ({
-            id: item.id || Math.random().toString(36).substring(7), // ID fallback
-            quantity: item.quantity,
-            product: {
-              id: item.product?.id || item.productId?.id || '',
-              name:
-                item.product?.name ||
-                item.productId?.name ||
-                'Produto desconhecido',
-              price: item.product?.price || item.productId?.price || 0,
-              image:
-                item.product?.image ||
-                item.productId?.image ||
-                'https://via.placeholder.com/80',
-              cashback_percentage:
-                item.product?.cashback_percentage ||
-                item.productId?.cashback_percentage ||
-                0,
-            },
-          })),
-        })
+        setOrder(mapped)
       } catch (err) {
         console.error('Erro ao buscar pedido:', err)
         setOrder(null)
@@ -154,9 +130,12 @@ export function OrderConfirmation() {
     )
   }
 
-  const usedCashback = (order.discountApplied ?? 0) > 0
+  const usedCashback = order.discountApplied > 0
 
   const calculateTotalCashback = () => {
+    if (usedCashback) return 0
+    if (order.cashbackAmount !== undefined) return order.cashbackAmount
+
     return order.items.reduce((total, item) => {
       return (
         total +
@@ -183,8 +162,14 @@ export function OrderConfirmation() {
         <Text color="gray.500">
           Número do pedido: #{order.id.substring(0, 8).toUpperCase()}
         </Text>
+
+        {/* ✅ Loja */}
+        <Text color="gray.600" fontSize="sm">
+          Loja: {order.store.name}
+        </Text>
+
         <Text color="gray.500">
-          Data: {new Date(order.createdAt).toLocaleDateString('pt-BR')}
+          Data: {new Date(order.created_at).toLocaleDateString('pt-BR')}
         </Text>
 
         <Divider my={3} />
@@ -195,27 +180,23 @@ export function OrderConfirmation() {
 
         {order.items.length > 0 ? (
           <VStack space={4}>
-            {order.items.map((item) => (
+            {order.items.map((item: OrderItemDTO, index: number) => (
               <HStack
-                key={`${item.id}-${item.product.id}`}
+                key={`${order.id}-item-${index}`}
                 space={3}
                 alignItems="center"
               >
                 <Image
-                  source={{
-                    uri: item.product.image || 'https://via.placeholder.com/80',
-                  }}
+                  source={{ uri: item.product.image ?? DEFAULT_IMAGE }}
                   alt={item.product.name}
                   size="sm"
                   borderRadius="md"
                 />
                 <VStack flex={1}>
                   <Text fontWeight="bold">{item.product.name}</Text>
-                  <HStack justifyContent="space-between">
-                    <Text color="gray.500">
-                      {item.quantity}x {formatCurrency(item.product.price)}
-                    </Text>
-                  </HStack>
+                  <Text color="gray.500">
+                    {item.quantity}x {formatCurrency(item.product.price)}
+                  </Text>
                   <Text fontWeight="bold" textAlign="right">
                     Subtotal:{' '}
                     {formatCurrency(item.product.price * item.quantity)}
@@ -239,10 +220,10 @@ export function OrderConfirmation() {
                 Desconto aplicado:
               </Text>
               <Text color="orange.600">
-                -{formatCurrency(order.discountApplied ?? 0)} (
+                -{formatCurrency(order.discountApplied)} (
                 {Math.round(
-                  ((order.discountApplied ?? 0) /
-                    (order.totalAmount + (order.discountApplied ?? 0))) *
+                  (order.discountApplied /
+                    (order.totalAmount + order.discountApplied)) *
                     100,
                 )}
                 %)
@@ -252,15 +233,13 @@ export function OrderConfirmation() {
 
           <HStack justifyContent="space-between">
             <Text fontWeight="bold">Total do Pedido:</Text>
-            <Text>{formatCurrency(order.totalAmount ?? 0)}</Text>
+            <Text>{formatCurrency(order.totalAmount)}</Text>
           </HStack>
 
           <HStack justifyContent="space-between">
             <Text fontWeight="bold">Cashback Total:</Text>
             <Text color="green.600">
-              {usedCashback
-                ? formatCurrency(0)
-                : formatCurrency(calculateTotalCashback())}
+              {formatCurrency(calculateTotalCashback())}
             </Text>
           </HStack>
         </VStack>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react'
+import React, { useCallback, useState, useMemo } from 'react'
 import {
   Box,
   Text,
@@ -14,35 +14,15 @@ import {
   ScrollView,
   Center,
 } from 'native-base'
+import { useFocusEffect } from '@react-navigation/native'
+
 import { api } from '@services/api'
 import { formatCurrency } from '@utils/format'
-import { useFocusEffect } from '@react-navigation/native'
 import { HomeScreen } from '@components/HomeScreen'
-
-interface Product {
-  id: string
-  name: string
-  price: number
-  image: string | null
-  cashback_percentage: number
-}
-interface OrderItem {
-  id: string
-  quantity: number
-  product: Product
-}
-interface Order {
-  id: string
-  createdAt: string
-  totalAmount: number
-  discountApplied?: number
-  status: string
-  items: OrderItem[]
-  cashbackAmount?: number
-  qrCodeUrl?: string | null
-}
+import { OrderDTO, OrderItemDTO } from '@dtos/OrderDTO'
 
 const DEFAULT_PRODUCT_IMAGE = 'https://via.placeholder.com/80'
+
 const STATUS_OPTIONS = [
   { value: '', label: 'Todos' },
   { value: 'PENDING', label: 'Pendente' },
@@ -51,53 +31,50 @@ const STATUS_OPTIONS = [
 ]
 
 export function OrderHistory() {
-  const [orders, setOrders] = useState<Order[]>([])
+  const [orders, setOrders] = useState<OrderDTO[]>([])
   const [selectedStatus, setSelectedStatus] = useState<string>('')
   const [loading, setLoading] = useState(true)
-  const [hasLoaded, setHasLoaded] = useState(false) // 👈 NOVO: sabemos se a 1ª busca terminou
+  const [hasLoaded, setHasLoaded] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+
   const toast = useToast()
 
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true)
+
       const response = await api.get('/orders/history')
 
-      const validatedOrders = (response.data.orders || []).map(
+      const mappedOrders: OrderDTO[] = (response.data.orders || []).map(
         (order: any) => ({
-          id: order.id || '',
-          createdAt: order.createdAt || new Date().toISOString(),
-          totalAmount: order.totalAmount || 0,
-          discountApplied: order.discountApplied ?? 0,
-          status: order.status || 'PENDING',
-          items: (order.items || []).map((item: any) => ({
-            id: item.id || Math.random().toString(36).substr(2, 9),
-            quantity: item.quantity || 0,
+          id: order.id,
+          store: {
+            id: order.store.id,
+            name: order.store.name,
+          },
+          totalAmount: Number(order.totalAmount),
+          discountApplied: Number(order.discountApplied ?? 0),
+          status: order.status,
+          created_at: order.created_at,
+          validated_at: order.validated_at ?? null,
+          qrCodeUrl: order.qrCodeUrl ?? null,
+          cashbackAmount: order.cashbackAmount,
+          items: order.items.map((item: any) => ({
+            id: item.id,
+            quantity: Number(item.quantity),
             product: {
-              id: item.product?.id || item.productId?.id || '',
-              name:
-                item.product?.name ||
-                item.productId?.name ||
-                'Produto desconhecido',
-              price: item.product?.price || item.productId?.price || 0,
-              image:
-                item.product?.image ||
-                item.productId?.image ||
-                DEFAULT_PRODUCT_IMAGE,
-              cashback_percentage:
-                item.product?.cashback_percentage ||
-                item.productId?.cashback_percentage ||
-                0,
+              id: item.product.id,
+              name: item.product.name,
+              price: Number(item.product.price),
+              image: item.product.image ?? DEFAULT_PRODUCT_IMAGE,
+              cashback_percentage: item.product.cashback_percentage,
             },
           })),
-          cashbackAmount: order.cashbackAmount,
-          qrCodeUrl: order.qrCodeUrl || null,
         }),
       )
 
-      setOrders(validatedOrders)
-      setHasLoaded(true) // 👈 MARCA que a 1ª busca acabou (com sucesso)
-      return validatedOrders
+      setOrders(mappedOrders)
+      setHasLoaded(true)
     } catch (error) {
       console.error('Erro ao buscar pedidos:', error)
       toast.show({
@@ -105,8 +82,7 @@ export function OrderHistory() {
         bgColor: 'red.500',
         placement: 'top',
       })
-      setHasLoaded(true) // 👈 também marcamos em caso de erro para permitir mensagem vazia
-      return []
+      setHasLoaded(true)
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -119,16 +95,10 @@ export function OrderHistory() {
     }, [fetchOrders]),
   )
 
-  // Opcional: derive a lista filtrada via useMemo (evita setState extra)
   const filteredOrders = useMemo(() => {
     if (!selectedStatus) return orders
-    return orders.filter((o) => o.status === selectedStatus)
+    return orders.filter((order) => order.status === selectedStatus)
   }, [orders, selectedStatus])
-
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await fetchOrders()
-  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -143,17 +113,24 @@ export function OrderHistory() {
     }
   }
 
-  const calculateOrderCashback = (order: Order) => {
-    if ((order.discountApplied ?? 0) > 0) return 0
-    if (order.cashbackAmount !== undefined) return order.cashbackAmount
+  const calculateCashback = (order: OrderDTO) => {
+    if (order.discountApplied > 0) return 0
+
+    if (order.cashbackAmount !== undefined) {
+      return order.cashbackAmount
+    }
+
     return order.items.reduce((total, item) => {
-      const price = item.product?.price || 0
-      const percentage = item.product?.cashback_percentage || 0
-      return total + (price * item.quantity * percentage) / 100
+      return (
+        total +
+        (item.product.price *
+          item.quantity *
+          item.product.cashback_percentage) /
+          100
+      )
     }, 0)
   }
 
-  // 👇 Enquanto não terminou a 1ª busca, SEMPRE mostra o loading
   if (loading || !hasLoaded) {
     return (
       <Box flex={1} justifyContent="center" alignItems="center">
@@ -166,157 +143,130 @@ export function OrderHistory() {
     <Box flex={1} bg="gray.50">
       <HomeScreen title="Meus Pedidos" />
 
+      {/* Filtro de status */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         mb={4}
         py={2}
       >
-        <HStack space={1} mb={2}>
+        <HStack space={2} px={2}>
           {STATUS_OPTIONS.map((option) => (
             <Pressable
               key={`status-${option.value}`}
               onPress={() => setSelectedStatus(option.value)}
             >
               <Box
-                mr={3}
-                w={24}
-                h={10}
+                px={4}
+                py={1}
                 borderRadius="2xl"
                 bg={
                   selectedStatus === option.value ? 'primary.500' : 'gray.200'
                 }
               >
-                <Center>
-                  <Text
-                    color={
-                      selectedStatus === option.value ? 'white' : 'gray.700'
-                    }
-                    fontWeight="medium"
-                    ml={2}
-                    mt={2}
-                  >
-                    {option.label}
-                  </Text>
-                </Center>
+                <Text
+                  color={selectedStatus === option.value ? 'white' : 'gray.700'}
+                  fontWeight="medium"
+                >
+                  {option.label}
+                </Text>
               </Box>
             </Pressable>
           ))}
         </HStack>
       </ScrollView>
 
-      {/* 👇 Só mostra “nenhum pedido” quando JÁ carregou ao menos uma vez */}
       {filteredOrders.length === 0 ? (
-        <Box bg="white" pb={280} borderRadius="md" alignItems="center">
-          <Text color="red.500" fontSize="16">
-            {selectedStatus === ''
-              ? 'Nenhum pedido encontrado'
-              : `Nenhum pedido com status ${STATUS_OPTIONS.find(
-                  (o) => o.value === selectedStatus,
-                )?.label.toLowerCase()}`}
+        <Center mb={20} mt={8}>
+          <Text color="gray.500">
+            {selectedStatus
+              ? 'Nenhum pedido com esse status'
+              : 'Nenhum pedido encontrado'}
           </Text>
-        </Box>
+        </Center>
       ) : (
         <FlatList
           data={filteredOrders}
-          keyExtractor={(item) => `order-${item.id}`}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          refreshing={refreshing}
+          onRefresh={fetchOrders}
           renderItem={({ item }) => (
             <Box mb={4} bg="white" p={4} borderRadius="md" shadow={1}>
-              <HStack justifyContent="space-between" mb={2}>
+              <HStack justifyContent="space-between" mb={1}>
                 <Text fontWeight="bold">Pedido #{item.id.substring(0, 8)}</Text>
+
                 <Badge colorScheme={getStatusColor(item.status)}>
-                  {STATUS_OPTIONS.find((o) => o.value === item.status)?.label ||
-                    item.status}
+                  {STATUS_OPTIONS.find((o) => o.value === item.status)?.label}
                 </Badge>
               </HStack>
 
               <Text color="gray.500" mb={3}>
-                {new Date(item.createdAt).toLocaleDateString('pt-BR')}
+                {new Date(item.created_at).toLocaleDateString('pt-BR')}
               </Text>
 
-              <VStack space={3} mb={3}>
-                {item.items.map((orderItem) => (
+              <VStack space={3}>
+                {item.items.map((orderItem: OrderItemDTO, index: number) => (
                   <HStack
-                    key={`item-${item.id}-${orderItem.id}`}
+                    key={`${item.id}-item-${index}`}
                     space={3}
                     alignItems="center"
                   >
                     <Image
                       source={{
-                        uri: orderItem.product.image || DEFAULT_PRODUCT_IMAGE,
+                        uri: orderItem.product.image ?? DEFAULT_PRODUCT_IMAGE,
                       }}
                       alt={orderItem.product.name}
                       size="sm"
                       borderRadius="md"
-                      fallbackElement={
-                        <Box
-                          bg="gray.200"
-                          size="sm"
-                          borderRadius="md"
-                          justifyContent="center"
-                          alignItems="center"
-                        >
-                          <Text color="gray.500">Sem imagem</Text>
-                        </Box>
-                      }
                     />
                     <VStack flex={1}>
                       <Text fontWeight="medium">{orderItem.product.name}</Text>
-                      <HStack justifyContent="space-between">
-                        <Text color="gray.500">
-                          {orderItem.quantity}x{' '}
-                          {formatCurrency(orderItem.product.price)}
-                        </Text>
-                        {(item.discountApplied ?? 0) === 0 && (
-                          <Text color="green.600">
-                            {orderItem.product.cashback_percentage}% cashback
-                          </Text>
-                        )}
-                      </HStack>
+                      <Text color="gray.500">
+                        {orderItem.quantity}x{' '}
+                        {formatCurrency(orderItem.product.price)}
+                      </Text>
                     </VStack>
                   </HStack>
                 ))}
               </VStack>
 
-              <Divider my={2} />
+              <Box my={2} />
+              {/* 🔥 Loja */}
+              <Box bg={'amber.50'} mt={'2'} mb={2}>
+                <Text color="gray.600" fontWeight={'bold'} fontSize="sm" mb={2}>
+                  📍 Vendido por {item.store.name}
+                </Text>
 
-              <VStack space={2}>
-                <HStack justifyContent="space-between">
-                  <Text fontWeight="bold">Total a pagar:</Text>
-                  <Text>{formatCurrency(item.totalAmount)}</Text>
-                </HStack>
+                <VStack space={1}>
+                  <HStack justifyContent="space-between">
+                    <Text ml={2} fontWeight="bold">
+                      Total
+                    </Text>
+                    <Text mr={2}>{formatCurrency(item.totalAmount)}</Text>
+                  </HStack>
 
-                {item.discountApplied && item.discountApplied > 0 ? (
-                  <HStack justifyContent="space-between">
-                    <Text fontWeight="bold" color="orange.600">
-                      Desconto aplicado:
-                    </Text>
-                    <Text color="orange.600">
-                      -{formatCurrency(item.discountApplied)} (
-                      {Math.round(
-                        ((item.discountApplied ?? 0) /
-                          (item.totalAmount + (item.discountApplied ?? 0))) *
-                          100,
-                      )}
-                      %)
-                    </Text>
-                  </HStack>
-                ) : (
-                  <HStack justifyContent="space-between">
-                    <Text fontWeight="bold">Cashback:</Text>
-                    <Text color="green.600">
-                      {formatCurrency(calculateOrderCashback(item))}
-                    </Text>
-                  </HStack>
-                )}
-              </VStack>
+                  {item.discountApplied > 0 ? (
+                    <HStack justifyContent="space-between">
+                      <Text color="orange.600">Desconto</Text>
+                      <Text color="orange.600">
+                        -{formatCurrency(item.discountApplied)}
+                      </Text>
+                    </HStack>
+                  ) : (
+                    <HStack justifyContent="space-between">
+                      <Text ml={2} color="green.600">
+                        Cashback
+                      </Text>
+                      <Text mr={2} color="green.600">
+                        {formatCurrency(calculateCashback(item))}
+                      </Text>
+                    </HStack>
+                  )}
+                </VStack>
+              </Box>
             </Box>
           )}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          // Opcional: também dá para controlar o vazio pelo ListEmptyComponent
-          // ListEmptyComponent={ hasLoaded ? <Text>...</Text> : null }
         />
       )}
     </Box>

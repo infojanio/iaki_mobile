@@ -16,14 +16,34 @@ async function getCartFromBackend(storeId: string) {
   return response.data
 }
 
+function handleCartError(error: any) {
+  if (error?.response?.status === 409) {
+    throw {
+      type: 'INSUFFICIENT_STOCK',
+      message:
+        error.response.data?.message ??
+        'Estoque insuficiente para este produto',
+    }
+  }
+
+  throw error
+}
+
 async function addToCart(data: AddToCartDTO) {
-  return api.post('/cart/items', data)
+  try {
+    return await api.post('/cart/items', data)
+  } catch (error: any) {
+    handleCartError(error)
+  }
 }
 
 async function incrementItem(data: CartItemActionDTO) {
-  return api.patch('/cart/items/increment', data)
+  try {
+    return await api.patch('/cart/items/increment', data)
+  } catch (error: any) {
+    handleCartError(error)
+  }
 }
-
 export async function getOpenCart() {
   const response = await api.get('/cart/open')
   return response.data
