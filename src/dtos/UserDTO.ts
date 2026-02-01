@@ -11,7 +11,7 @@ export type UserDTO = {
   phone?: string
   avatar?: string
   cpf?: string
-  role: 'ADMIN' | 'USER' // <- Adiciona isso
+  role: 'ADMIN' | 'USER' | 'STORE_ADMIN' // <- Adiciona isso
   street?: string
   state?: string
   postalCode?: string

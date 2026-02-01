@@ -11,113 +11,130 @@ import { Platform } from 'react-native'
 const baseURL =
   Platform.OS === 'android'
     ? 'http://10.0.2.2:3333'
-    : 'http://192.168.1.43:3333' // ou localhost no iOS
+    : 'http://192.168.1.43:3333'
 
 const api = axios.create({
   baseURL,
 })
-//baseURL: 'http://192.168.1.43:3333', // substitua pelo seu IP http://192.168.3.70:3333
-//baseURL: 'https://iaki-backend-production.up.railway.app', // use https!
 
 let isRefreshing = false
-let failedQueue: any[] = []
+let failedQueue: {
+  resolve: (token: string) => void
+  reject: (error: any) => void
+}[] = []
 
-function processQueue(error: any, token: string | null = null) {
+function processQueue(error: any, token: string | null) {
   failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error)
     } else {
-      prom.resolve(token)
+      prom.resolve(token!)
     }
   })
+
   failedQueue = []
 }
 
+/**
+ * 🔐 REQUEST — injeta access token
+ */
 api.interceptors.request.use(async (config) => {
-  const { token } = await storageAuthTokenGet()
-  if (token && config.headers) {
-    config.headers['Authorization'] = `Bearer ${token}`
+  const stored = await storageAuthTokenGet()
+
+  if (stored?.token && config.headers) {
+    config.headers.Authorization = `Bearer ${stored.token}`
   }
 
   return config
 })
 
+/**
+ * 🔁 RESPONSE — refresh automático
+ */
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as any
+    const originalRequest: any = error.config
 
-    const tokenExpired =
-      error.response?.status === 401 &&
-      (error.response?.data as { message?: string })?.message ===
-        'token.expired'
-    console.log('recado', error.response?.data)
-
-    if (tokenExpired && !originalRequest._retry) {
-      originalRequest._retry = true
-
-      if (!isRefreshing) {
-        isRefreshing = true
-        try {
-          const { refreshToken } = await storageAuthTokenGet()
-
-          const { data } = await api.post('/token/refresh', {
-            refreshToken,
-          })
-
-          await storageAuthTokenSave({
-            token: data.accessToken,
-            refreshToken: data.refreshToken,
-          })
-
-          api.defaults.headers.common[
-            'Authorization'
-          ] = `Bearer ${data.accessToken}`
-
-          originalRequest.headers[
-            'Authorization'
-          ] = `Bearer ${data.accessToken}`
-
-          failedQueue.forEach((request) => {
-            request.resolve(data.accessToken)
-          })
-
-          failedQueue = []
-
-          return api(originalRequest)
-        } catch (refreshError) {
-          failedQueue.forEach((request) => {
-            request.reject(refreshError)
-          })
-
-          failedQueue = []
-          await storageAuthTokenRemove()
-          signOutApp() // 👈 chama o signOut do contexto
-        } finally {
-          isRefreshing = false
-        }
+    /**
+     * 🚨 Se NÃO for erro 401 → erro normal
+     */
+    if (error.response?.status !== 401) {
+      if (error.response?.data) {
+        return Promise.reject(
+          new AppError((error.response.data as any).message),
+        )
       }
+      return Promise.reject(error)
+    }
 
+    /**
+     * 🛑 Evita loop infinito
+     */
+    if (originalRequest._retry) {
+      await storageAuthTokenRemove()
+      signOutApp()
+      return Promise.reject(error)
+    }
+
+    originalRequest._retry = true
+
+    /**
+     * 🔁 Se já existe refresh em andamento → fila
+     */
+    if (isRefreshing) {
       return new Promise((resolve, reject) => {
         failedQueue.push({
           resolve: (token: string) => {
-            originalRequest.headers = {
-              ...originalRequest.headers,
-              Authorization: `Bearer ${token}`,
-            }
+            originalRequest.headers.Authorization = `Bearer ${token}`
             resolve(api(originalRequest))
           },
-          reject: (err: any) => reject(err), // 👈 aqui coloque `(err: any)` para corrigir o erro do TS
+          reject,
         })
       })
     }
 
-    if (error.response && error.response.data) {
-      return Promise.reject(
-        new AppError((error.response.data as { message: string }).message),
-      )
-    } else {
-      return Promise.reject(error)
+    isRefreshing = true
+
+    try {
+      const stored = await storageAuthTokenGet()
+
+      if (!stored?.refreshToken) {
+        throw new Error('Refresh token inexistente')
+      }
+
+      /**
+       * 🔄 CHAMA REFRESH
+       */
+      const { data } = await api.post('/token/refresh', {
+        refreshToken: stored.refreshToken,
+      })
+
+      const { accessToken, refreshToken } = data
+
+      /**
+       * 💾 Salva novos tokens
+       */
+      await storageAuthTokenSave({
+        token: accessToken,
+        refreshToken,
+      })
+
+      api.defaults.headers.common.Authorization = `Bearer ${accessToken}`
+      originalRequest.headers.Authorization = `Bearer ${accessToken}`
+
+      processQueue(null, accessToken)
+
+      return api(originalRequest)
+    } catch (refreshError) {
+      processQueue(refreshError, null)
+
+      await storageAuthTokenRemove()
+      signOutApp()
+
+      return Promise.reject(refreshError)
+    } finally {
+      isRefreshing = false
     }
   },
 )

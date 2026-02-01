@@ -9,24 +9,22 @@ import {
   ScrollView,
   TextInput,
   Image,
-  Alert,
 } from 'react-native'
-import { Input } from '@components/Input' // Seu componente Input estilizado
+import { Input } from '@components/Input'
 import MarketPng from '@assets/rahdar.png'
 import IakiPng from '@assets/logoiaki.png'
 import clubePng from '@assets/cashbacks.png'
 import { useNavigation } from '@react-navigation/native'
 import { AuthNavigatorRoutesProps } from '@routes/auth.routes'
+import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import Feather from 'react-native-vector-icons/Feather'
 import { useAuth } from '@hooks/useAuth'
 import { AppError } from '@utils/AppError'
 import { Center, useToast, VStack } from 'native-base'
-
 import { useForm, Controller } from 'react-hook-form'
 import * as yup from 'yup'
 import { yupResolver } from '@hookform/resolvers/yup'
 import { api } from '@services/api'
-import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
 type FormDataProps = {
   email: string
@@ -42,18 +40,14 @@ const signInSchema = yup.object({
 })
 
 export function SignIn() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | undefined>('')
 
   const { signIn } = useAuth()
   const navigation = useNavigation<AuthNavigatorRoutesProps>()
   const navigationApp = useNavigation<AppNavigatorRoutesProps>()
   const toast = useToast()
 
-  //criando controle para o formulário
   const {
     control,
     handleSubmit,
@@ -70,25 +64,28 @@ export function SignIn() {
     try {
       setIsLoading(true)
 
-      // 1. Faz login e obtém o usuário autenticado
+      // 🔐 Login
       const user = await signIn(email, password)
 
-      // 2. Verifica se a localização existe
+      // 📍 Verifica localização
       const response = await api.get(`/users/${user.id}/location`)
 
       if (response?.data?.latitude && response?.data?.longitude) {
-        navigationApp.navigate('home', { userId: user.id }) // Já tem localização, vai para Home
+        navigationApp.navigate('home') // ✅ SEM params
       } else {
-        navigationApp.navigate('localization', { userId: user.id }) // Redireciona para Location
+        // navigationApp.navigate('localization', { userId: user.id })
       }
-    } catch (error) {
-      const isAppError = error instanceof AppError
-      const title = isAppError
-        ? error.message
-        : 'Não foi possível entrar. Tente novamente mais tarde!'
+    } catch (error: any) {
+      let message = 'Não foi possível entrar. Tente novamente mais tarde!'
+
+      if (error?.response?.data?.message) {
+        message = error.response.data.message
+      } else if (error instanceof AppError) {
+        message = error.message
+      }
 
       toast.show({
-        title,
+        title: message,
         placement: 'top',
         bgColor: 'red.500',
       })
@@ -108,18 +105,11 @@ export function SignIn() {
         keyboardShouldPersistTaps="handled"
       >
         <VStack>
-          <Center
-            ml={-4}
-            mr={-4}
-            bg={'gray.200'}
-            borderTopRadius={'3xl'}
-            mb={-2}
-          >
+          <Center ml={-4} mr={-4} bg="gray.200" borderTopRadius="3xl" mb={-2}>
             <Image
-              style={{ height: 220, width: 300, marginBottom: 2 }}
-              alt="clube"
+              style={{ height: 220, width: 300 }}
               source={clubePng}
-              borderRadius={1}
+              resizeMode="contain"
             />
           </Center>
 
@@ -128,9 +118,8 @@ export function SignIn() {
               <Text style={styles.header}>Clube de vantagens</Text>
               <Image
                 style={{ height: 30, width: 160, marginBottom: 16 }}
-                alt="Logo Rahdar"
                 source={MarketPng}
-                borderRadius={1}
+                resizeMode="contain"
               />
             </View>
 
@@ -167,7 +156,7 @@ export function SignIn() {
 
               <TouchableOpacity
                 style={styles.iconButton}
-                onPress={() => setShowPassword(!showPassword)}
+                onPress={() => setShowPassword((prev) => !prev)}
               >
                 <Feather
                   name={showPassword ? 'eye-off' : 'eye'}
@@ -177,15 +166,14 @@ export function SignIn() {
               </TouchableOpacity>
             </View>
 
-            {errorMessage && (
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            )}
-
             <TouchableOpacity
               style={styles.button}
               onPress={handleSubmit(handleSignIn)}
+              disabled={isLoading}
             >
-              <Text style={styles.buttonText}>Entrar</Text>
+              <Text style={styles.buttonText}>
+                {isLoading ? 'Entrando...' : 'Entrar'}
+              </Text>
             </TouchableOpacity>
 
             <View style={styles.footer}>
@@ -194,12 +182,12 @@ export function SignIn() {
                 <Text style={styles.link}>Cadastre-se</Text>
               </TouchableOpacity>
             </View>
+
             <View style={{ alignItems: 'center', marginTop: 8 }}>
               <Image
                 style={{ height: 60, width: 104 }}
-                alt="Logo IAki"
                 source={IakiPng}
-                borderRadius={1}
+                resizeMode="contain"
               />
             </View>
           </View>
@@ -219,17 +207,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 10,
     padding: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
     elevation: 5,
   },
   header: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginTop: 10,
-    marginBottom: 10,
+    marginVertical: 10,
     color: '#333',
     textAlign: 'center',
   },
@@ -262,12 +245,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
-  errorText: {
-    color: 'red',
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 10,
-  },
   footer: {
     marginTop: 20,
     flexDirection: 'row',
@@ -282,6 +259,5 @@ const styles = StyleSheet.create({
     color: '#e1093f',
     fontWeight: 'bold',
     marginLeft: 5,
-    marginBottom: 8,
   },
 })
