@@ -19,12 +19,10 @@ import { api } from '@services/api' // << vamos usar para buscar o perfil
 
 export function Profile() {
   const [balance, setBalance] = useState(0)
-  const [pendingCashback, setPendingCashback] = useState(0)
   const [totalReceived, setTotalReceived] = useState(0)
   const [totalUsed, setTotalUsed] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Novo: estado local com os dados mais recentes do usuário
   const [userView, setUserView] = useState<any>(null)
 
   const [statement, setStatement] = useState<
@@ -39,48 +37,41 @@ export function Profile() {
   const navigation = useNavigation<AppNavigatorRoutesProps>()
   const { user } = useAuth()
 
-  const fetchData = useCallback(async () => {
+  const fetchCashbackData = useCallback(async () => {
     try {
       setIsLoading(true)
-      const [balanceData, pending, cashbackStatement] = await Promise.all([
+
+      const [balanceData, cashbackStatement] = await Promise.all([
         userService.getUserCashbackBalance(),
-        orderService.getPendingCashback(),
         userService.getUserCashbackStatement(),
       ])
+
       setBalance(balanceData.balance)
       setTotalReceived(balanceData.totalReceived)
       setTotalUsed(balanceData.totalUsed)
-      setPendingCashback(pending)
       setStatement(cashbackStatement)
     } catch (error) {
-      console.log('Erro ao carregar dados do perfil:', error)
-      Alert.alert('Erro', 'Não foi possível carregar seus dados.')
+      Alert.alert('Erro', 'Não foi possível carregar seus cashbacks.')
     } finally {
       setIsLoading(false)
     }
   }, [])
 
-  // Novo: fetch do perfil no foco, para refletir alterações da ProfileEdit
   const fetchUserProfile = useCallback(async () => {
     try {
       const { data } = await api.get('/users/profile')
       setUserView(data?.user ?? null)
-    } catch (e) {
-      // se a rota mudar, ajuste aqui
-      console.log('Erro ao carregar /users/profile:', e)
+    } catch {
+      // silencioso
     }
   }, [])
 
   useFocusEffect(
     useCallback(() => {
       fetchUserProfile()
-      fetchData()
-    }, [fetchUserProfile, fetchData]),
+      fetchCashbackData()
+    }, [fetchUserProfile, fetchCashbackData]),
   )
-
-  const handleViewStatement = () => navigation.navigate('orderHistory')
-  const handleUseCashback = () => navigation.navigate('searchProducts' as never)
-  const handleEditProfile = () => navigation.navigate('profileEdit')
 
   if (isLoading) {
     return (
@@ -90,7 +81,6 @@ export function Profile() {
     )
   }
 
-  // Preferimos userView (recente do backend); se não tiver, cai para o user do contexto
   const displayName = userView?.name ?? user?.name ?? 'Usuário'
   const displayEmail = userView?.email ?? user?.email ?? ''
   const displayAvatar = userView?.avatar ?? user?.avatar
@@ -98,16 +88,13 @@ export function Profile() {
   return (
     <View>
       <HomeScreen title="Cashback Acumulado" />
+
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Cabeçalho de perfil com avatar + botão Alterar */}
+        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleEditProfile} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => navigation.navigate('profileEdit')}>
             <UserPhoto
-              source={
-                displayAvatar
-                  ? { uri: displayAvatar }
-                  : undefined /* defaultUserPhotoImg */
-              }
+              source={displayAvatar ? { uri: displayAvatar } : undefined}
               alt="Foto do usuário"
               size={24}
               mr={3}
@@ -115,87 +102,64 @@ export function Profile() {
           </TouchableOpacity>
 
           <View style={{ flex: 1 }}>
-            <Text style={styles.userName} numberOfLines={1}>
-              {displayName}
-            </Text>
-            <Text style={styles.userEmail} numberOfLines={1}>
-              {displayEmail}
-            </Text>
-
-            <View style={styles.avatarActions}>
-              <TouchableOpacity
-                onPress={handleEditProfile}
-                style={[styles.smallBtn, { backgroundColor: '#0EA5E9' }]}
-              >
-                <Text style={styles.smallBtnText}>Alterar</Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.userName}>{displayName}</Text>
+            <Text style={styles.userEmail}>{displayEmail}</Text>
           </View>
         </View>
 
+        {/* Card saldo */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>💰 Meus cashbacks </Text>
+          <Text style={styles.cardTitle}>💰 Cashback geral</Text>
 
           <View style={styles.balanceRow}>
             <View>
               <Text style={styles.label}>Disponível</Text>
               <Text style={styles.value}>R$ {balance.toFixed(2)}</Text>
             </View>
+
             <View>
               <Text style={styles.label}>Recebido</Text>
               <Text style={styles.valueReceived}>
-                {totalReceived.toFixed(2)}
+                R$ {totalReceived.toFixed(2)}
               </Text>
             </View>
+
             <View>
               <Text style={styles.label}>Utilizado</Text>
-              <Text style={styles.valueUsed}>{totalUsed.toFixed(2)}</Text>
+              <Text style={styles.valueUsed}>R$ {totalUsed.toFixed(2)}</Text>
             </View>
-          </View>
-
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={styles.button}
-              onPress={handleViewStatement}
-            >
-              <Text style={styles.buttonText}>Ver Pedidos</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.button} onPress={handleUseCashback}>
-              <Text style={styles.buttonText}>Usar Cashback</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
+        {/* Extrato */}
         <View style={styles.summary}>
-          <Text style={styles.summaryTitle}>Extrato </Text>
+          <Text style={styles.summaryTitle}>Extrato geral</Text>
 
           {statement.length === 0 ? (
             <Text style={styles.summaryLabel}>
               Nenhuma transação encontrada.
             </Text>
           ) : (
-            <>
-              {statement.map((item) => (
-                <View key={item.id} style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>
-                    {item.type === 'RECEIVE' ? 'Recebido' : 'Utilizado'} -{' '}
-                    {new Date(item.created_at).toLocaleDateString('pt-BR')}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.summaryValue,
-                      {
-                        color: item.type === 'RECEIVE' ? '#16A34A' : '#EF4444',
-                      },
-                    ]}
-                  >
-                    {item.type === 'RECEIVE' ? '+' : '-'} R${' '}
-                    {Number(item.amount ?? 0).toFixed(2)}
-                  </Text>
-                </View>
-              ))}
-            </>
+            statement.map((item) => (
+              <View key={item.id} style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>
+                  {item.type === 'RECEIVE' ? 'Recebido' : 'Utilizado'} •{' '}
+                  {new Date(item.created_at).toLocaleDateString('pt-BR')}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.summaryValue,
+                    {
+                      color: item.type === 'RECEIVE' ? '#16A34A' : '#EF4444',
+                    },
+                  ]}
+                >
+                  {item.type === 'RECEIVE' ? '+' : '-'} R${' '}
+                  {Number(item.amount ?? 0).toFixed(2)}
+                </Text>
+              </View>
+            ))
           )}
         </View>
       </ScrollView>
