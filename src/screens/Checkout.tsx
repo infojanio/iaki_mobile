@@ -66,23 +66,34 @@ export function Checkout() {
   const hasPending = orders.some((order) => order.status === 'PENDING')
 
   /* ======================
-     Saldo + histórico
+     Saldo (POR LOJA) + histórico
   ====================== */
   useFocusEffect(
     useCallback(() => {
       async function fetchData() {
+        if (!activeStoreId) return
+
         try {
           const [balanceRes, ordersRes] = await Promise.all([
-            api.get('/users/balance'),
+            // ✅ SALDO APENAS DA LOJA ATIVA
+            api.get(`/cashbacks/balance/${activeStoreId}`),
+
             api.get('/orders/history'),
           ])
 
-          setCashbackBalance(balanceRes.data.balance ?? 0)
+          const balance = balanceRes.data.balance ?? 0
+
+          setCashbackBalance(balance)
           setOrders(ordersRes.data.orders ?? [])
-        } catch {
+
+          // 🔒 segurança: se não tem saldo, desliga o switch
+          if (balance <= 0) {
+            setUseCashback(false)
+          }
+        } catch (error) {
           toast.show({
             title: 'Erro',
-            description: 'Não foi possível carregar saldo ou pedidos.',
+            description: 'Não foi possível carregar o saldo da loja.',
             bgColor: 'red.500',
             placement: 'top',
           })
@@ -90,7 +101,7 @@ export function Checkout() {
       }
 
       fetchData()
-    }, []),
+    }, [activeStoreId]),
   )
 
   /* ======================
@@ -102,7 +113,7 @@ export function Checkout() {
     if (useCashback && cashbackBalance <= 0) {
       Alert.alert(
         'Saldo insuficiente',
-        'Você não possui saldo de cashback suficiente.',
+        'Você não possui saldo de cashback nesta loja.',
       )
       return
     }
@@ -113,10 +124,12 @@ export function Checkout() {
       console.log('[CHECKOUT]', {
         activeStoreId,
         cartItemsLength: cartItems.length,
+        cashbackUsed,
       })
 
-      const response = await api.post('/cart/checkout')
-      console.log('[CHECKOUT RESPONSE]', response.data)
+      const response = await api.post('/cart/checkout', {
+        useCashback,
+      })
 
       const { orderId } = response.data
 
@@ -172,32 +185,32 @@ export function Checkout() {
           </HStack>
         )}
       />
-      <Box mr={44}>
-        {activeStoreName && (
-          <Text fontSize="14" color="blue.700">
-            Vendido por {activeStoreName}
-          </Text>
-        )}
-      </Box>
+
+      {activeStoreName && (
+        <Text fontSize="14" color="blue.700" mb={2}>
+          Vendido por {activeStoreName}
+        </Text>
+      )}
+
       <Divider my={4} />
 
       <VStack space={3}>
         <Text fontSize="lg" fontWeight="bold">
-          Saldo disponível: {formatCurrency(cashbackBalance)}
+          Saldo disponível nesta loja: {formatCurrency(cashbackBalance)}
         </Text>
 
         <HStack alignItems="center" space={3}>
           <Switch
             isChecked={useCashback}
-            isDisabled={cashbackBalance <= 0 || hasPending}
+            isDisabled={cashbackBalance <= 0 || hasPending || !activeStoreId}
             onToggle={setUseCashback}
           />
           <Text>Usar cashback como desconto</Text>
         </HStack>
 
         {hasPending && (
-          <Text color="red.500" textAlign="left">
-            <Text fontWeight="bold"> ⚠️ Retire o último pedido na loja.</Text>
+          <Text color="red.500">
+            ⚠️ Finalize o último pedido antes de criar outro.
           </Text>
         )}
       </VStack>

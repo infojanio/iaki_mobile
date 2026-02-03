@@ -56,6 +56,10 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest: any = error.config
 
+    console.log('AXIOS INTERCEPTOR ERROR:', error)
+    console.log('AXIOS CONFIG:', error.config)
+    console.log('AXIOS RESPONSE:', error.response)
+
     /**
      * 🚨 Se NÃO for erro 401 → erro normal
      */
