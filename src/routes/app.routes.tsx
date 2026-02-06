@@ -191,7 +191,7 @@ export function AppRoutes() {
         name="profile"
         component={Profile}
         options={{
-          title: 'Perfil',
+          title: 'Conta',
           tabBarIcon: ({ color }) => (
             <ProfileSvg fill={color} width={iconSize} height={iconSize} />
           ),

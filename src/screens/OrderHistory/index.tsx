@@ -44,6 +44,7 @@ interface Order {
 }
 
 const DEFAULT_PRODUCT_IMAGE = 'https://via.placeholder.com/80'
+
 const STATUS_OPTIONS = [
   { value: '', label: 'Todos' },
   { value: 'PENDING', label: 'Pendente' },
@@ -57,25 +58,28 @@ export function OrderHistory() {
   const [loading, setLoading] = useState(true)
   const [selectedStatus, setSelectedStatus] = useState<string>('')
   const [refreshing, setRefreshing] = useState(false)
+
   const toast = useToast()
 
-  // Função para carregar os pedidos
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true)
+
       const response = await api.get('/orders/history')
 
-      const validatedOrders = (response.data.orders || []).map(
+      const validatedOrders: Order[] = (response.data.orders || []).map(
         (order: any) => ({
-          id: order.id || '',
-          createdAt: order.createdAt || new Date().toISOString(),
-          totalAmount: order.totalAmount || 0,
-          status: order.status || 'PENDING',
+          id: order.id,
+          createdAt: order.createdAt,
+          totalAmount: order.totalAmount,
+          status: order.status,
+          cashbackAmount: order.cashbackAmount,
+          qrCodeUrl: order.qrCodeUrl ?? null,
           items: (order.items || []).map((item: any) => ({
-            id: item.id || Math.random().toString(36).substr(2, 9),
-            quantity: item.quantity || 0,
+            id: item.id,
+            quantity: item.quantity,
             product: {
-              id: item.product?.id || item.productId?.id || '',
+              id: item.product?.id || item.productId?.id,
               name:
                 item.product?.name ||
                 item.productId?.name ||
@@ -91,35 +95,28 @@ export function OrderHistory() {
                 0,
             },
           })),
-          cashbackAmount: order.cashbackAmount,
-          qrCodeUrl: order.qrCodeUrl || null,
         }),
       )
 
       setOrders(validatedOrders)
-      return validatedOrders
     } catch (error) {
-      console.error('Erro ao buscar pedidos:', error)
       toast.show({
         description: 'Erro ao carregar histórico de pedidos',
-        bgColor: 'red.500',
         placement: 'top',
+        bgColor: 'red.500',
       })
-      return []
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
   }, [toast])
 
-  // Atualiza os pedidos quando a tela recebe foco
   useFocusEffect(
     useCallback(() => {
       fetchOrders()
     }, [fetchOrders]),
   )
 
-  // Filtra os pedidos quando o status selecionado muda
   useEffect(() => {
     if (selectedStatus === '') {
       setFilteredOrders(orders)
@@ -128,9 +125,8 @@ export function OrderHistory() {
         orders.filter((order) => order.status === selectedStatus),
       )
     }
-  }, [selectedStatus, orders])
+  }, [orders, selectedStatus])
 
-  // Função para atualização manual (pull-to-refresh)
   const handleRefresh = async () => {
     setRefreshing(true)
     await fetchOrders()
@@ -153,12 +149,47 @@ export function OrderHistory() {
     if (order.cashbackAmount !== undefined) {
       return order.cashbackAmount
     }
+
     return order.items.reduce((total, item) => {
-      const price = item.product?.price || 0
-      const percentage = item.product?.cashbackPercentage || 0
-      return total + (price * item.quantity * percentage) / 100
+      return (
+        total +
+        (item.product.price * item.quantity * item.product.cashbackPercentage) /
+          100
+      )
     }, 0)
   }
+
+  const StatusFilterHeader = () => (
+    <Box px={4} pt={2} pb={4}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <HStack space={2}>
+          {STATUS_OPTIONS.map((option) => (
+            <Pressable
+              key={option.value}
+              onPress={() => setSelectedStatus(option.value)}
+            >
+              <Box
+                px={4}
+                h={10}
+                borderRadius="2xl"
+                justifyContent="center"
+                bg={
+                  selectedStatus === option.value ? 'primary.500' : 'gray.200'
+                }
+              >
+                <Text
+                  color={selectedStatus === option.value ? 'white' : 'gray.700'}
+                  fontWeight="medium"
+                >
+                  {option.label}
+                </Text>
+              </Box>
+            </Pressable>
+          ))}
+        </HStack>
+      </ScrollView>
+    </Box>
+  )
 
   if (loading) {
     return (
@@ -169,78 +200,33 @@ export function OrderHistory() {
   }
 
   return (
-    <Box flex={1} bg="gray.50" safeArea mt={-5}>
+    <Box flex={1} bg="gray.50" safeArea>
       <HomeScreen title="Meus Pedidos" />
 
-      {/* Filtro por Status com Pressable */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        mb={2}
-        py={2}
-      >
-        <HStack space={1} mb={2}>
-          {STATUS_OPTIONS.map((option) => (
-            <Pressable
-              key={`status-${option.value}`}
-              onPress={() => setSelectedStatus(option.value)}
-            >
-              <Box
-                mr={3}
-                w={24}
-                h={10}
-                borderRadius="2xl"
-                bg={
-                  selectedStatus === option.value ? 'primary.500' : 'gray.200'
-                }
-              >
-                <Center>
-                  <Text
-                    color={
-                      selectedStatus === option.value ? 'white' : 'gray.700'
-                    }
-                    fontWeight="medium"
-                    alignItems={'center'}
-                    justifyContent={'center'}
-                    ml={2}
-                    mt={2}
-                  >
-                    {option.label}
-                  </Text>
-                </Center>
-              </Box>
-            </Pressable>
-          ))}
-        </HStack>
-      </ScrollView>
-
       {filteredOrders.length === 0 ? (
-        <Box
-          bg="white"
-          pb={280}
-          borderRadius="md"
-          alignItems={'center'}
-          fontSize={'16'}
-        >
-          <Text color="red.500">
+        <Center flex={1}>
+          <Text color="gray.500">
             {selectedStatus === ''
               ? 'Nenhum pedido encontrado'
-              : `Nenhum pedido com status ${STATUS_OPTIONS.find(
-                  (o) => o.value === selectedStatus,
-                )?.label.toLowerCase()}`}
+              : `Nenhum pedido com status ${
+                  STATUS_OPTIONS.find((o) => o.value === selectedStatus)?.label
+                }`}
           </Text>
-        </Box>
+        </Center>
       ) : (
         <FlatList
           data={filteredOrders}
-          keyExtractor={(item) => `order-${item.id}`}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={<StatusFilterHeader />}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          contentContainerStyle={{ paddingBottom: 32 }}
           renderItem={({ item }) => (
-            <Box mb={4} bg="white" p={4} borderRadius="md" shadow={1}>
+            <Box mb={4} bg="white" p={4} mx={4} borderRadius="md" shadow={1}>
               <HStack justifyContent="space-between" mb={2}>
                 <Text fontWeight="bold">Pedido #{item.id.substring(0, 8)}</Text>
                 <Badge colorScheme={getStatusColor(item.status)}>
-                  {STATUS_OPTIONS.find((o) => o.value === item.status)?.label ||
-                    item.status}
+                  {STATUS_OPTIONS.find((o) => o.value === item.status)?.label}
                 </Badge>
               </HStack>
 
@@ -250,30 +236,24 @@ export function OrderHistory() {
 
               <VStack space={3} mb={3}>
                 {item.items.map((orderItem) => (
-                  <HStack
-                    key={`item-${item.id}-${orderItem.id}`}
-                    space={3}
-                    alignItems="center"
-                  >
+                  <HStack key={orderItem.id} space={3} alignItems="center">
                     <Image
                       source={{
-                        uri: orderItem.product.image || DEFAULT_PRODUCT_IMAGE,
+                        uri: orderItem.product.image ?? DEFAULT_PRODUCT_IMAGE,
                       }}
-                      alt={orderItem.product.name}
-                      size="sm"
-                      borderRadius="md"
                       fallbackElement={
                         <Box
                           bg="gray.200"
                           size="sm"
                           borderRadius="md"
-                          justifyContent="center"
                           alignItems="center"
+                          justifyContent="center"
                         >
                           <Text color="gray.500">Sem imagem</Text>
                         </Box>
                       }
                     />
+
                     <VStack flex={1}>
                       <Text fontWeight="medium">{orderItem.product.name}</Text>
                       <HStack justifyContent="space-between">
@@ -292,7 +272,7 @@ export function OrderHistory() {
 
               <Divider my={2} />
 
-              <VStack space={2}>
+              <VStack space={1}>
                 <HStack justifyContent="space-between">
                   <Text fontWeight="bold">Subtotal:</Text>
                   <Text>{formatCurrency(item.totalAmount)}</Text>
@@ -307,9 +287,6 @@ export function OrderHistory() {
               </VStack>
             </Box>
           )}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
         />
       )}
     </Box>

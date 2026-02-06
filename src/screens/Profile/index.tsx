@@ -91,21 +91,21 @@ export function Profile() {
 
       <ScrollView contentContainerStyle={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.navigate('profileEdit')}>
+        <TouchableOpacity onPress={() => navigation.navigate('profileEdit')}>
+          <View style={styles.header}>
             <UserPhoto
               source={displayAvatar ? { uri: displayAvatar } : undefined}
               alt="Foto do usuário"
               size={24}
               mr={3}
             />
-          </TouchableOpacity>
 
-          <View style={{ flex: 1 }}>
-            <Text style={styles.userName}>{displayName}</Text>
-            <Text style={styles.userEmail}>{displayEmail}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.userName}>{displayName}</Text>
+              <Text style={styles.userEmail}>{displayEmail}</Text>
+            </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Card saldo */}
         <View style={styles.card}>
