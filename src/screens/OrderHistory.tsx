@@ -72,7 +72,7 @@ export function OrderHistory() {
       const parsedOrders: Order[] = (response.data.orders || []).map(
         (order: any) => ({
           id: order.id,
-          createdAt: order.createdAt,
+          createdAt: order.created_at,
           totalAmount: order.totalAmount,
           status: order.status,
           cashbackAmount: order.cashbackAmount,
@@ -92,8 +92,8 @@ export function OrderHistory() {
                 item.productId?.image ||
                 DEFAULT_PRODUCT_IMAGE,
               cashbackPercentage:
-                item.product?.cashbackPercentage ||
-                item.productId?.cashbackPercentage ||
+                item.product?.cashback_percentage ||
+                item.productId?.cashback_percentage ||
                 0,
             },
           })),
