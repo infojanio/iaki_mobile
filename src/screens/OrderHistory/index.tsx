@@ -170,7 +170,7 @@ export function OrderHistory() {
             >
               <Box
                 px={4}
-                h={10}
+                py={2}
                 borderRadius="2xl"
                 justifyContent="center"
                 bg={
@@ -223,11 +223,27 @@ export function OrderHistory() {
           contentContainerStyle={{ paddingBottom: 32 }}
           renderItem={({ item }) => (
             <Box mb={4} bg="white" p={4} mx={4} borderRadius="md" shadow={1}>
-              <HStack justifyContent="space-between" mb={2}>
-                <Text fontWeight="bold">Pedido #{item.id.substring(0, 8)}</Text>
-                <Badge colorScheme={getStatusColor(item.status)}>
-                  {STATUS_OPTIONS.find((o) => o.value === item.status)?.label}
-                </Badge>
+              <HStack justifyContent="space-between" alignItems="center" mb={2}>
+                <Text fontWeight="bold" flexShrink={1}>
+                  Pedido #{item.id.substring(0, 8)}
+                </Text>
+
+                <Box minW={90} alignItems="flex-end">
+                  <Badge
+                    colorScheme={getStatusColor(item.status)}
+                    alignSelf="flex-end"
+                    px={3}
+                    py={1}
+                    borderRadius="full"
+                  >
+                    <Text fontSize="xs" fontWeight="bold" color="white">
+                      {
+                        STATUS_OPTIONS.find((o) => o.value === item.status)
+                          ?.label
+                      }
+                    </Text>
+                  </Badge>
+                </Box>
               </HStack>
 
               <Text color="gray.500" mb={3}>
