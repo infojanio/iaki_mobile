@@ -2,7 +2,7 @@ export type SubCategoryDTO = {
   id: string
   name: string
   image: string
-  category_id: string
+  categoryId: string
 
   Category?: {
     id: string

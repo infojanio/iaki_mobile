@@ -7,7 +7,7 @@ type Props = {
 }
 
 export function ProductCard({ data, onPress }: Props) {
-  const cashbackValue = (Number(data.price) * data.cashback_percentage) / 100
+  const cashbackValue = (Number(data.price) * data.cashbackPercentage) / 100
 
   return (
     <Pressable onPress={onPress} mr={2}>

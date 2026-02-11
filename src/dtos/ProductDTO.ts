@@ -8,7 +8,7 @@ export type ProductDTO = {
   price: number
   quantity: number
   image?: string
-  cashback_percentage: number
+  cashbackPercentage: number
   status: boolean
 
   // 🔑 loja (backend novo)
@@ -19,9 +19,9 @@ export type ProductDTO = {
   }
 
   // 🔁 compatibilidade (backend antigo)
-  store_id?: string
+  storeId?: string
 
-  subcategory_id?: string
+  subcategoryId?: string
   subcategory?: {
     id: string
     name: string

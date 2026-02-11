@@ -5,8 +5,8 @@ interface Product {
   id: string
   name: string
   price: number
-  cashback_percentage: number
-  store_id: string
+  cashbackPercentage: number
+  storeId: string
   image?: string
 }
 
@@ -58,7 +58,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const cashback = items.reduce(
     (sum, item) =>
       sum +
-      (item.product.price * item.quantity * item.product.cashback_percentage) /
+      (item.product.price * item.quantity * item.product.cashbackPercentage) /
         100,
     0,
   )

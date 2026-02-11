@@ -34,7 +34,7 @@ type Product = {
   description: string
   price: number
   image: string
-  cashback_percentage: number
+  cashbackPercentage: number
   store: {
     id: string
     name: string
@@ -68,7 +68,7 @@ export function ProductDetails() {
         const normalizedProduct: Product = {
           ...data,
           price: Number(data.price),
-          cashback_percentage: Number(data.cashback_percentage),
+          cashbackPercentage: Number(data.cashbackPercentage),
         }
 
         setProduct(normalizedProduct)
@@ -173,7 +173,7 @@ export function ProductDetails() {
               </Text>
 
               <Text fontSize="16" color="green.600" fontWeight="medium">
-                {product.cashback_percentage}% de cashback
+                {product.cashbackPercentage}% de cashback
               </Text>
             </HStack>
 

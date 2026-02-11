@@ -181,7 +181,7 @@ export function StoreProducts() {
       setIsLoadingProducts(true)
 
       const response = await api.get(
-        `/subcategories/category/?category_id=${categoryId}`,
+        `/subcategories/category/?categoryId=${categoryId}`,
       )
 
       setSubCategories(response.data)
@@ -213,7 +213,7 @@ export function StoreProducts() {
       setIsLoadingProducts(true)
 
       const response = await api.get(
-        `/products/subcategory/?subcategory_id=${subcategoryId}`,
+        `/products/subcategory/?subcategoryId=${subcategoryId}`,
       )
 
       setProducts(response.data)

@@ -117,7 +117,7 @@ export function ProductBySubCategory() {
       console.log('Buscando subcategorias para a categoria:', categoryId)
       //http://localhost:3333/subcategories/category?categoryId=41302d8e-8660-47c6-a604-4908aea64e35
       const response = await api.get(
-        `/subcategories/category/?category_id=${categoryId}`,
+        `/subcategories/category/?categoryId=${categoryId}`,
       )
       setSubCategories(response.data)
 
@@ -147,7 +147,7 @@ export function ProductBySubCategory() {
     try {
       setIsLoading(true)
       const response = await api.get(
-        `/products/subcategory/?subcategory_id=${subCategorySelected}`,
+        `/products/subcategory/?subcategoryId=${subCategorySelected}`,
       )
       setProducts(response.data)
       console.log('Produtos', response.data)

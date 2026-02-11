@@ -94,17 +94,17 @@ export function AllProductsCashback() {
       switch (filter) {
         case '5':
           filtered = productsList.filter(
-            (product) => product.cashback_percentage > 5,
+            (product) => product.cashbackPercentage > 5,
           )
           break
         case '10':
           filtered = productsList.filter(
-            (product) => product.cashback_percentage > 10,
+            (product) => product.cashbackPercentage > 10,
           )
           break
         case '15':
           filtered = productsList.filter(
-            (product) => product.cashback_percentage > 15,
+            (product) => product.cashbackPercentage > 15,
           )
           break
         default:

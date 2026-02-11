@@ -30,7 +30,7 @@ export function Profile() {
       id: string
       type: 'RECEIVE' | 'USE'
       amount: number
-      created_at: string
+      createdAt: string
     }>
   >([])
 
@@ -144,7 +144,7 @@ export function Profile() {
               <View key={item.id} style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>
                   {item.type === 'RECEIVE' ? 'Recebido' : 'Utilizado'} •{' '}
-                  {new Date(item.created_at).toLocaleDateString('pt-BR')}
+                  {new Date(item.createdAt).toLocaleDateString('pt-BR')}
                 </Text>
 
                 <Text

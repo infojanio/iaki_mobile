@@ -14,7 +14,7 @@ export type CategoryDTO = {
 export type SubCategoryDTO = {
   id: string
   name: string
-  category_id: string // Mantendo compatibilidade com seu backend
+  categoryId: string // Mantendo compatibilidade com seu backend
   status: boolean
 }
 

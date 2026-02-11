@@ -1,3 +1,5 @@
+import { StoreDTO } from './StoreDTO'
+
 export type CityDTO = {
   id: string
   name: string
@@ -15,5 +17,6 @@ export type UserDTO = {
   street?: string
   state?: string
   postalCode?: string
+  store?: StoreDTO | null
   city?: CityDTO | null
 }

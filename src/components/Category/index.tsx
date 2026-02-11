@@ -43,7 +43,7 @@ export function Category() {
       //const response = await api.get(`/companies/company/?company_id=${companyId}`,
       const response = await api.get(`/categories`)
 
-      //const response = await api.get('/categories/category/?category_id=${categoryId}')
+      //const response = await api.get('/categories/category/?categoryId=${categoryId}')
 
       setCategories(response.data)
       // console.log(response.data)

@@ -53,7 +53,7 @@ export function Checkout() {
     cartItems
       .reduce(
         (sum, item) =>
-          sum + (item.price * item.quantity * item.cashback_percentage) / 100,
+          sum + (item.price * item.quantity * item.cashbackPercentage) / 100,
         0,
       )
       .toFixed(2),

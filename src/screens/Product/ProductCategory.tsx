@@ -106,7 +106,7 @@ export function ProductCategory() {
                   subCategorySelected.toLocaleUpperCase() ===
                   item.name.toLocaleUpperCase()
                 }
-                onPress={() => setSubCategorySelected(item.name)} //o segredo tá aqui, passando id = subcategory_id
+                onPress={() => setSubCategorySelected(item.name)} //o segredo tá aqui, passando id = subcategoryId
               />
             )}
             horizontal

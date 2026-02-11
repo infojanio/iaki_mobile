@@ -46,7 +46,7 @@ export function OrderConfirmation() {
         const mapped: OrderDTO = {
           id: data.id,
           store: {
-            id: data.store?.id ?? data.store_id ?? '',
+            id: data.store?.id ?? data.storeId ?? '',
             name: data.store?.name ?? data.storeName ?? 'Loja não identificada',
           },
           totalAmount: Number(data.totalAmount ?? 0),
@@ -67,8 +67,8 @@ export function OrderConfirmation() {
                 name: item.product?.name ?? 'Produto desconhecido',
                 price: Number(item.product?.price ?? 0),
                 image: item.product?.image ?? DEFAULT_IMAGE,
-                cashback_percentage: Number(
-                  item.product?.cashback_percentage ?? 0,
+                cashbackPercentage: Number(
+                  item.product?.cashbackPercentage ?? 0,
                 ),
               },
             }),
@@ -139,9 +139,7 @@ export function OrderConfirmation() {
     return order.items.reduce((total, item) => {
       return (
         total +
-        (item.product.price *
-          item.quantity *
-          item.product.cashback_percentage) /
+        (item.product.price * item.quantity * item.product.cashbackPercentage) /
           100
       )
     }, 0)

@@ -5,7 +5,7 @@ export interface OrderProductDTO {
   name: string
   price: number
   image: string | null
-  cashback_percentage: number
+  cashbackPercentage: number
 }
 
 export interface OrderItemDTO {

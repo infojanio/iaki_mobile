@@ -21,7 +21,7 @@ type CartItem = {
   image: string
   price: number
   quantity: number
-  cashback_percentage: number
+  cashbackPercentage: number
   storeId: string
   stock: number
 }
@@ -113,8 +113,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
           image,
           price: Number(item.priceSnapshot ?? product.price ?? 0),
           quantity: item.quantity,
-          cashback_percentage: Number(
-            item.cashbackSnapshot ?? product.cashback_percentage ?? 0,
+          cashbackPercentage: Number(
+            item.cashbackSnapshot ?? product.cashbackPercentage ?? 0,
           ),
           storeId,
           stock: Number(product.quantity ?? 0),

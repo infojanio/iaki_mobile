@@ -7,7 +7,7 @@ type OrderItem = {
   image: string
   price: number
   quantity: number
-  cashback_percentage: number
+  cashbackPercentage: number
   storeId: string
 }
 
@@ -37,7 +37,7 @@ export function OrderProvider({ children }: OrderProviderProps) {
         image: item.image,
         price: item.price,
         quantity: item.quantity,
-        cashback_percentage: item.cashback_percentage ?? 0,
+        cashbackPercentage: item.cashbackPercentage ?? 0,
         storeId: item.storeId ?? '', // Garante que o storeId sempre exista
       }))
 

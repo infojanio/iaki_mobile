@@ -37,7 +37,7 @@ export function CategoryList({ insideScrollView = true }: Props) {
   function getCategoryIdFromSub(s: SubCategoryDTO): string | null {
     // cobre variações comuns do backend
     // @ts-ignore
-    return s.category_id ?? s.categoryId ?? s.category?.id ?? null
+    return s.categoryId ?? s.categoryId ?? s.category?.id ?? null
   }
 
   async function loadAll(showLoader = true) {

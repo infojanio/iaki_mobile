@@ -56,25 +56,19 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest: any = error.config
 
-    console.log('AXIOS INTERCEPTOR ERROR:', error)
-    console.log('AXIOS CONFIG:', error.config)
-    console.log('AXIOS RESPONSE:', error.response)
+    console.log(
+      'AXIOS ERROR:',
+      error.response?.status,
+      error.config?.url,
+      error.response?.data,
+    )
 
-    /**
-     * 🚨 Se NÃO for erro 401 → erro normal
-     */
+    // ✅ QUALQUER ERRO DIFERENTE DE 401 → só rejeita
     if (error.response?.status !== 401) {
-      if (error.response?.data) {
-        return Promise.reject(
-          new AppError((error.response.data as any).message),
-        )
-      }
       return Promise.reject(error)
     }
 
-    /**
-     * 🛑 Evita loop infinito
-     */
+    // 🔁 proteção contra loop
     if (originalRequest._retry) {
       await storageAuthTokenRemove()
       signOutApp()
@@ -83,9 +77,6 @@ api.interceptors.response.use(
 
     originalRequest._retry = true
 
-    /**
-     * 🔁 Se já existe refresh em andamento → fila
-     */
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
         failedQueue.push({
@@ -107,18 +98,12 @@ api.interceptors.response.use(
         throw new Error('Refresh token inexistente')
       }
 
-      /**
-       * 🔄 CHAMA REFRESH
-       */
       const { data } = await api.post('/token/refresh', {
         refreshToken: stored.refreshToken,
       })
 
       const { accessToken, refreshToken } = data
 
-      /**
-       * 💾 Salva novos tokens
-       */
       await storageAuthTokenSave({
         token: accessToken,
         refreshToken,

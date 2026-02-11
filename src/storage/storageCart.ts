@@ -9,7 +9,7 @@ export type StorageCartProps = {
   quantity: number
   price: number
   image: string
-  cashback_percentage: number
+  cashbackPercentage: number
   storeId: string
 }
 
@@ -19,7 +19,7 @@ export type StorageOrderProps = {
   quantity: number
   price: number
   image: string
-  cashback_percentage: number
+  cashbackPercentage: number
   storeId: string
 }
 
