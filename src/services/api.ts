@@ -11,7 +11,7 @@ import { Platform } from 'react-native'
 const baseURL =
   Platform.OS === 'android'
     ? 'http://10.0.2.2:3333'
-    : 'http://192.168.1.43:3333'
+    : 'http://192.168.1.47:3333'
 
 const api = axios.create({
   baseURL,

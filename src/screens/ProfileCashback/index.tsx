@@ -17,7 +17,7 @@ import { UserPhoto } from '@components/HomeHeader/UserPhoto'
 import { useAuth } from '@hooks/useAuth'
 import { api } from '@services/api' // << vamos usar para buscar o perfil
 
-export function Profile() {
+export function ProfileCashback() {
   const [balance, setBalance] = useState(0)
   const [totalReceived, setTotalReceived] = useState(0)
   const [totalUsed, setTotalUsed] = useState(0)

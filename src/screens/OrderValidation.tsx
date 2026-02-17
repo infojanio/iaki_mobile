@@ -28,13 +28,14 @@ interface Product {
   name: string
   price: number
   image: string | null
-  cashbackPercentage: number
 }
+
 interface OrderItem {
   id: string
   quantity: number
   product: Product
 }
+
 interface Order {
   id: string
   userId: string
@@ -44,17 +45,16 @@ interface Order {
   discountApplied?: number
   status: string
   items: OrderItem[]
-  cashbackAmount?: number
-  qrCodeUrl?: string | null
 }
 
 const DEFAULT_PRODUCT_IMAGE = 'https://via.placeholder.com/80'
+
 const STATUS_OPTIONS = [
   { value: 'PENDING', label: 'Pendente' },
   { value: 'VALIDATED', label: 'Aprovado' },
-  // { value: 'EXPIRED', label: 'Recusado' },
-  { value: 'EXPIRED', label: 'Cancelado' }, // 👈 novo (caso seu backend use esse status)
+  { value: 'EXPIRED', label: 'Cancelado' },
 ]
+
 const PAGE_SIZE = 8
 
 export function OrderValidation() {
@@ -67,16 +67,35 @@ export function OrderValidation() {
   const [refreshing, setRefreshing] = useState(false)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
-  const toast = useToast()
 
+  const toast = useToast()
   const { isOpen, onOpen, onClose } = useDisclose()
   const cancelRef = useRef(null)
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
 
-  // 'validate' | 'cancel'
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
   const [dialogAction, setDialogAction] = useState<'validate' | 'cancel'>(
     'validate',
   )
+
+  function getStatusLabel(status: string) {
+    switch (status) {
+      case 'PENDING':
+        return 'Pendente'
+      case 'VALIDATED':
+        return 'Aprovado'
+      case 'EXPIRED':
+        return 'Cancelado'
+      default:
+        return status
+    }
+  }
+
+  const calculateOrderPoints = (order: Order) => {
+    const valorPago =
+      Number(order.totalAmount) - Number(order.discountApplied ?? 0)
+
+    return Math.floor(valorPago / 10)
+  }
 
   const fetchOrders = useCallback(
     async (pageNumber = 1, reset = false) => {
@@ -93,52 +112,34 @@ export function OrderValidation() {
         })
 
         const newOrders = (response.data.orders || []).map((order: any) => ({
-          id: order.id || '',
+          id: order.id,
           user_name: order.user_name,
-          createdAt: order.createdAt || new Date().toISOString(),
-          totalAmount: order.totalAmount || 0,
+          createdAt: order.createdAt,
+          totalAmount: order.totalAmount,
           discountApplied: order.discountApplied ?? 0,
-          status: order.status || 'PENDING',
+          status: order.status,
           items: (order.items || []).map((item: any) => ({
-            id: item.id || Math.random().toString(36).substr(2, 9),
-            quantity: item.quantity || 0,
+            id: item.id,
+            quantity: item.quantity,
             product: {
-              id: item.product?.id || item.productId?.id || '',
-              name:
-                item.product?.name ||
-                item.productId?.name ||
-                'Produto desconhecido',
-              price: item.product?.price || item.productId?.price || 0,
-              image:
-                item.product?.image ||
-                item.productId?.image ||
-                DEFAULT_PRODUCT_IMAGE,
-              cashbackPercentage:
-                item.product?.cashbackPercentage ||
-                item.productId?.cashbackPercentage ||
-                0,
+              id: item.product?.id,
+              name: item.product?.name,
+              price: item.product?.price,
+              image: item.product?.image || DEFAULT_PRODUCT_IMAGE,
             },
           })),
-          cashbackAmount: order.cashbackAmount,
-          qrCodeUrl: order.qrCodeUrl || null,
         }))
 
-        if (reset) {
-          setOrders(newOrders)
-        } else {
-          setOrders((prev) => [...prev, ...newOrders])
-        }
+        if (reset) setOrders(newOrders)
+        else setOrders((prev) => [...prev, ...newOrders])
 
         setHasMore(newOrders.length === PAGE_SIZE)
-        return newOrders
       } catch (error) {
-        console.error('Erro ao buscar pedidos:', error)
         toast.show({
-          description: 'Erro ao carregar histórico de pedidos',
+          description: 'Erro ao carregar pedidos',
           bgColor: 'red.500',
           placement: 'top',
         })
-        return []
       } finally {
         if (reset) {
           setLoading(false)
@@ -162,30 +163,25 @@ export function OrderValidation() {
   useFocusEffect(
     useCallback(() => {
       setPage(1)
-      setHasLoaded(false)
       fetchOrders(1, true)
     }, [fetchOrders]),
   )
 
   useEffect(() => {
     setPage(1)
-    setHasLoaded(false)
     fetchOrders(1, true)
-  }, [selectedStatus, searchId, fetchOrders])
+  }, [selectedStatus])
 
   const filteredOrders = useMemo(() => {
-    let result = orders
-    if (searchId.trim() !== '') {
-      const searchTerm = searchId.trim().toLowerCase()
-      result = result.filter((o) => o.id.toLowerCase().includes(searchTerm))
-    }
-    return result
+    if (!searchId.trim()) return orders
+    return orders.filter((o) =>
+      o.id.toLowerCase().includes(searchId.toLowerCase()),
+    )
   }, [orders, searchId])
 
   const handleRefresh = async () => {
     setRefreshing(true)
     setPage(1)
-    setHasLoaded(false)
     await fetchOrders(1, true)
   }
 
@@ -202,91 +198,45 @@ export function OrderValidation() {
     }
   }
 
-  const calculateOrderCashback = (order: Order) => {
-    if ((order.discountApplied ?? 0) > 0) return 0
-    if (order.cashbackAmount !== undefined) return order.cashbackAmount
-    return order.items.reduce((total, item) => {
-      const price = item.product?.price || 0
-      const percentage = item.product?.cashbackPercentage || 0
-      return total + (price * item.quantity * percentage) / 100
-    }, 0)
-  }
-
   const validateOrder = async (orderId: string) => {
     try {
-      console.log('[VALIDATE] Enviando validação do pedido:', orderId)
-
       const response = await api.patch(`/orders/${orderId}/validate`)
 
-      console.log('[VALIDATE] Sucesso:', response.data)
-
       toast.show({
-        description: response.data?.message || 'Cashback aprovado com sucesso!',
+        description:
+          response.data?.message || 'Pedido validado e pontos gerados!',
         bgColor: 'green.500',
         placement: 'top',
       })
 
-      setPage(1)
-      setHasLoaded(false)
       fetchOrders(1, true)
     } catch (error: any) {
-      console.log('================ VALIDATE ORDER ERROR ================')
-      console.log('MESSAGE:', error?.message)
-      console.log('STATUS:', error?.response?.status)
-      console.log('DATA:', error?.response?.data)
-      console.log('HEADERS:', error?.response?.headers)
-      console.log('CONFIG URL:', error?.config?.url)
-      console.log('CONFIG METHOD:', error?.config?.method)
-      console.log('FULL ERROR:', error)
-      console.log('=====================================================')
-
       toast.show({
-        description:
-          error?.response?.data?.message ||
-          error?.message ||
-          'Erro ao aprovar cashback',
+        description: error?.response?.data?.message || 'Erro ao validar pedido',
         bgColor: 'red.500',
         placement: 'top',
       })
     }
   }
 
-  // 👇 NOVO: cancelar pedido
   const cancelOrder = async (orderId: string) => {
     try {
-      // Ajuste a rota se no seu backend for diferente (ex: /orders/:id/expire)
-      const response = await api.patch(`/orders/${orderId}/cancel`)
+      await api.patch(`/orders/${orderId}/cancel`)
+
       toast.show({
-        description: response?.data?.message || 'Pedido cancelado com sucesso!',
+        description: 'Pedido cancelado com sucesso!',
         bgColor: 'red.500',
         placement: 'top',
       })
-      setPage(1)
-      setHasLoaded(false)
-      fetchOrders(1, true)
-    } catch (error) {
-      const message =
-        (error as any)?.response?.data?.message || 'Erro ao cancelar pedido'
-      toast.show({ description: message, bgColor: 'red.500', placement: 'top' })
-    }
-  }
 
-  const renderFooter = () => {
-    if (loadingMore) {
-      return (
-        <Center my={4}>
-          <Spinner size="lg" />
-        </Center>
-      )
+      fetchOrders(1, true)
+    } catch {
+      toast.show({
+        description: 'Erro ao cancelar pedido',
+        bgColor: 'red.500',
+        placement: 'top',
+      })
     }
-    if (!hasMore && orders.length > 0) {
-      return (
-        <Center my={4}>
-          <Text color="gray.500">Não há mais pedidos para carregar</Text>
-        </Center>
-      )
-    }
-    return null
   }
 
   if (loading || !hasLoaded) {
@@ -302,26 +252,24 @@ export function OrderValidation() {
       <HomeScreen title="Validação de Pedidos" />
 
       <Box px={4} py={2}>
-        <HStack bg="gray.50">
-          <Box flex={1} ml={2} mt={2}>
+        <HStack>
+          <Box flex={1} mt={2}>
             <Input
-              placeholder="Buscar por ID (ex: ABC123)"
+              placeholder="Buscar por ID"
               value={searchId}
               onChangeText={setSearchId}
             />
           </Box>
-          <Box mr={1} ml={1} mt={1} alignItems="center">
-            <Button onPress={() => setSearchId('')} variant="outline">
-              Limpar
-            </Button>
-          </Box>
+          <Button ml={2} mt={2} onPress={() => setSearchId('')}>
+            Limpar
+          </Button>
         </HStack>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <HStack space={2}>
+          <HStack space={2} mt={3}>
             {STATUS_OPTIONS.map((option) => (
               <Pressable
-                key={`status-${option.value}`}
+                key={option.value}
                 onPress={() => setSelectedStatus(option.value)}
               >
                 <Box
@@ -336,7 +284,6 @@ export function OrderValidation() {
                     color={
                       selectedStatus === option.value ? 'white' : 'gray.700'
                     }
-                    fontWeight="medium"
                   >
                     {option.label}
                   </Text>
@@ -347,201 +294,143 @@ export function OrderValidation() {
         </ScrollView>
       </Box>
 
-      {filteredOrders.length === 0 ? (
-        <Center flex={1}>
-          <Text color="gray.500">
-            {searchId || selectedStatus !== 'PENDING'
-              ? 'Nenhum pedido encontrado com os filtros atuais'
-              : 'Nenhum pedido disponível para validação'}
-          </Text>
-        </Center>
-      ) : (
-        <FlatList
-          data={filteredOrders}
-          keyExtractor={(item) => `order-${item.id}`}
-          renderItem={({ item }) => {
-            const usedCashback = (item.discountApplied ?? 0) > 0
-            const isPending = item.status === 'PENDING'
+      <FlatList
+        data={filteredOrders}
+        keyExtractor={(item, index) =>
+          item.id ? `order-${item.id}` : `order-${index}`
+        }
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        onEndReached={loadMoreOrders}
+        onEndReachedThreshold={0.1}
+        renderItem={({ item }) => {
+          const isPending = item.status === 'PENDING'
 
-            return (
-              <Box mb={4} mx={4} bg="white" p={4} borderRadius="md" shadow={1}>
-                <Box mb={2}>
-                  <Text fontWeight="normal">Cliente: {item.user_name}</Text>
-                </Box>
+          return (
+            <Box bg="white" p={4} m={4} borderRadius="md" shadow={1}>
+              <Text fontWeight="bold">Pedido #{item.id.substring(0, 8)}</Text>
 
-                <HStack justifyContent="space-between" mb={2}>
-                  <Text fontWeight="bold">
-                    Pedido #{item.id.substring(0, 8)}
+              <Badge colorScheme={getStatusColor(item.status)}>
+                {getStatusLabel(item.status)}
+              </Badge>
+
+              <Text color="gray.500" mt={2}>
+                Cliente: {item.user_name}
+              </Text>
+
+              <Text color="gray.500">
+                {new Date(item.createdAt).toLocaleDateString('pt-BR')}
+              </Text>
+
+              <Divider my={3} />
+
+              <VStack space={2}>
+                {item.items.map((orderItem, index) => (
+                  <HStack
+                    key={`item-${item.id}-${orderItem.id ?? index}`}
+                    space={3}
+                  >
+                    <Image
+                      source={{
+                        uri: orderItem.product.image || DEFAULT_PRODUCT_IMAGE,
+                      }}
+                      alt="Produto"
+                      size="sm"
+                      borderRadius="md"
+                    />
+                    <VStack flex={1}>
+                      <Text>
+                        {orderItem.quantity}x {orderItem.product.name}
+                      </Text>
+                      <Text color="gray.500">
+                        {formatCurrency(orderItem.product.price)}
+                      </Text>
+                    </VStack>
+                  </HStack>
+                ))}
+              </VStack>
+
+              <Divider my={3} />
+
+              <HStack justifyContent="space-between">
+                <Text fontWeight="bold">Total:</Text>
+                <Text>{formatCurrency(item.totalAmount)}</Text>
+              </HStack>
+
+              {item.discountApplied ? (
+                <HStack justifyContent="space-between">
+                  <Text color="orange.600">Desconto aplicado:</Text>
+                  <Text color="orange.600">
+                    -{formatCurrency(item.discountApplied)}
                   </Text>
-                  <Badge colorScheme={getStatusColor(item.status)}>
-                    {STATUS_OPTIONS.find((o) => o.value === item.status)
-                      ?.label || item.status}
-                  </Badge>
                 </HStack>
+              ) : null}
 
-                <Text color="gray.500" mb={3}>
-                  {new Date(item.createdAt).toLocaleDateString('pt-BR')}
+              <HStack justifyContent="space-between" mt={2}>
+                <Text fontWeight="bold" color="purple.700">
+                  Pontos a gerar:
                 </Text>
+                <Text fontWeight="bold" color="purple.700">
+                  {calculateOrderPoints(item)} pontos
+                </Text>
+              </HStack>
 
-                <VStack space={3} mb={3}>
-                  {item.items.map((orderItem) => (
-                    <HStack
-                      key={`item-${item.id}-${orderItem.id}`}
-                      space={3}
-                      alignItems="center"
-                    >
-                      <Image
-                        source={{
-                          uri: orderItem.product.image || DEFAULT_PRODUCT_IMAGE,
-                        }}
-                        alt={orderItem.product.name}
-                        size="sm"
-                        borderRadius="md"
-                        fallbackElement={
-                          <Box
-                            bg="gray.200"
-                            size="sm"
-                            borderRadius="md"
-                            justifyContent="center"
-                            alignItems="center"
-                          >
-                            <Text color="gray.500">Sem imagem</Text>
-                          </Box>
-                        }
-                      />
-                      <VStack flex={1}>
-                        <Text fontWeight="medium">
-                          {orderItem.product.name}
-                        </Text>
-                        <HStack justifyContent="space-between">
-                          <Text color="gray.500">
-                            {orderItem.quantity}x{' '}
-                            {formatCurrency(orderItem.product.price)}
-                          </Text>
-                          {!usedCashback && (
-                            <Text color="green.600">
-                              {orderItem.product.cashbackPercentage}% cashback
-                            </Text>
-                          )}
-                        </HStack>
-                      </VStack>
-                    </HStack>
-                  ))}
-                </VStack>
+              {isPending && (
+                <HStack mt={4} space={3}>
+                  <Button
+                    flex={1}
+                    colorScheme="green"
+                    onPress={() => {
+                      setSelectedOrderId(item.id)
+                      setDialogAction('validate')
+                      onOpen()
+                    }}
+                  >
+                    Validar Pedido
+                  </Button>
 
-                <Divider my={2} />
-                <VStack space={2} mb={3}>
-                  <HStack justifyContent="space-between">
-                    <Text fontWeight="bold">Total a pagar:</Text>
-                    <Text>{formatCurrency(item.totalAmount)}</Text>
-                  </HStack>
+                  <Button
+                    flex={1}
+                    colorScheme="red"
+                    onPress={() => {
+                      setSelectedOrderId(item.id)
+                      setDialogAction('cancel')
+                      onOpen()
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                </HStack>
+              )}
+            </Box>
+          )
+        }}
+      />
 
-                  {usedCashback ? (
-                    <HStack justifyContent="space-between">
-                      <Text fontWeight="bold" color="orange.600">
-                        Desconto aplicado:
-                      </Text>
-                      <Text color="orange.600">
-                        -{formatCurrency(item.discountApplied!)} (
-                        {Math.round(
-                          ((item.discountApplied ?? 0) /
-                            (item.totalAmount + (item.discountApplied ?? 0))) *
-                            100,
-                        )}
-                        %)
-                      </Text>
-                    </HStack>
-                  ) : (
-                    <HStack justifyContent="space-between">
-                      <Text fontWeight="bold">Cashback:</Text>
-                      <Text color="green.600">
-                        {formatCurrency(calculateOrderCashback(item))}
-                      </Text>
-                    </HStack>
-                  )}
-                </VStack>
-
-                {isPending && (
-                  <HStack space={3}>
-                    <Button
-                      flex={1}
-                      onPress={() => {
-                        setSelectedOrderId(item.id)
-                        setDialogAction('validate')
-                        onOpen()
-                      }}
-                      bg="green.600"
-                      _pressed={{ bg: 'green.700' }}
-                    >
-                      Validar Cashback
-                    </Button>
-
-                    <Button
-                      flex={1}
-                      onPress={() => {
-                        setSelectedOrderId(item.id)
-                        setDialogAction('cancel')
-                        onOpen()
-                      }}
-                      bg="red.600"
-                      _pressed={{ bg: 'red.700' }}
-                      variant="solid"
-                    >
-                      Cancelar Pedido
-                    </Button>
-                  </HStack>
-                )}
-              </Box>
-            )
-          }}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          onEndReached={loadMoreOrders}
-          onEndReachedThreshold={0.1}
-          ListFooterComponent={renderFooter}
-        />
-      )}
-
-      {/* Dialog compartilhado para validar/cancelar */}
       <AlertDialog
         leastDestructiveRef={cancelRef}
         isOpen={isOpen}
         onClose={onClose}
       >
         <AlertDialog.Content>
-          <AlertDialog.CloseButton />
-          <AlertDialog.Header>
-            {dialogAction === 'validate'
-              ? 'Confirmar Validação'
-              : 'Confirmar Cancelamento'}
-          </AlertDialog.Header>
-          <AlertDialog.Body>
-            {dialogAction === 'validate'
-              ? 'Tem certeza que deseja validar este pedido? '
-              : 'Tem certeza que deseja cancelar este pedido? '}
-            <Text fontWeight="bold">
-              Pedido: #{selectedOrderId?.substring(0, 8)}
-            </Text>
-          </AlertDialog.Body>
+          <AlertDialog.Header>Confirmar ação</AlertDialog.Header>
+          <AlertDialog.Body>Deseja confirmar esta ação?</AlertDialog.Body>
           <AlertDialog.Footer>
-            <Button ref={cancelRef} onPress={onClose} variant="ghost">
+            <Button variant="ghost" onPress={onClose}>
               Voltar
             </Button>
             <Button
+              ml={3}
               colorScheme={dialogAction === 'validate' ? 'green' : 'red'}
               onPress={async () => {
                 if (!selectedOrderId) return
-                if (dialogAction === 'validate') {
+                if (dialogAction === 'validate')
                   await validateOrder(selectedOrderId)
-                } else {
-                  await cancelOrder(selectedOrderId)
-                }
+                else await cancelOrder(selectedOrderId)
                 onClose()
               }}
-              ml={3}
             >
-              {dialogAction === 'validate' ? 'Validar' : 'Cancelar Pedido'}
+              Confirmar
             </Button>
           </AlertDialog.Footer>
         </AlertDialog.Content>

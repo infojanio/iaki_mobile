@@ -14,7 +14,6 @@ import {
   ScrollView,
   Center,
 } from 'native-base'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { api } from '@services/api'
 import { formatCurrency } from '@utils/format'
 import { useFocusEffect } from '@react-navigation/native'
@@ -25,7 +24,6 @@ interface Product {
   name: string
   price: number
   image: string | null
-  cashbackPercentage: number
 }
 
 interface OrderItem {
@@ -40,8 +38,7 @@ interface Order {
   totalAmount: number
   status: string
   items: OrderItem[]
-  cashbackAmount?: number
-  qrCodeUrl?: string | null
+  pointsEarned?: number
 }
 
 const DEFAULT_PRODUCT_IMAGE = 'https://via.placeholder.com/80'
@@ -50,7 +47,7 @@ const STATUS_OPTIONS = [
   { value: '', label: 'Todos' },
   { value: 'PENDING', label: 'Pendente' },
   { value: 'VALIDATED', label: 'Aprovado' },
-  { value: 'EXPIRED', label: 'Recusado' },
+  { value: 'EXPIRED', label: 'Cancelado' },
 ]
 
 export function OrderHistory() {
@@ -61,7 +58,6 @@ export function OrderHistory() {
   const [refreshing, setRefreshing] = useState(false)
 
   const toast = useToast()
-  const insets = useSafeAreaInsets()
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -70,34 +66,27 @@ export function OrderHistory() {
       const response = await api.get('/orders/history')
 
       const parsedOrders: Order[] = (response.data.orders || []).map(
-        (order: any) => ({
-          id: order.id,
-          createdAt: order.createdAt,
-          totalAmount: order.totalAmount,
-          status: order.status,
-          cashbackAmount: order.cashbackAmount,
-          qrCodeUrl: order.qrCodeUrl ?? null,
-          items: (order.items || []).map((item: any) => ({
-            id: item.id,
-            quantity: item.quantity,
-            product: {
-              id: item.product?.id || item.productId?.id,
-              name:
-                item.product?.name ||
-                item.productId?.name ||
-                'Produto desconhecido',
-              price: item.product?.price || item.productId?.price || 0,
-              image:
-                item.product?.image ||
-                item.productId?.image ||
-                DEFAULT_PRODUCT_IMAGE,
-              cashbackPercentage:
-                item.product?.cashbackPercentage ||
-                item.productId?.cashbackPercentage ||
-                0,
-            },
-          })),
-        }),
+        (order: any) => {
+          const total = Number(order.totalAmount ?? 0)
+
+          return {
+            id: order.id,
+            createdAt: order.createdAt,
+            totalAmount: total,
+            status: order.status,
+            pointsEarned: order.pointsEarned ?? Math.floor(total / 10), // fallback se backend ainda não enviar
+            items: (order.items || []).map((item: any) => ({
+              id: item.id,
+              quantity: item.quantity,
+              product: {
+                id: item.product?.id ?? '',
+                name: item.product?.name ?? 'Produto desconhecido',
+                price: item.product?.price ?? 0,
+                image: item.product?.image ?? DEFAULT_PRODUCT_IMAGE,
+              },
+            })),
+          }
+        },
       )
 
       setOrders(parsedOrders)
@@ -147,27 +136,13 @@ export function OrderHistory() {
     }
   }
 
-  const calculateOrderCashback = (order: Order) => {
-    if (order.cashbackAmount !== undefined) {
-      return order.cashbackAmount
-    }
-
-    return order.items.reduce((total, item) => {
-      return (
-        total +
-        (item.product.price * item.quantity * item.product.cashbackPercentage) /
-          100
-      )
-    }, 0)
-  }
-
   const StatusFilterHeader = () => (
     <Box px={4} pt={2} pb={4}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <HStack space={2}>
           {STATUS_OPTIONS.map((option) => (
             <Pressable
-              key={option.value}
+              key={`status-${option.value}`}
               onPress={() => setSelectedStatus(option.value)}
             >
               <Box
@@ -204,99 +179,84 @@ export function OrderHistory() {
     <Box flex={1} bg="gray.50">
       <HomeScreen title="Meus Pedidos" />
 
-      <>
-        {/* 🔥 FILTROS SEMPRE VISÍVEIS */}
-        <StatusFilterHeader />
+      <StatusFilterHeader />
 
-        {filteredOrders.length === 0 ? (
-          <Center flex={1} mt={8}>
-            <Text color="gray.500">
-              {selectedStatus === ''
-                ? 'Nenhum pedido encontrado'
-                : `Nenhum pedido com status ${
-                    STATUS_OPTIONS.find((o) => o.value === selectedStatus)
-                      ?.label
-                  }`}
-            </Text>
-          </Center>
-        ) : (
-          <FlatList
-            data={filteredOrders}
-            keyExtractor={(item) => item.id}
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            contentContainerStyle={{ paddingBottom: 32 }}
-            renderItem={({ item }) => (
-              /* render do pedido (inalterado) */
+      {filteredOrders.length === 0 ? (
+        <Center flex={1} mt={8}>
+          <Text color="gray.500">
+            {selectedStatus === ''
+              ? 'Nenhum pedido encontrado'
+              : `Nenhum pedido com status ${
+                  STATUS_OPTIONS.find((o) => o.value === selectedStatus)?.label
+                }`}
+          </Text>
+        </Center>
+      ) : (
+        <FlatList
+          data={filteredOrders}
+          keyExtractor={(item) => `order-${item.id}`}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          contentContainerStyle={{ paddingBottom: 32 }}
+          renderItem={({ item }) => (
+            <Box mb={4} bg="white" p={4} mx={4} borderRadius="md" shadow={1}>
+              <HStack justifyContent="space-between" mb={2}>
+                <Text fontWeight="bold">Pedido #{item.id.substring(0, 8)}</Text>
+                <Badge colorScheme={getStatusColor(item.status)}>
+                  {STATUS_OPTIONS.find((o) => o.value === item.status)?.label}
+                </Badge>
+              </HStack>
 
-              <Box mb={4} bg="white" p={4} mx={4} borderRadius="md" shadow={1}>
-                <HStack justifyContent="space-between" mb={2}>
-                  <Text fontWeight="bold">
-                    Pedido #{item.id.substring(0, 8)}
-                  </Text>
-                  <Badge colorScheme={getStatusColor(item.status)}>
-                    {STATUS_OPTIONS.find((o) => o.value === item.status)?.label}
-                  </Badge>
+              <Text color="gray.500" mb={3}>
+                {new Date(item.createdAt).toLocaleDateString('pt-BR')}
+              </Text>
+
+              <VStack space={3} mb={3}>
+                {item.items.map((orderItem, index) => (
+                  <HStack
+                    key={`order-${item.id}-item-${orderItem.id ?? index}`}
+                    space={3}
+                    alignItems="center"
+                  >
+                    <Image
+                      source={{
+                        uri: orderItem.product.image ?? DEFAULT_PRODUCT_IMAGE,
+                      }}
+                      alt="imagem"
+                      size="sm"
+                      borderRadius="md"
+                    />
+
+                    <VStack flex={1}>
+                      <Text fontWeight="medium">{orderItem.product.name}</Text>
+                      <Text color="gray.500">
+                        {orderItem.quantity}x{' '}
+                        {formatCurrency(orderItem.product.price)}
+                      </Text>
+                    </VStack>
+                  </HStack>
+                ))}
+              </VStack>
+
+              <Divider my={2} />
+
+              <VStack space={1}>
+                <HStack justifyContent="space-between">
+                  <Text fontWeight="bold">Total:</Text>
+                  <Text>{formatCurrency(item.totalAmount)}</Text>
                 </HStack>
 
-                <Text color="gray.500" mb={3}>
-                  {new Date(item.createdAt).toLocaleDateString('pt-BR')}
-                </Text>
-
-                <VStack space={3} mb={3}>
-                  {item.items.map((orderItem, index) => (
-                    <HStack
-                      key={`order-${item.id}-item-${orderItem.id ?? index}`}
-                      space={3}
-                      alignItems="center"
-                    >
-                      <Image
-                        source={{
-                          uri: orderItem.product.image ?? DEFAULT_PRODUCT_IMAGE,
-                        }}
-                        alt="imagem"
-                        size="sm"
-                        borderRadius="md"
-                      />
-
-                      <VStack flex={1}>
-                        <Text fontWeight="medium">
-                          {orderItem.product.name}
-                        </Text>
-                        <HStack justifyContent="space-between">
-                          <Text color="gray.500">
-                            {orderItem.quantity}x{' '}
-                            {formatCurrency(orderItem.product.price)}
-                          </Text>
-                          <Text color="green.600">
-                            {orderItem.product.cashbackPercentage}% cashback
-                          </Text>
-                        </HStack>
-                      </VStack>
-                    </HStack>
-                  ))}
-                </VStack>
-
-                <Divider my={2} />
-
-                <VStack space={1}>
-                  <HStack justifyContent="space-between">
-                    <Text fontWeight="bold">Subtotal:</Text>
-                    <Text>{formatCurrency(item.totalAmount)}</Text>
-                  </HStack>
-
-                  <HStack justifyContent="space-between">
-                    <Text fontWeight="bold">Cashback:</Text>
-                    <Text color="green.600">
-                      {formatCurrency(calculateOrderCashback(item))}
-                    </Text>
-                  </HStack>
-                </VStack>
-              </Box>
-            )}
-          />
-        )}
-      </>
+                <HStack justifyContent="space-between">
+                  <Text fontWeight="bold">Pontos ganhos:</Text>
+                  <Text color="purple.600" fontWeight="bold">
+                    +{item.pointsEarned ?? 0} 🪙
+                  </Text>
+                </HStack>
+              </VStack>
+            </Box>
+          )}
+        />
+      )}
     </Box>
   )
 }

@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useContext, useCallback } from 'react'
-import { useFocusEffect, useNavigation } from '@react-navigation/native'
+import React, { useEffect, useState, useContext } from 'react'
+import { useNavigation } from '@react-navigation/native'
 import {
   Box,
   Text,
@@ -9,34 +9,20 @@ import {
   Button,
   FlatList,
   Divider,
-  useToast,
   ArrowBackIcon,
-  Switch,
 } from 'native-base'
-import { Alert } from 'react-native'
 
 import { api } from '@services/api'
-import { useAuth } from '@hooks/useAuth'
 import { formatCurrency } from '@utils/format'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CartContext } from '@contexts/CartContext'
 
 export function Checkout() {
   const navigation = useNavigation<AppNavigatorRoutesProps>()
-  const toast = useToast()
-
-  const { user } = useAuth()
-  const { cartItems, activeStoreId, activeStoreName, syncOpenCart } =
-    useContext(CartContext)
+  const { cartItems, activeStoreName, syncOpenCart } = useContext(CartContext)
 
   const [loading, setLoading] = useState(false)
-  const [useCashback, setUseCashback] = useState(false)
-  const [cashbackBalance, setCashbackBalance] = useState(0)
-  const [orders, setOrders] = useState<any[]>([])
 
-  /* ======================
-     Segurança de contexto
-  ====================== */
   useEffect(() => {
     syncOpenCart()
   }, [])
@@ -49,87 +35,18 @@ export function Checkout() {
     0,
   )
 
-  const cashbackToReceive = Number(
-    cartItems
-      .reduce(
-        (sum, item) =>
-          sum + (item.price * item.quantity * item.cashbackPercentage) / 100,
-        0,
-      )
-      .toFixed(2),
-  )
+  const total = subtotal
 
-  const cashbackUsed = useCashback ? Math.min(cashbackBalance, subtotal) : 0
+  // 🪙 1 ponto a cada R$ 10 pagos
+  const pointsToEarn = Math.floor(total / 10)
 
-  const total = subtotal - cashbackUsed
-
-  const hasPending = orders.some((order) => order.status === 'PENDING')
-
-  /* ======================
-     Saldo (POR LOJA) + histórico
-  ====================== */
-  useFocusEffect(
-    useCallback(() => {
-      async function fetchData() {
-        if (!activeStoreId) return
-
-        try {
-          const [balanceRes, ordersRes] = await Promise.all([
-            // ✅ SALDO APENAS DA LOJA ATIVA
-            api.get(`/cashbacks/balance/${activeStoreId}`),
-
-            api.get('/orders/history'),
-          ])
-
-          const balance = balanceRes.data.balance ?? 0
-
-          setCashbackBalance(balance)
-          setOrders(ordersRes.data.orders ?? [])
-
-          // 🔒 segurança: se não tem saldo, desliga o switch
-          if (balance <= 0) {
-            setUseCashback(false)
-          }
-        } catch (error) {
-          toast.show({
-            title: 'Erro',
-            description: 'Não foi possível carregar o saldo da loja.',
-            bgColor: 'red.500',
-            placement: 'top',
-          })
-        }
-      }
-
-      fetchData()
-    }, [activeStoreId]),
-  )
-
-  /* ======================
-     Confirmar pedido
-  ====================== */
   async function handleConfirmOrder() {
     if (cartItems.length === 0) return
-
-    if (useCashback && cashbackBalance <= 0) {
-      Alert.alert(
-        'Saldo insuficiente',
-        'Você não possui saldo de cashback nesta loja.',
-      )
-      return
-    }
 
     try {
       setLoading(true)
 
-      console.log('[CHECKOUT]', {
-        activeStoreId,
-        cartItemsLength: cartItems.length,
-        cashbackUsed,
-      })
-
-      const response = await api.post('/cart/checkout', {
-        useCashback,
-      })
+      const response = await api.post('/cart/checkout')
 
       const { orderId } = response.data
 
@@ -137,21 +54,15 @@ export function Checkout() {
 
       navigation.navigate('orderConfirmation', {
         orderId,
-        cashbackEarned: cashbackToReceive,
+        pointsEarned: pointsToEarn,
       })
     } catch (err: any) {
-      Alert.alert(
-        'Erro',
-        err?.response?.data?.message || 'Erro ao confirmar o pedido.',
-      )
+      console.log(err)
     } finally {
       setLoading(false)
     }
   }
 
-  /* ======================
-     Render
-  ====================== */
   return (
     <Box flex={1} bg="white" px={4} py={6}>
       <ArrowBackIcon onPress={() => navigation.goBack()} />
@@ -194,57 +105,39 @@ export function Checkout() {
 
       <Divider my={4} />
 
-      <VStack space={3}>
-        <Text fontSize="lg" fontWeight="bold">
-          Saldo disponível nesta loja: {formatCurrency(cashbackBalance)}
-        </Text>
-
-        <HStack alignItems="center" space={3}>
-          <Switch
-            isChecked={useCashback}
-            isDisabled={cashbackBalance <= 0 || hasPending || !activeStoreId}
-            onToggle={setUseCashback}
-          />
-          <Text>Usar cashback como desconto</Text>
-        </HStack>
-
-        {hasPending && (
-          <Text color="red.500">
-            ⚠️ Finalize o último pedido antes de criar outro.
-          </Text>
-        )}
-      </VStack>
-
-      <Divider my={4} />
-
       <VStack space={2}>
         <HStack justifyContent="space-between">
           <Text>Subtotal</Text>
           <Text>{formatCurrency(subtotal)}</Text>
         </HStack>
 
-        {useCashback && (
-          <HStack justifyContent="space-between">
-            <Text>Desconto (cashback)</Text>
-            <Text color="green.600">- {formatCurrency(cashbackUsed)}</Text>
-          </HStack>
-        )}
-
         <HStack justifyContent="space-between">
           <Text fontWeight="bold">Total</Text>
           <Text fontWeight="bold">{formatCurrency(total)}</Text>
         </HStack>
 
-        <Text color="green.600">
-          Cashback esperado: {formatCurrency(cashbackToReceive)}
-        </Text>
+        {/* 🔥 BLOCO DE PONTOS */}
+        <Box
+          bg="purple.50"
+          p={4}
+          borderRadius="lg"
+          borderWidth={1}
+          borderColor="purple.200"
+          mt={3}
+        >
+          <Text color="purple.700" fontWeight="bold" fontSize="md">
+            🪙 Você ganhará {pointsToEarn} pontos
+          </Text>
+          <Text fontSize="xs" color="purple.500">
+            1 ponto a cada R$ 10 pagos
+          </Text>
+        </Box>
 
         <Button
           mt={6}
           colorScheme="blue"
           isLoading={loading}
           onPress={handleConfirmOrder}
-          isDisabled={loading || cartItems.length === 0 || hasPending}
           rounded="xl"
         >
           Confirmar Pedido

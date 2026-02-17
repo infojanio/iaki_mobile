@@ -7,7 +7,7 @@ type Store = {
 }
 
 type StoreContextData = {
-  store: Store | null
+  selectedStore: Store | null
   setStore: (store: Store) => Promise<void>
   clearStore: () => Promise<void>
 }
@@ -21,11 +21,11 @@ type StoreProviderProps = {
 const STORE_STORAGE_KEY = '@iaki:store'
 
 export function StoreProvider({ children }: StoreProviderProps) {
-  const [store, setStoreState] = useState<Store | null>(null)
+  const [selectedStore, setSelectedStore] = useState<Store | null>(null)
 
   async function setStore(store: Store) {
     try {
-      setStoreState(store)
+      setSelectedStore(store)
       await AsyncStorage.setItem(STORE_STORAGE_KEY, JSON.stringify(store))
     } catch (error) {
       console.error('Erro ao salvar loja:', error)
@@ -34,7 +34,7 @@ export function StoreProvider({ children }: StoreProviderProps) {
 
   async function clearStore() {
     try {
-      setStoreState(null)
+      setSelectedStore(null)
       await AsyncStorage.removeItem(STORE_STORAGE_KEY)
     } catch (error) {
       console.error('Erro ao limpar loja:', error)
@@ -44,8 +44,9 @@ export function StoreProvider({ children }: StoreProviderProps) {
   async function loadStoredStore() {
     try {
       const storedStore = await AsyncStorage.getItem(STORE_STORAGE_KEY)
+
       if (storedStore) {
-        setStoreState(JSON.parse(storedStore))
+        setSelectedStore(JSON.parse(storedStore))
       }
     } catch (error) {
       console.error('Erro ao carregar loja salva:', error)
@@ -57,7 +58,13 @@ export function StoreProvider({ children }: StoreProviderProps) {
   }, [])
 
   return (
-    <StoreContext.Provider value={{ store, setStore, clearStore }}>
+    <StoreContext.Provider
+      value={{
+        selectedStore,
+        setStore,
+        clearStore,
+      }}
+    >
       {children}
     </StoreContext.Provider>
   )

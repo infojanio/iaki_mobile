@@ -10,12 +10,13 @@ import { useContext } from 'react'
 import HomeSvg from '@assets/home.svg'
 import SearchSvg from '@assets/search.svg'
 import CashbackSvg from '@assets/checked.svg'
-import ProfileSvg from '@assets/profile.svg'
+import ProfileSvg from '@assets/money.svg'
 import RequestSvg from '@assets/pedidos.svg'
 
 import { Home } from '@screens/Home'
 import { Cart } from '@screens/Cart'
-import { Profile } from '@screens/Profile'
+import { ProfileCashback } from '@screens/ProfileCashback'
+import { ProfileWallet } from '@screens/ProfileWallet'
 import { OrderHistory } from '@screens/OrderHistory'
 import { OrderValidation } from '@screens/OrderValidation'
 import { SearchProducts } from '@screens/SearchProducts'
@@ -45,6 +46,7 @@ import { StoresByBusiness } from '@screens/StoresByBusiness'
 import { StoreProducts } from '@screens/StoreProducts'
 import { CartTabIcon } from '@components/CartTabIcon'
 import { StoreRatings } from '@screens/StoreRatings'
+import { StoreRewardCatalog } from '@screens/StoreRewardCatalog'
 
 /* =======================
    TIPAGEM DAS ROTAS
@@ -58,12 +60,13 @@ type AppRoutes = {
   orderHistory: undefined
   orderValidation: { orderId: string } | undefined
   profile: undefined
+  wallet: undefined
 
   checkout: undefined
   orderConfirmation: {
     orderId: string
-    cashbackEarned?: number
-    cashbackUsed?: number
+    pointsEarned?: number
+    pointsUsed?: number
   }
   profileEdit: undefined
   productList: undefined
@@ -84,6 +87,7 @@ type AppRoutes = {
   privacy: undefined
   terms: undefined
   storeRatings: { storeId: string; storeName: string }
+  storeRewardCatalog: { storeId: string }
 }
 
 export type AppNavigatorRoutesProps = BottomTabNavigationProp<AppRoutes>
@@ -186,12 +190,12 @@ export function AppRoutes() {
         />
       )}
 
-      {/* PERFIL */}
+      {/* WALLET */}
       <Screen
-        name="profile"
-        component={Profile}
+        name="wallet"
+        component={ProfileWallet}
         options={{
-          title: 'Conta',
+          title: 'Carteira',
           tabBarIcon: ({ color }) => (
             <ProfileSvg fill={color} width={iconSize} height={iconSize} />
           ),
@@ -288,6 +292,12 @@ export function AppRoutes() {
       <Screen
         name="storeRatings"
         component={StoreRatings}
+        options={{ tabBarButton: () => null }}
+      />
+
+      <Screen
+        name="storeRewardCatalog"
+        component={StoreRewardCatalog}
         options={{ tabBarButton: () => null }}
       />
     </Navigator>
