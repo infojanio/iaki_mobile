@@ -7,6 +7,7 @@ import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 
 import { ProductCard } from '@components/Product/ProductCard'
+
 import { CityContext } from '@contexts/CityContext'
 
 type Props = {

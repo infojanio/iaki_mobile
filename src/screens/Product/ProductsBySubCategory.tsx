@@ -14,6 +14,7 @@ import { SubCategoryFilter } from '@components/Category/SubCategoryFilter'
 import { ProductCard } from '@components/Product/ProductCard'
 import { Loading } from '@components/Loading'
 import { HomeScreen } from '@components/HomeScreen'
+import { BackHome } from '@components/BackHome'
 
 /* ==============================
    📐 LAYOUT (CARROSSEL)
@@ -92,8 +93,8 @@ export function ProductsBySubCategory() {
       const nextSelected = existsFromRoute
         ? initialSubcategoryId!
         : data.length > 0
-        ? data[0].id
-        : null
+          ? data[0].id
+          : null
 
       setSelectedSubCategory(nextSelected)
     } catch {
@@ -159,7 +160,7 @@ export function ProductsBySubCategory() {
   ============================== */
   return (
     <VStack flex={1} bg="white">
-      <HomeScreen title="Produtos" />
+      <BackHome title="Produtos" />
 
       {/* 🔒 HEADER FIXO — NOME DA LOJA */}
       {storeName && (

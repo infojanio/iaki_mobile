@@ -18,6 +18,7 @@ import { UserPhoto } from '@components/HomeHeader/UserPhoto'
 import { useAuth } from '@hooks/useAuth'
 import { api } from '@services/api'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { BackHome } from '@components/BackHome'
 
 if (
   Platform.OS === 'android' &&
@@ -92,7 +93,7 @@ export function ProfileWallet() {
 
   return (
     <Box flex={1} bg="gray.50">
-      <HomeScreen title="Minha Carteira" />
+      <BackHome title="Minha Carteira" />
 
       <ScrollView px={4} pb={10}>
         {/* Header */}

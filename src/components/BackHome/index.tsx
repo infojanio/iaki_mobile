@@ -8,39 +8,26 @@ type Props = {
   title: string
 }
 
-export function HomeScreen({ title }: Props) {
+export function BackHome({ title }: Props) {
   const { colors, sizes } = useTheme()
-
-  // ✅ NÃO tipar como BottomTabNavigationProp aqui
   const navigation = useNavigation<any>()
-
-  // ✅ usar pilha (evita ping-pong)
-  const { popAndGetBackRoute } = useNavigationHistory()
+  const { getPreviousRoute } = useNavigationHistory()
 
   const handleBack = () => {
-    // 1️⃣ Se existe Stack pai (root stack), volta nele
-    const parent = navigation.getParent?.()
-    if (parent?.canGoBack?.()) {
-      parent.goBack()
-      return
-    }
-
-    // 2️⃣ Se NÃO for tab e tiver como voltar, usa goBack
-    const stateType = navigation.getState?.()?.type
-    const isTab = stateType === 'tab'
-    if (!isTab && navigation.canGoBack?.()) {
+    // Se existir stack de verdade em algum fluxo, usa
+    if (navigation.canGoBack()) {
       navigation.goBack()
       return
     }
 
-    // 3️⃣ Histórico inteligente COM POP (remove rota atual e volta na anterior)
-    const target = popAndGetBackRoute()
-    if (target?.name) {
-      navigation.navigate(target.name, target.params)
+    // Caso Tab/sem stack: volta para a tela anterior registrada
+    const prev = getPreviousRoute()
+    if (prev?.name) {
+      navigation.navigate(prev.name, prev.params)
       return
     }
 
-    // 4️⃣ Fallback final
+    // fallback
     navigation.navigate('home')
   }
 

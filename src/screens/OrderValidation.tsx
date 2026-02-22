@@ -310,7 +310,7 @@ export function OrderValidation() {
             <Box bg="white" p={4} m={4} borderRadius="md" shadow={1}>
               <Text fontWeight="bold">Pedido #{item.id.substring(0, 8)}</Text>
 
-              <Badge colorScheme={getStatusColor(item.status)}>
+              <Badge width={32} colorScheme={getStatusColor(item.status)}>
                 {getStatusLabel(item.status)}
               </Badge>
 
@@ -337,6 +337,7 @@ export function OrderValidation() {
                       alt="Produto"
                       size="sm"
                       borderRadius="md"
+                      resizeMode="contain"
                     />
                     <VStack flex={1}>
                       <Text>

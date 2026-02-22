@@ -1,5 +1,5 @@
 import { TouchableOpacity, TouchableOpacityProps } from 'react-native'
-import { VStack, Image, Text, Center, Box } from 'native-base'
+import { VStack, Image, Text, Center, Box, Badge } from 'native-base'
 
 import { api } from '@services/api'
 import { ProductDTO } from '@dtos/ProductDTO'
@@ -9,6 +9,15 @@ export type ProductCardProps = TouchableOpacityProps & {
 }
 
 export function ProductCard({ product, ...rest }: ProductCardProps) {
+  const price = Number(product.price)
+  const discountPercent = Number(product.cashbackPercentage ?? 0)
+
+  const originalPrice =
+    discountPercent > 0 ? price / (1 - discountPercent / 100) : price
+  /*
+  const discountValue = (price * discountPercent) / 100
+  const finalPrice = price + discountValue
+  */
   return (
     <TouchableOpacity {...rest}>
       <VStack
@@ -36,7 +45,7 @@ export function ProductCard({ product, ...rest }: ProductCardProps) {
               }}
               alt="Imagem"
               rounded="3xl"
-              resizeMode="stretch"
+              resizeMode="contain"
             />
           </VStack>
           <Center>
@@ -50,6 +59,22 @@ export function ProductCard({ product, ...rest }: ProductCardProps) {
             >
               {product.name}
             </Text>
+
+            {discountPercent > 0 ? (
+              <>
+                <Text fontSize="xs" color="gray.400" strikeThrough>
+                  R$ {originalPrice.toFixed(2)}
+                </Text>
+
+                <Text fontSize="lg" fontWeight="bold" color="red.600">
+                  R$ {price.toFixed(2)}
+                </Text>
+              </>
+            ) : (
+              <Text fontSize="lg" fontWeight="bold">
+                R$ {price.toFixed(2)}
+              </Text>
+            )}
           </Center>
 
           <Box bg="red.500" rounded="md" pl="1" pr="1">
@@ -57,22 +82,6 @@ export function ProductCard({ product, ...rest }: ProductCardProps) {
               {product.quantity} unidades
             </Text>
           </Box>
-          <Center h={10} w={32}>
-            <Text
-              color={'black'}
-              fontWeight={'bold'}
-              fontSize="16"
-              numberOfLines={2}
-            >
-              R$ {Number(product.price).toFixed(2)}
-            </Text>
-
-            <Box bg="green.500" rounded="md" pl="1" pr="1">
-              <Text fontSize="14" color="gray.100" numberOfLines={1}>
-                {product.cashbackPercentage}% cashback
-              </Text>
-            </Box>
-          </Center>
         </Center>
       </VStack>
     </TouchableOpacity>

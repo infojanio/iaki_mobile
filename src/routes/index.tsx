@@ -9,11 +9,20 @@ import { Redirect } from '@screens/Redirect'
 import { SelectCity } from '@screens/SelectCity'
 import { Loading } from '@components/Loading'
 
+import {
+  NavigationHistoryProvider,
+  useNavigationHistory,
+} from '@contexts/NavigationHistoryContext'
+import { useRef } from 'react'
+import { getActiveRoute } from './getActiveRoute'
+
 const Stack = createNativeStackNavigator()
 
-export function Routes() {
+function NavigationRoot() {
   const { colors } = useTheme()
   const { user, isLoadingUserStorageData } = useAuth()
+  const { recordRoute } = useNavigationHistory()
+  const stateRef = useRef<any>(null)
 
   const theme = {
     ...DefaultTheme,
@@ -28,23 +37,36 @@ export function Routes() {
   }
 
   return (
-    <Box flex={1} bg="green.50">
-      <NavigationContainer theme={theme}>
-        <Stack.Navigator
-          initialRouteName="redirect"
-          screenOptions={{ headerShown: false }}
-        >
-          {!user || !user.id ? (
-            <Stack.Screen name="authRoutes" component={AuthRoutes} />
-          ) : (
-            <>
-              <Stack.Screen name="redirect" component={Redirect} />
-              <Stack.Screen name="selectCity" component={SelectCity} />
-              <Stack.Screen name="appRoutes" component={AppRoutes} />
-            </>
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
-    </Box>
+    <NavigationContainer
+      theme={theme}
+      onStateChange={(state) => {
+        stateRef.current = state
+        const active = getActiveRoute(state)
+        recordRoute(active)
+      }}
+    >
+      <Stack.Navigator
+        initialRouteName="redirect"
+        screenOptions={{ headerShown: false }}
+      >
+        {!user || !user.id ? (
+          <Stack.Screen name="authRoutes" component={AuthRoutes} />
+        ) : (
+          <>
+            <Stack.Screen name="redirect" component={Redirect} />
+            <Stack.Screen name="selectCity" component={SelectCity} />
+            <Stack.Screen name="appRoutes" component={AppRoutes} />
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  )
+}
+
+export function Routes() {
+  return (
+    <NavigationHistoryProvider>
+      <NavigationRoot />
+    </NavigationHistoryProvider>
   )
 }

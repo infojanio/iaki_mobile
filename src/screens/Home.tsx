@@ -23,6 +23,7 @@ import { StoreList } from './StoreList'
 
 import { CityContext } from '@contexts/CityContext'
 import { CartContext } from '@contexts/CartContext'
+import { ProductDiscount } from './Product/ProductDiscount'
 
 export function Home() {
   const { city } = useContext(CityContext)
@@ -116,7 +117,7 @@ export function Home() {
             <StoreList />
 
             {/* Produtos clicáveis */}
-            <ProductCashback onPressProduct={handleOpenProductDetails} />
+            <ProductDiscount onPressProduct={handleOpenProductDetails} />
             <Reel />
             <ProductQuantity onPressProduct={handleOpenProductDetails} />
 

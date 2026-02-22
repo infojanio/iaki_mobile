@@ -20,6 +20,7 @@ import { ProductCard } from '@components/Product/ProductCard'
 import { Loading } from '@components/Loading'
 import { HomeScreen } from '@components/HomeScreen'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { BackHome } from '@components/BackHome'
 
 type RouteParams = {
   businessCategoryId: string
@@ -107,7 +108,7 @@ export function ProductsByStore() {
 
   return (
     <VStack flex={1} bg="white" safeArea>
-      <HomeScreen title="Produtos" />
+      <BackHome title="Produtos" />
 
       {/* Filtros de subcategorias (horizontal) */}
       <Box px={4} pt={4}>

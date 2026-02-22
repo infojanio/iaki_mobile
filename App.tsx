@@ -19,6 +19,7 @@ import { CartProvider } from '@contexts/CartContext'
 import { AppModalRoot } from '@components/AppModalRoot'
 
 import { checkAndApplyOtaNow, wireOtaOnAppState } from 'src/lib/updates'
+import { StorePointsProvider } from '@contexts/StorePointsContext'
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -62,11 +63,13 @@ export default function App() {
         <AuthContextProvider>
           <CityProvider>
             <CartProvider>
-              {/* 🔄 Loading protegido pelo NativeBase */}
-              {fontsLoaded ? <Routes /> : <Loading />}
+              <StorePointsProvider>
+                {/* 🔄 Loading protegido pelo NativeBase */}
+                {fontsLoaded ? <Routes /> : <Loading />}
 
-              {/* 🧠 Modais globais */}
-              <AppModalRoot />
+                {/* 🧠 Modais globais */}
+                <AppModalRoot />
+              </StorePointsProvider>
             </CartProvider>
           </CityProvider>
         </AuthContextProvider>

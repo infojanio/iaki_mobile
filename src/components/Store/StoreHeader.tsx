@@ -11,7 +11,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons'
 import { StoreDTO } from '@dtos/StoreDTO'
 import { useNavigation } from '@react-navigation/native'
-import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { useNavigationHistory } from '@contexts/NavigationHistoryContext'
 import { useState } from 'react'
 import { StoreRatingModal } from '@components/StoreRatingModal'
 
@@ -21,7 +21,12 @@ type Props = {
 
 export function StoreHeader({ store }: Props) {
   const { colors, sizes } = useTheme()
-  const navigation = useNavigation<AppNavigatorRoutesProps>()
+
+  // 🔥 NÃO tipar como BottomTabNavigationProp aqui
+  const navigation = useNavigation<any>()
+
+  // ✅ usando a pilha (evita ping-pong)
+  const { popAndGetBackRoute } = useNavigationHistory()
 
   const [showRatingModal, setShowRatingModal] = useState(false)
   const [storeData, setStoreData] = useState(store)
@@ -63,9 +68,37 @@ export function StoreHeader({ store }: Props) {
     })
   }
 
+  function handleBack() {
+    // 1️⃣ tenta voltar pelo Stack pai (melhor cenário)
+    const parent = navigation.getParent?.()
+    if (parent?.canGoBack?.()) {
+      parent.goBack()
+      return
+    }
+
+    // 2️⃣ evita usar goBack no TAB (normalmente volta pra Home)
+    const stateType = navigation.getState?.()?.type
+    const isTab = stateType === 'tab'
+
+    if (!isTab && navigation.canGoBack?.()) {
+      navigation.goBack()
+      return
+    }
+
+    // 3️⃣ usa histórico com POP (remove rota atual e retorna a anterior)
+    const target = popAndGetBackRoute()
+    if (target?.name) {
+      navigation.navigate(target.name, target.params)
+      return
+    }
+
+    // 4️⃣ fallback
+    navigation.navigate('home')
+  }
+
   return (
     <>
-      <VStack safeArea mb={2}>
+      <VStack safeArea mb={2} bg="gray.100">
         {/* IMAGEM DA LOJA */}
         <Box position="relative">
           <Image
@@ -73,6 +106,7 @@ export function StoreHeader({ store }: Props) {
             alt={store.name}
             h={180}
             w="100%"
+            resizeMode="stretch"
           />
 
           {/* BOTÃO VOLTAR */}
@@ -91,16 +125,16 @@ export function StoreHeader({ store }: Props) {
                 color={colors.gray[700]}
               />
             }
-            onPress={() => navigation.goBack()}
+            onPress={handleBack}
           />
         </Box>
 
         {/* CARD DE INFORMAÇÕES */}
         <Box
           bg="white"
-          opacity={0.97}
+          opacity={0.87}
           mx={4}
-          mt={-10}
+          mt={-4}
           p={4}
           borderRadius="xl"
           shadow={4}
@@ -149,22 +183,11 @@ export function StoreHeader({ store }: Props) {
                   </Box>
                 )}
               </Pressable>
-
-              {/* STATUS 
-              <Text
-                fontSize="sm"
-                fontWeight="bold"
-                color={store.isActive ? 'green.600' : 'red.500'}
-              >
-                {store.isActive ? 'Loja disponível' : 'Loja indisponível'}
-              </Text>
-             */}
             </HStack>
           </VStack>
         </Box>
       </VStack>
 
-      {/* ⭐ MODAL DE AVALIAÇÃO */}
       <StoreRatingModal
         isOpen={showRatingModal}
         storeId={storeData.id}

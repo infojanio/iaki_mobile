@@ -23,6 +23,7 @@ import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { HomeScreen } from '@components/HomeScreen'
 
 import { CartContext } from '@contexts/CartContext'
+import { ButtonBack } from '@components/ButtonBack'
 
 type RouteParams = {
   productId: string
@@ -142,7 +143,9 @@ export function ProductDetails() {
   ============================== */
   return (
     <VStack flex={1} bg="white">
-      <HomeScreen title="Detalhes do produto" />
+      <HStack mt={4}>
+        <ButtonBack />
+      </HStack>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <Box bg="white" borderRadius="3xl" shadow={5} mt={4} mx={4}>
@@ -173,7 +176,7 @@ export function ProductDetails() {
               </Text>
 
               <Text fontSize="16" color="green.600" fontWeight="medium">
-                {product.cashbackPercentage}% de cashback
+                {product.cashbackPercentage}% de desconto
               </Text>
             </HStack>
 

@@ -3,10 +3,10 @@ import { useContext, useMemo } from 'react'
 import { useNavigation } from '@react-navigation/native'
 
 import { CartContext } from '@contexts/CartContext'
-import { HomeScreen } from '@components/HomeScreen'
 import { ItemsCart } from '@components/Cart/ItemsCart'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { formatCurrency } from '@utils/format'
+import { ButtonBack } from '@components/Cart/ButtonBack'
 
 export function Cart() {
   const { cartItems, activeStoreId } = useContext(CartContext)
@@ -31,7 +31,9 @@ export function Cart() {
 
   return (
     <VStack flex={1}>
-      <HomeScreen title="Carrinho" />
+      <HStack mt={4}>
+        <ButtonBack />
+      </HStack>
 
       <VStack flex={1} bg="gray.100" p={4}>
         {cartItems.length === 0 ? (

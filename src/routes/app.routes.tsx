@@ -15,7 +15,7 @@ import RequestSvg from '@assets/pedidos.svg'
 
 import { Home } from '@screens/Home'
 import { Cart } from '@screens/Cart'
-import { ProfileCashback } from '@screens/ProfileCashback'
+import { ProfileCashback } from '@screens/Cashbacks/ProfileCashback'
 import { ProfileWallet } from '@screens/ProfileWallet'
 import { OrderHistory } from '@screens/OrderHistory'
 import { OrderValidation } from '@screens/OrderValidation'
@@ -47,6 +47,7 @@ import { StoreProducts } from '@screens/StoreProducts'
 import { CartTabIcon } from '@components/CartTabIcon'
 import { StoreRatings } from '@screens/StoreRatings'
 import { StoreRewardCatalog } from '@screens/StoreRewardCatalog'
+import { RewardQRCodeScreen } from '@screens/RewardQRCodeScreen'
 
 /* =======================
    TIPAGEM DAS ROTAS
@@ -88,6 +89,7 @@ type AppRoutes = {
   terms: undefined
   storeRatings: { storeId: string; storeName: string }
   storeRewardCatalog: { storeId: string }
+  rewardQRCode: { redemptionId: string; storeId: string }
 }
 
 export type AppNavigatorRoutesProps = BottomTabNavigationProp<AppRoutes>
@@ -195,7 +197,7 @@ export function AppRoutes() {
         name="wallet"
         component={ProfileWallet}
         options={{
-          title: 'Carteira',
+          title: 'Resgate',
           tabBarIcon: ({ color }) => (
             <ProfileSvg fill={color} width={iconSize} height={iconSize} />
           ),
@@ -298,6 +300,12 @@ export function AppRoutes() {
       <Screen
         name="storeRewardCatalog"
         component={StoreRewardCatalog}
+        options={{ tabBarButton: () => null }}
+      />
+
+      <Screen
+        name="rewardQRCode"
+        component={RewardQRCodeScreen}
         options={{ tabBarButton: () => null }}
       />
     </Navigator>

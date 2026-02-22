@@ -16,6 +16,7 @@ import { api } from '@services/api'
 import { formatCurrency } from '@utils/format'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CartContext } from '@contexts/CartContext'
+import { ButtonBack } from '@components/ButtonBack'
 
 export function Checkout() {
   const navigation = useNavigation<AppNavigatorRoutesProps>()
@@ -65,7 +66,9 @@ export function Checkout() {
 
   return (
     <Box flex={1} bg="white" px={4} py={6}>
-      <ArrowBackIcon onPress={() => navigation.goBack()} />
+      <HStack mt={2}>
+        <ButtonBack />
+      </HStack>
 
       <Text fontSize="16" fontWeight="bold" mt={2} textAlign="center">
         Resumo do Pedido
@@ -81,6 +84,7 @@ export function Checkout() {
               alt={item.name}
               size="64px"
               borderRadius="md"
+              resizeMode="contain"
             />
 
             <VStack flex={1}>

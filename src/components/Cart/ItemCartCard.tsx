@@ -40,7 +40,7 @@ export function ItemCartCard({
         h={16}
         source={{ uri: data.image }}
         alt={data.name}
-        resizeMode={Platform.OS === 'android' ? 'contain' : 'cover'}
+        resizeMode={Platform.OS === 'android' ? 'contain' : 'contain'}
       />
 
       <VStack flex={1} ml={3}>

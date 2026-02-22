@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import {
   Box,
   Text,
@@ -8,14 +8,18 @@ import {
   HStack,
   Spinner,
   useToast,
-  Divider,
+  Image,
   Pressable,
-  Badge,
 } from 'native-base'
 import { RefreshControl, Alert } from 'react-native'
-import { useRoute, useFocusEffect } from '@react-navigation/native'
+import {
+  useRoute,
+  useFocusEffect,
+  useNavigation,
+} from '@react-navigation/native'
 import { api } from '@services/api'
 import { HomeScreen } from '@components/HomeScreen'
+import { useStorePoints } from '@contexts/StorePointsContext'
 
 interface Reward {
   id: string
@@ -24,13 +28,16 @@ interface Reward {
   pointsCost: number
   stock: number
   isActive: boolean
+  image: string
 }
 
-interface Wallet {
-  balance: number
-  earned: number
-  spent: number
-  transactions?: any[]
+interface PendingRedemption {
+  id: string
+  reward: {
+    id: string
+    title: string
+    image?: string
+  }
 }
 
 interface RouteParams {
@@ -39,24 +46,31 @@ interface RouteParams {
 
 export function StoreRewardCatalog() {
   const route = useRoute()
+  const navigation = useNavigation<any>()
   const { storeId } = route.params as RouteParams
 
   const toast = useToast()
+  const { wallet, balance, fetchWallet } = useStorePoints()
 
-  const [wallet, setWallet] = useState<Wallet | null>(null)
   const [rewards, setRewards] = useState<Reward[]>([])
+  const [pending, setPending] = useState<PendingRedemption[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [activeTab, setActiveTab] = useState<'catalog' | 'pending'>('catalog')
 
   const fetchData = async () => {
     try {
-      const [walletResponse, rewardsResponse] = await Promise.all([
-        api.get(`/stores/${storeId}/points/me`),
+      setLoading(true)
+
+      await fetchWallet(storeId)
+
+      const [rewardsResponse, pendingResponse] = await Promise.all([
         api.get(`/stores/${storeId}/rewards`),
+        api.get(`/stores/${storeId}/rewards/redemptions/me`),
       ])
 
-      setWallet(walletResponse.data)
       setRewards(rewardsResponse.data)
+      setPending(pendingResponse.data)
     } catch (error) {
       toast.show({
         title: 'Erro ao carregar dados',
@@ -80,18 +94,16 @@ export function StoreRewardCatalog() {
     fetchData()
   }, [])
 
-  const handleRedeem = async (rewardId: string, pointsCost: number) => {
+  const handleRedeem = async (rewardId: string) => {
     try {
-      await api.post(`/stores/${storeId}/rewards/${rewardId}/redeem`)
+      const response = await api.post(
+        `/stores/${storeId}/rewards/${rewardId}/redeem`,
+      )
 
-      toast.show({
-        title: '🎉 Brinde resgatado com sucesso!',
-        placement: 'top',
-        bgColor: 'green.500',
+      navigation.navigate('rewardQRCode', {
+        redemptionId: response.data.redemptionId,
+        storeId,
       })
-
-      // Atualiza carteira automaticamente
-      fetchData()
     } catch (error: any) {
       Alert.alert(
         'Erro',
@@ -109,99 +121,173 @@ export function StoreRewardCatalog() {
   }
 
   return (
-    <Box flex={1} bg="gray.50">
-      <HomeScreen title="Catálogo de Brindes" />
+    <Box flex={1} bg="gray.200">
+      <HomeScreen title="Brindes" />
 
-      {/* 🪙 Saldo */}
-      <Box mx={4} mt={4} p={6} bg="purple.600" rounded="2xl" shadow={3}>
-        <Text color="purple.100" fontSize="sm">
-          Seus pontos disponíveis
-        </Text>
+      {/* 🧭 ABAS */}
+      <Box mt={4} px={4}>
+        <HStack
+          bg="gray.100"
+          rounded="full"
+          p={1}
+          justifyContent="space-between"
+        >
+          <Pressable
+            flex={1}
+            onPress={() => setActiveTab('catalog')}
+            bg={activeTab === 'catalog' ? 'white' : 'transparent'}
+            rounded="full"
+            py={2}
+            alignItems="center"
+          >
+            <Text
+              fontWeight="bold"
+              color={activeTab === 'catalog' ? 'purple.600' : 'gray.600'}
+            >
+              Catálogo
+            </Text>
+          </Pressable>
 
-        <Text fontSize="4xl" fontWeight="bold" color="white" mt={1}>
-          {wallet?.balance ?? 0}
-        </Text>
-
-        <HStack justifyContent="space-between" mt={4}>
-          <VStack>
-            <Text fontSize="xs" color="purple.200">
-              Acumulado
+          <Pressable
+            flex={1}
+            onPress={() => setActiveTab('pending')}
+            bg={activeTab === 'pending' ? 'white' : 'transparent'}
+            rounded="full"
+            py={2}
+            alignItems="center"
+          >
+            <Text
+              fontWeight="bold"
+              color={activeTab === 'pending' ? 'purple.600' : 'gray.600'}
+            >
+              Escolhidos ({pending.length})
             </Text>
-            <Text fontWeight="bold" color="green.200">
-              {wallet?.earned ?? 0}
-            </Text>
-          </VStack>
-
-          <VStack>
-            <Text fontSize="xs" color="purple.200">
-              Utilizado
-            </Text>
-            <Text fontWeight="bold" color="red.200">
-              {wallet?.spent ?? 0}
-            </Text>
-          </VStack>
+          </Pressable>
         </HStack>
       </Box>
 
-      <Divider my={6} />
+      {/* 🎁 ABA CATÁLOGO */}
+      {activeTab === 'catalog' && (
+        <FlatList
+          data={rewards.filter((r) => r.isActive)}
+          keyExtractor={(item) => item.id}
+          px={4}
+          mt={4}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListEmptyComponent={
+            <Text textAlign="center" mt={10} color="gray.500">
+              Nenhum brinde disponível.
+            </Text>
+          }
+          renderItem={({ item }) => {
+            const canRedeem = balance >= item.pointsCost && item.stock > 0
+            const missingPoints = item.pointsCost - balance
 
-      {/* 🎁 Lista de brindes */}
-      <FlatList
-        data={rewards.filter((r) => r.isActive)}
-        keyExtractor={(item) => item.id}
-        px={4}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <Text textAlign="center" mt={10} color="gray.500">
-            Nenhum brinde disponível no momento.
-          </Text>
-        }
-        renderItem={({ item }) => {
-          const canRedeem =
-            wallet?.balance !== undefined &&
-            wallet.balance >= item.pointsCost &&
-            item.stock > 0
+            return (
+              <Box
+                bg="gray.100"
+                rounded="3xl"
+                shadow={3}
+                mb={6}
+                overflow="hidden"
+              >
+                {item.image && (
+                  <Box height={180} bg="gray.200" borderWidth={0.24}>
+                    <Image
+                      source={{ uri: item.image }}
+                      alt={item.title}
+                      width="100%"
+                      height="100%"
+                      resizeMode="stretch"
+                    />
+                  </Box>
+                )}
 
-          return (
-            <Box bg="white" p={5} rounded="2xl" shadow={2} mb={4}>
-              <VStack space={3}>
-                <HStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize="md" fontWeight="bold">
+                <VStack p={5} space={3}>
+                  <Text fontSize="lg" fontWeight="bold">
                     {item.title}
                   </Text>
 
-                  {item.stock <= 0 && (
-                    <Badge colorScheme="coolGray">Esgotado</Badge>
+                  {item.description && (
+                    <Text fontSize="sm" color="gray.500">
+                      {item.description}
+                    </Text>
                   )}
-                </HStack>
 
-                {item.description && (
-                  <Text fontSize="sm" color="gray.500">
-                    {item.description}
+                  {!canRedeem && item.stock > 0 && (
+                    <Text fontSize="xs" color="red.400">
+                      Faltam {missingPoints} pontos
+                    </Text>
+                  )}
+
+                  <Button
+                    mt={2}
+                    bg={canRedeem ? 'purple.600' : 'red.400'}
+                    isDisabled={!canRedeem}
+                    onPress={() => handleRedeem(item.id)}
+                    rounded="2xl"
+                  >
+                    {canRedeem ? 'Resgatar agora' : 'Pontos insuficientes'}
+                  </Button>
+                </VStack>
+              </Box>
+            )
+          }}
+        />
+      )}
+
+      {/* 🎟 ABA PENDENTES */}
+      {activeTab === 'pending' && (
+        <FlatList
+          data={pending}
+          keyExtractor={(item) => item.id}
+          px={4}
+          mt={4}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListEmptyComponent={
+            <Text textAlign="center" mt={10} color="gray.500">
+              Nenhum brinde pendente.
+            </Text>
+          }
+          renderItem={({ item }) => (
+            <Box
+              bg="orange.50"
+              borderColor="orange.300"
+              borderWidth={1}
+              rounded="2xl"
+              p={5}
+              mb={4}
+            >
+              <HStack justifyContent="space-between" alignItems="center">
+                <VStack flex={1}>
+                  <Text bold>{item.reward.title}</Text>
+                  <Text fontSize="xs" color="gray.500">
+                    Aguardando validação
                   </Text>
-                )}
-
-                <Text fontSize="lg" fontWeight="bold" color="purple.600">
-                  {item.pointsCost} pontos
-                </Text>
+                </VStack>
 
                 <Button
-                  mt={2}
-                  bg={canRedeem ? 'purple.600' : 'gray.300'}
-                  _pressed={{ opacity: 0.8 }}
-                  isDisabled={!canRedeem}
-                  onPress={() => handleRedeem(item.id, item.pointsCost)}
+                  size="sm"
+                  bg="orange.500"
                   rounded="xl"
+                  onPress={() =>
+                    navigation.navigate('rewardQRCode', {
+                      redemptionId: item.id,
+                      storeId,
+                    })
+                  }
                 >
-                  {canRedeem ? 'Resgatar' : 'Pontos insuficientes'}
+                  Mostrar QR
                 </Button>
-              </VStack>
+              </HStack>
             </Box>
-          )
-        }}
-      />
+          )}
+        />
+      )}
     </Box>
   )
 }
