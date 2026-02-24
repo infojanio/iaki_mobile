@@ -41,7 +41,7 @@ export function About() {
 
         <Text fontSize="md" color="gray.800" mt={4} ml={2} mr={2}>
           O aplicativo <Text bold>IAki</Text> foi desenvolvido para oferecer
-          cashback em compras, promoções exclusivas e praticidade no dia a dia.
+          desconto em compras, promoções exclusivas e praticidade no dia a dia.
         </Text>
 
         <VStack space={3} mt={6}>

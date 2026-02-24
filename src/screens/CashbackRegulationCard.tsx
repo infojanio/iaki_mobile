@@ -41,7 +41,7 @@ export function CashbackRegulationCard() {
       <HStack space={2} alignItems="center" mb={3}>
         <Icon as={MaterialIcons} name="info" size="md" color="primary.500" />
         <Text fontSize="lg" fontWeight="bold" color="primary.500">
-          Passos para acumular Cashback
+          Passos para acumular Pontos
         </Text>
       </HStack>
 
@@ -55,8 +55,8 @@ export function CashbackRegulationCard() {
             mt={0.5}
           />
           <Text flex={1}>
-            <Text fontWeight="bold">1. Compre em nosso app:</Text> Escolha
-            produtos participantes do programa de cashback.
+            <Text fontWeight="bold">1. Compre em nosso app:</Text> Escolha os
+            produtos, adicione ao carrinho e confirme o pedido.
           </Text>
         </HStack>
 
@@ -72,7 +72,7 @@ export function CashbackRegulationCard() {
             <Text fontWeight="bold">
               2. Após finalizar o pedido, vá até nossa loja física:
             </Text>{' '}
-            Informe ao atendente que deseja acumular cashback.
+            Informe ao atendente que deseja acumular pontos.
           </Text>
         </HStack>
 
@@ -85,8 +85,8 @@ export function CashbackRegulationCard() {
             mt={0.5}
           />
           <Text flex={1}>
-            <Text fontWeight="bold">3. Realize o pagamento:</Text> Forneça seu
-            CPF no ato da emissão da nota fiscal.
+            <Text fontWeight="bold">3. Realize o pagamento:</Text> Forneça o
+            código do pedido para aprovação.
           </Text>
         </HStack>
 
@@ -99,15 +99,15 @@ export function CashbackRegulationCard() {
             mt={0.5}
           />
           <Text flex={1}>
-            <Text fontWeight="bold">4. Solicite a validação:</Text> Seu cashback
-            será creditado em até 2 dias úteis após a compra.
+            <Text fontWeight="bold">4. Solicite a validação:</Text> Seus pontos
+            serão creditados após validação feita pela loja.
           </Text>
         </HStack>
       </VStack>
 
       <Box mt={4} p={3} bg="primary.50" borderRadius="sm">
         <Text fontSize="sm" color="gray.600" textAlign="center">
-          Acumule cashbacks.{' '}
+          Acumule pontos.{' '}
           <Link
             _text={{
               color: 'primary.600',
@@ -117,7 +117,7 @@ export function CashbackRegulationCard() {
             href="https://iaki.com.br"
             isExternal
           >
-            Depois troque por produtos.
+            Depois troque por brindes na loja.
           </Link>
         </Text>
       </Box>

@@ -225,6 +225,7 @@ export function OrderHistory() {
                       alt="imagem"
                       size="sm"
                       borderRadius="md"
+                      resizeMode="contain"
                     />
 
                     <VStack flex={1}>

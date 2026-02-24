@@ -50,20 +50,20 @@ export function TermsOfUse() {
           2. Uso do Aplicativo
         </Text>
         <Text>
-          • O app destina-se a fornecer informações sobre cashback, compras e
+          • O app destina-se a fornecer informações sobre descontos, compras e
           promoções.{'\n'}• É proibido usar o aplicativo para fins ilegais,
           fraudulentos ou que prejudiquem terceiros.{'\n'}• Reservamo-nos o
           direito de suspender ou encerrar contas que violem estes termos.
         </Text>
 
         <Text fontSize="lg" bold mt={2}>
-          3. Cashback
+          3. Pontuação
         </Text>
         <Text>
-          • As regras de acúmulo e utilização do cashback são definidas pela
+          • As regras de acúmulo e utilização dos pontos são definidas pela
           plataforma e podem ser alteradas com aviso prévio.{'\n'}• O saldo de
-          cashback é pessoal e não pode ser transferido, vendido ou convertido
-          em dinheiro, salvo quando explicitamente permitido.
+          pontos é pessoal e não pode ser transferido, vendido ou convertido em
+          dinheiro, são resgatados em troca de brindes.
         </Text>
 
         <Text fontSize="lg" bold mt={2}>
