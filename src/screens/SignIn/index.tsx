@@ -116,11 +116,6 @@ export function SignIn() {
           <View style={styles.formContainer}>
             <View style={{ alignItems: 'center' }}>
               <Text style={styles.header}>Clube de vantagens</Text>
-              <Image
-                style={{ height: 30, width: 160, marginBottom: 16 }}
-                source={MarketPng}
-                resizeMode="contain"
-              />
             </View>
 
             <Controller
@@ -185,7 +180,7 @@ export function SignIn() {
 
             <View style={{ alignItems: 'center', marginTop: 8 }}>
               <Image
-                style={{ height: 60, width: 104 }}
+                style={{ height: 80, width: 124 }}
                 source={IakiPng}
                 resizeMode="contain"
               />
