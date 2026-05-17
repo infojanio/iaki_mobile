@@ -91,8 +91,10 @@ export function StoreProducts() {
 
         const [storeRes, catRes, bannerRes] = await Promise.all([
           api.get(`/stores/${storeId}`),
+
           api.get(`/stores/${storeId}/categories`),
-          api.get(`/banners/store/${storeId}`),
+
+          api.get(`/stores/${storeId}/banners`),
         ])
 
         setStore(storeRes.data)
