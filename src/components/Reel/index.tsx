@@ -15,7 +15,7 @@ import { api } from '@services/api'
 type ReelDTO = {
   id: string
   title: string
-  image_url: string
+  imageUrl: string
   link?: string | null
 }
 
@@ -45,7 +45,7 @@ export function Reel() {
       const { data } = await api.get<ReelDTO[]>('/reels')
       const mapped: Reel[] = (data ?? []).map((b) => ({
         id: b.id,
-        imageUrl: b.image_url,
+        imageUrl: b.imageUrl,
         link: b.link ?? undefined,
       }))
       setReels(mapped)
@@ -103,7 +103,7 @@ export function Reel() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.text}>Reels do Instagram</Text>
+      <Text style={styles.text}>🚀 Fidelize seus clientes </Text>
       <FlatList
         ref={listRef}
         data={reels}

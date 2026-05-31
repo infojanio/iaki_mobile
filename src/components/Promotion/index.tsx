@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Dimensions,
   Pressable,
@@ -27,8 +27,8 @@ type Props = {
 const { width } = Dimensions.get('window')
 
 // Card quase tela cheia (padrão iFood / Uber Eats)
-const CARD_W = Math.min(320, width - 24)
-const CARD_H = 120
+const CARD_W = Math.min(420, width - 24)
+const CARD_H = 160
 const CARD_GAP = 14
 
 export function Promotion({ banners: bannersFromProps }: Props) {
@@ -38,13 +38,21 @@ export function Promotion({ banners: bannersFromProps }: Props) {
   const [activeIndex, setActiveIndex] = useState(0)
 
   // 🔹 Normaliza banners recebidos
-  const banners: PromoBanner[] = (bannersFromProps ?? []).map((b) => ({
-    id: b.id,
-    imageUrl: b.imageUrl,
-    position: b.position,
-    storeId: b.storeId,
-    link: b.link ?? undefined,
-  }))
+  const banners: PromoBanner[] = useMemo(() => {
+    const normalized = (bannersFromProps ?? []).map((b) => ({
+      id: b.id,
+      imageUrl: b.imageUrl,
+      position: b.position,
+      storeId: b.storeId,
+      link: b.link ?? undefined,
+    }))
+
+    // 🔥 embaralha
+    const shuffled = [...normalized].sort(() => Math.random() - 0.5)
+
+    // 🔥 pega apenas 3
+    return shuffled.slice(0, 3)
+  }, [bannersFromProps])
 
   // 🔹 Autoplay (mantido)
   useEffect(() => {

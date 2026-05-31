@@ -1,15 +1,24 @@
-import { createContext, ReactNode, useState, useEffect } from 'react'
-import { api } from '@services/api'
+import {
+  createContext,
+  ReactNode,
+  useState,
+  useEffect,
+  useCallback,
+} from 'react'
+
 import { useToast } from 'native-base'
 
+import { api } from '@services/api'
+
 import { useAuth } from '@hooks/useAuth'
+
 import { BannerDTO } from '@dtos/BannerDTO'
 
 /* ==============================
    🧱 TIPOS
 ============================== */
 
-type City = {
+export type City = {
   id: string
   name: string
   uf: string
@@ -17,11 +26,17 @@ type City = {
 
 type CityContextData = {
   city: City | null
+
   cityBanners: BannerDTO[]
+
   isLoading: boolean
 
   fetchUserCity: () => Promise<void>
+
   setUserCity: (city: City) => Promise<void>
+
+  refreshCityBanners: () => Promise<void>
+
   clearCity: () => void
 }
 
@@ -37,40 +52,55 @@ type CityProviderProps = {
 
 export function CityProvider({ children }: CityProviderProps) {
   const { userId } = useAuth()
+
   const toast = useToast()
 
   const [city, setCity] = useState<City | null>(null)
+
   const [cityBanners, setCityBanners] = useState<BannerDTO[]>([])
+
   const [isLoading, setIsLoading] = useState(false)
 
   /* ==============================
-     🔄 BANNERS DA CIDADE
+     🎯 CARREGAR BANNERS DA CIDADE
   ============================== */
-  useEffect(() => {
-    async function loadCityBanners() {
-      if (!city?.id) {
-        setCityBanners([])
-        return
-      }
 
-      try {
-        const res = await api.get('/banners', {
-          params: { cityId: city.id },
-        })
-
-        setCityBanners(res.data)
-      } catch (error) {
-        console.error('[CityContext] Erro ao carregar banners', error)
-        setCityBanners([])
-      }
+  const refreshCityBanners = useCallback(async () => {
+    if (!city?.id) {
+      setCityBanners([])
+      return
     }
 
-    loadCityBanners()
+    try {
+      const response = await api.get(`/banners/city/${city.id}`)
+
+      const banners =
+        response.data?.data ?? response.data?.banners ?? response.data ?? []
+
+      // 🔥 embaralha
+      const shuffled = [...banners].sort(() => Math.random() - 0.5)
+
+      // 🔥 mostra apenas 3
+      setCityBanners(shuffled.slice(0, 3))
+    } catch (error) {
+      console.error('[CityContext] Erro ao carregar banners:', error)
+
+      setCityBanners([])
+    }
   }, [city?.id])
+
+  /* ==============================
+     🔄 RECARREGA AO TROCAR CIDADE
+  ============================== */
+
+  useEffect(() => {
+    refreshCityBanners()
+  }, [refreshCityBanners])
 
   /* ==============================
      🏙️ DEFINIR CIDADE
   ============================== */
+
   async function setUserCity(selectedCity: City) {
     try {
       setIsLoading(true)
@@ -89,6 +119,12 @@ export function CityProvider({ children }: CityProviderProps) {
       */
     } catch (error) {
       console.error('[CityContext] Erro ao salvar cidade:', error)
+
+      toast.show({
+        title: 'Erro ao alterar cidade',
+        placement: 'top',
+      })
+
       throw error
     } finally {
       setIsLoading(false)
@@ -96,24 +132,37 @@ export function CityProvider({ children }: CityProviderProps) {
   }
 
   /* ==============================
-     🔄 BUSCAR CIDADE DO USUÁRIO
-     (hidratação futura)
+     👤 BUSCAR CIDADE DO USUÁRIO
   ============================== */
+
   async function fetchUserCity() {
     try {
-      const { data } = await api.get('/users/me')
+      const { data } = await api.get('/me')
 
-      if (data?.city) {
-        setCity(data.city)
+      const user = data?.user
+
+      if (user?.city) {
+        setCity(user.city)
+        return
+      }
+
+      // 🔥 fallback
+      if (user?.cityId && user?.cityName) {
+        setCity({
+          id: user.cityId,
+          name: user.cityName,
+          uf: user.uf ?? '',
+        })
       }
     } catch (error) {
-      console.error('[CityContext] Erro ao buscar cidade do usuário', error)
+      console.error('[CityContext] Erro ao buscar cidade do usuário:', error)
     }
   }
 
   /* ==============================
-     🧹 LIMPAR CIDADE (LOGOUT)
+     🧹 LIMPAR CONTEXTO
   ============================== */
+
   function clearCity() {
     setCity(null)
     setCityBanners([])
@@ -122,6 +171,7 @@ export function CityProvider({ children }: CityProviderProps) {
   /* ==============================
      🔐 REAGE AO LOGOUT
   ============================== */
+
   useEffect(() => {
     if (!userId) {
       clearCity()
@@ -131,15 +181,23 @@ export function CityProvider({ children }: CityProviderProps) {
   /* ==============================
      📦 CONTEXT
   ============================== */
+
   return (
     <CityContext.Provider
       value={{
         city,
+
         cityBanners,
+
         isLoading,
-        setUserCity,
-        clearCity,
+
         fetchUserCity,
+
+        setUserCity,
+
+        refreshCityBanners,
+
+        clearCity,
       }}
     >
       {children}

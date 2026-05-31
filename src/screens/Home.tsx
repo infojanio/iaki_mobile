@@ -1,47 +1,50 @@
-import { useCallback, useContext, useEffect, useState } from 'react'
+import { useCallback, useContext, useState } from 'react'
 import { Box, VStack, useToast, ScrollView } from 'native-base'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 
-import { AppError } from '@utils/AppError'
 import { api } from '@services/api'
+import { AppError } from '@utils/AppError'
+
 import { useAuth } from '@hooks/useAuth'
 
 import { ProductDTO } from '@dtos/ProductDTO'
+import { StoreDTO } from '@dtos/StoreDTO'
+
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
 import { HomeHeader } from '@components/HomeHeader'
 import { Promotion } from '@components/Promotion'
+import { SearchBar } from '@components/SearchBar'
+import { FeaturedStores } from '@components/FeaturedStores'
 import { Loading } from '@components/Loading'
 
-import { CashbackRegulationCard } from './CashbackRegulationCard'
-import { Reel } from '@components/Reel'
-import { CategoryList } from './CategoryList'
-import { ProductCashback } from './Product/ProductCashback'
+import { ProductDiscount } from './Product/ProductDiscount'
 import { ProductQuantity } from './Product/ProductQuantity'
+
+import { CashbackRegulationCard } from './CashbackRegulationCard'
 import { BusinessCategory } from '@screens/BusinessCategory'
-import { StoreList } from './StoreList'
+import { Reel } from '@components/Reel'
 
 import { CityContext } from '@contexts/CityContext'
 import { CartContext } from '@contexts/CartContext'
-import { ProductDiscount } from './Product/ProductDiscount'
 
 export function Home() {
-  const { city } = useContext(CityContext)
-  const { syncCartBadge } = useContext(CartContext)
-  const { cityBanners } = useContext(CityContext)
-
-  const navigation = useNavigation<AppNavigatorRoutesProps>()
   const toast = useToast()
 
-  const [products, setProducts] = useState<ProductDTO[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const navigation = useNavigation<AppNavigatorRoutesProps>()
+
+  const { city, cityBanners } = useContext(CityContext)
+
+  const { syncCartBadge } = useContext(CartContext)
 
   const { userId } = useAuth()
 
-  /* ==============================
-     🔗 ABRIR PRODUTO
-     (SEM lógica de loja/carrinho)
-  ============================== */
+  const [products, setProducts] = useState<ProductDTO[]>([])
+  const [stores, setStores] = useState<StoreDTO[]>([])
+
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingStores, setIsLoadingStores] = useState(false)
+
   function handleOpenProductDetails(product: ProductDTO) {
     if (!product.id) {
       toast.show({
@@ -50,6 +53,7 @@ export function Home() {
         placement: 'top',
         bgColor: 'red.500',
       })
+
       return
     }
 
@@ -58,13 +62,10 @@ export function Home() {
     })
   }
 
-  /* ==============================
-     📦 FETCH PRODUTOS HOME
-  ============================== */
   async function fetchProducts() {
     try {
-      setIsLoading(true)
       const response = await api.get('/products')
+
       setProducts(response.data)
     } catch (error) {
       const title =
@@ -77,18 +78,39 @@ export function Home() {
         placement: 'top',
         bgColor: 'red.500',
       })
+    }
+  }
+
+  async function fetchStores() {
+    try {
+      if (!city?.id) return
+
+      setIsLoadingStores(true)
+
+      const response = await api.get(`/stores/city/${city.id}`)
+
+      setStores(response.data.stores ?? response.data)
+    } catch (error) {
+      console.log(error)
+    } finally {
+      setIsLoadingStores(false)
+    }
+  }
+
+  async function loadHomeData() {
+    try {
+      setIsLoading(true)
+
+      await Promise.all([fetchProducts(), fetchStores()])
     } finally {
       setIsLoading(false)
     }
   }
 
-  /* ==============================
-     🔄 CARREGAMENTO AO FOCUS
-  ============================== */
   useFocusEffect(
     useCallback(() => {
-      fetchProducts()
-    }, []),
+      loadHomeData()
+    }, [city?.id]),
   )
 
   useFocusEffect(
@@ -97,30 +119,41 @@ export function Home() {
     }, [city?.id]),
   )
 
-  /* ==============================
-     🖥️ RENDER
-  ============================== */
   return (
     <VStack flex={1} bg="gray.100">
-      <Box>
-        <HomeHeader />
-      </Box>
+      {/* HEADER */}
+      <HomeHeader />
+
+      {/* BUSCA */}
+      <SearchBar />
 
       {isLoading ? (
         <Loading />
       ) : (
         <ScrollView flex={1} showsVerticalScrollIndicator={false}>
-          <VStack flex={1} pt={1} bg="gray.100" pb={8}>
-            <BusinessCategory />
+          <VStack flex={1} bg="gray.100" pb={10}>
+            {/* BANNERS */}
             <Promotion banners={cityBanners} />
 
-            <StoreList />
+            {/* CATEGORIAS */}
+            <BusinessCategory />
 
-            {/* Produtos clicáveis */}
+            {/* LOJAS EM DESTAQUE */}
+            <FeaturedStores
+              stores={stores.slice(0, 10)}
+              isLoading={isLoadingStores}
+            />
+
+            {/* OFERTAS */}
             <ProductDiscount onPressProduct={handleOpenProductDetails} />
+
+            {/* REELS */}
             <Reel />
+
+            {/* MAIS VENDIDOS */}
             <ProductQuantity onPressProduct={handleOpenProductDetails} />
 
+            {/* REGRAS */}
             <CashbackRegulationCard />
           </VStack>
         </ScrollView>

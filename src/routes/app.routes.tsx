@@ -48,6 +48,7 @@ import { CartTabIcon } from '@components/CartTabIcon'
 import { StoreRatings } from '@screens/StoreRatings'
 import { StoreRewardCatalog } from '@screens/StoreRewardCatalog'
 import { RewardQRCodeScreen } from '@screens/RewardQRCodeScreen'
+import { StoreList } from '@screens/StoreList'
 
 /* =======================
    TIPAGEM DAS ROTAS
@@ -56,6 +57,7 @@ import { RewardQRCodeScreen } from '@screens/RewardQRCodeScreen'
 type AppRoutes = {
   home: undefined
   searchProducts: undefined
+  storeList: undefined
   storeProducts: { storeId: string }
   cart: undefined
   orderHistory: undefined
@@ -225,6 +227,13 @@ export function AppRoutes() {
         component={ProductList}
         options={{ tabBarButton: () => null }}
       />
+
+      <Screen
+        name="storeList"
+        component={StoreList}
+        options={{ tabBarButton: () => null }}
+      />
+
       <Screen
         name="storeProducts"
         component={StoreProducts}

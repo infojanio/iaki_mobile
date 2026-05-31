@@ -20,10 +20,10 @@ export function BusinessCategoryCard({
     <VStack flex={1} borderBottomWidth={isSelected ? 'green.100' : 'gray.500'}>
       <TouchableOpacity {...rest}>
         <Box
-          bg="gray.200"
+          bg="gray.50"
           size={24}
           marginBottom={1}
-          backgroundColor="gray.100"
+          backgroundColor="white"
           alignItems="center"
           marginTop={1}
           marginLeft={1}

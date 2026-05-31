@@ -22,6 +22,7 @@ import { StoreDTO } from '@dtos/StoreDTO'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CategoryDTO } from '@dtos/CategoryDTO'
 import { RatingStars } from '@components/RatingStars'
+import { HomeScreen } from '@components/HomeScreen'
 
 type Props = {
   insideScrollView?: boolean
@@ -89,7 +90,25 @@ export function StoreList({ insideScrollView = true }: Props) {
   if (isLoading) return <Loading />
 
   return (
-    <VStack flex={1} bg="coolGray.50" px={3} py={2}>
+    <VStack flex={1} bg="coolGray.50" py={2}>
+      <HomeScreen title="Voltar" />
+
+      <HStack
+        px={4}
+        pt={2}
+        pb={3}
+        justifyContent="space-between"
+        alignItems="center"
+      >
+        <Text fontSize="xl" fontWeight="700" color="coolGray.800">
+          🏪 Lojas Parceiras
+        </Text>
+
+        <Text fontSize="sm" color="blue.600" fontWeight="600">
+          {stores.length} lojas
+        </Text>
+      </HStack>
+
       <RNFlatList
         data={stores}
         keyExtractor={(item) => item.id}
@@ -100,75 +119,77 @@ export function StoreList({ insideScrollView = true }: Props) {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           ) : undefined
         }
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingBottom: 120,
+        }}
+        ItemSeparatorComponent={() => <Box h={4} />}
         renderItem={({ item: store }) => (
-          <Box bg="white" rounded="2xl" shadow="1" px={3} py={3} mb={3}>
-            <HStack>
-              <Text fontSize="14" fontStyle="italic" fontWeight="700" mb={2}>
+          <Box bg="white" borderRadius={24} shadow={2} px={4} py={4}>
+            <VStack space={3}>
+              <Text fontSize="lg" fontWeight="700">
                 {store.name}
               </Text>
-              <HStack>
-                <Box ml={4}>
-                  <RatingStars
-                    rating={store.rating}
-                    count={store.ratingCount}
-                  />
-                </Box>
-                <Box ml={2}>
-                  <Text> ✨</Text>
-                </Box>
-              </HStack>
-            </HStack>
 
-            {store.categories?.length ? (
-              <RNFlatList
-                data={store.categories}
-                keyExtractor={(cat: CategoryDTO) => cat.id}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                renderItem={({ item: cat }) => (
-                  <Pressable
-                    onPress={() => handleOpenSubCategories(store.id, cat.id)}
-                  >
-                    <VStack mr={6} width={84} alignItems="center">
-                      <Box
-                        bg="coolGray.100"
-                        rounded="xl"
-                        width={90}
-                        height={60}
-                        alignItems="center"
-                        justifyContent="center"
-                      >
-                        {cat.image ? (
-                          <Image
-                            source={{ uri: cat.image }}
-                            alt={cat.name}
-                            width="100%"
-                            height="100%"
-                            borderRadius="3xl"
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <Icon as={ImageIcon} size="6" color="coolGray.500" />
-                        )}
-                      </Box>
+              <RatingStars rating={store.rating} count={store.ratingCount} />
 
-                      <Text
-                        mt={1}
-                        fontSize="xs"
-                        numberOfLines={1}
-                        textAlign="center"
-                      >
-                        {cat.name}
-                      </Text>
-                    </VStack>
-                  </Pressable>
-                )}
-              />
-            ) : (
-              <Text fontSize="xs" color="coolGray.500">
-                Sem categorias.
-              </Text>
-            )}
+              {store.categories?.length ? (
+                <RNFlatList
+                  data={store.categories}
+                  horizontal
+                  keyExtractor={(cat) => cat.id}
+                  showsHorizontalScrollIndicator={false}
+                  renderItem={({ item: cat }) => (
+                    <Pressable
+                      onPress={() => handleOpenSubCategories(store.id, cat.id)}
+                    >
+                      <VStack width={90} mr={4} alignItems="center">
+                        <Box
+                          width={90}
+                          height={70}
+                          borderRadius={20}
+                          bg="coolGray.100"
+                          overflow="hidden"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          {cat.image ? (
+                            <Image
+                              source={{
+                                uri: cat.image,
+                              }}
+                              alt={cat.name}
+                              w="100%"
+                              h="100%"
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <Icon
+                              as={ImageIcon}
+                              size="6"
+                              color="coolGray.500"
+                            />
+                          )}
+                        </Box>
+
+                        <Text
+                          mt={2}
+                          fontSize="xs"
+                          textAlign="center"
+                          numberOfLines={1}
+                        >
+                          {cat.name}
+                        </Text>
+                      </VStack>
+                    </Pressable>
+                  )}
+                />
+              ) : (
+                <Text fontSize="xs" color="coolGray.500">
+                  Sem categorias disponíveis.
+                </Text>
+              )}
+            </VStack>
           </Box>
         )}
       />

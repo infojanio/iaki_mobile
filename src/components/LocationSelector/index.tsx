@@ -2,7 +2,6 @@ import { Pressable } from 'react-native'
 import { HStack, Text, Icon, useTheme } from 'native-base'
 import { MaterialIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
-import MarketPng from '@assets/logoiaki.png'
 
 import { useContext } from 'react'
 import { CityContext } from '@contexts/CityContext'
@@ -22,7 +21,7 @@ export function LocationSelector() {
 
   return (
     <Pressable onPress={handleChangeCity}>
-      <HStack alignItems="center" space={1}>
+      <HStack alignItems="center" space={1} ml={2}>
         <Icon
           as={MaterialIcons}
           name="location-on"
@@ -31,7 +30,7 @@ export function LocationSelector() {
         />
 
         <Text
-          fontSize="md"
+          fontSize="14"
           fontWeight="bold"
           color="gray.800"
           numberOfLines={1}
