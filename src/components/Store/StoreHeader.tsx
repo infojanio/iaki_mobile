@@ -100,7 +100,7 @@ export function StoreHeader({ store }: Props) {
     <>
       <VStack safeArea mb={2} bg="gray.100">
         {/* IMAGEM DA LOJA */}
-        <Box position="relative">
+        <Box bg={'blue.200'} position="relative">
           <Image
             source={{ uri: store.avatar }}
             alt={store.name}

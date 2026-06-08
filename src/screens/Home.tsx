@@ -120,7 +120,7 @@ export function Home() {
   )
 
   return (
-    <VStack flex={1} bg="gray.100">
+    <VStack flex={1} bg="blue.100">
       {/* HEADER */}
       <HomeHeader />
 
@@ -131,7 +131,7 @@ export function Home() {
         <Loading />
       ) : (
         <ScrollView flex={1} showsVerticalScrollIndicator={false}>
-          <VStack flex={1} bg="gray.100" pb={10}>
+          <VStack flex={1} bg="blue.50" ml={1} mr={1} pb={10}>
             {/* BANNERS */}
             <Promotion banners={cityBanners} />
 

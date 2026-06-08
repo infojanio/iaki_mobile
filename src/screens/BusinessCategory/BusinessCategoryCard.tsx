@@ -21,7 +21,7 @@ export function BusinessCategoryCard({
       <TouchableOpacity {...rest}>
         <Box
           bg="gray.50"
-          size={24}
+          size={20}
           marginBottom={1}
           backgroundColor="white"
           alignItems="center"

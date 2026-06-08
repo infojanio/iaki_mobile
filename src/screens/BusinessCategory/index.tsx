@@ -100,7 +100,6 @@ export function BusinessCategory() {
           showsHorizontalScrollIndicator={false}
           _contentContainerStyle={{ px: 2 }}
           mt={2}
-          mb={2}
         />
       </VStack>
     </HStack>
