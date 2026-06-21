@@ -17,7 +17,7 @@ import {
 } from '@react-navigation/native'
 import { AppError } from '@utils/AppError'
 import { api } from '@services/api'
-import { Group } from '@components/Product/SubcategoryCard'
+import { SubcategoryCard } from '@components/Product/SubcategoryCard'
 import { ProductDTO } from '@dtos/ProductDTO'
 import { SubCategoryDTO } from '@dtos/SubCategoryDTO'
 import { ProductCard } from '@components/Product/ProductCard'
@@ -195,7 +195,7 @@ export function ProductBySubCategory() {
             data={subCategories}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <Group
+              <SubcategoryCard
                 name={item.name}
                 subcategory={item.id}
                 isActive={subCategorySelected === item.id}

@@ -1,7 +1,6 @@
 import { TouchableOpacity, TouchableOpacityProps } from 'react-native'
 import { VStack, Image, Text, Center, Box, Badge } from 'native-base'
 
-import { api } from '@services/api'
 import { ProductDTO } from '@dtos/ProductDTO'
 
 export type ProductCardProps = TouchableOpacityProps & {
@@ -22,7 +21,7 @@ export function ProductCard({ product, ...rest }: ProductCardProps) {
     <TouchableOpacity {...rest}>
       <VStack
         mr={1}
-        mt={3}
+        mt={1}
         bg="white"
         alignItems={'normal'}
         w={120}

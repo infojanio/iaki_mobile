@@ -17,7 +17,7 @@ export function CashbackRegulationCard() {
       bg="white"
       borderRadius="md"
       p={4}
-      mt={4}
+      mt={2}
       mx={4}
       my={2}
       shadow={1}

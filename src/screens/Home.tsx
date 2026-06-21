@@ -27,6 +27,7 @@ import { Reel } from '@components/Reel'
 
 import { CityContext } from '@contexts/CityContext'
 import { CartContext } from '@contexts/CartContext'
+import { BenefitsBar } from '@components/BenefitsBar'
 
 export function Home() {
   const toast = useToast()
@@ -152,6 +153,8 @@ export function Home() {
 
             {/* MAIS VENDIDOS */}
             <ProductQuantity onPressProduct={handleOpenProductDetails} />
+
+            <BenefitsBar />
 
             {/* REGRAS */}
             <CashbackRegulationCard />

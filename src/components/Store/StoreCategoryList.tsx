@@ -37,7 +37,7 @@ export function StoreCategoryList({
           <HStack alignItems="center" space={3}>
             <Box
               w={10}
-              h={10}
+              h={6}
               bg="primary.100"
               borderRadius="full"
               alignItems="center"

@@ -1,14 +1,24 @@
 import React, {
-  useEffect,
-  useState,
   useCallback,
-  useRef,
   useContext,
+  useEffect,
+  useRef,
+  useState,
 } from 'react'
-import { Box, FlatList, HStack, Text, VStack, useToast } from 'native-base'
-import { TextInput, StyleSheet } from 'react-native'
-import { useNavigation, useFocusEffect } from '@react-navigation/native'
+import {
+  Box,
+  FlatList,
+  HStack,
+  Icon,
+  Text,
+  VStack,
+  useToast,
+} from 'native-base'
+import { TextInput, StyleSheet, Pressable, RefreshControl } from 'react-native'
+import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { MaterialIcons } from '@expo/vector-icons'
+import debounce from 'lodash.debounce'
+
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 import { ProductDTO } from '@dtos/ProductDTO'
@@ -16,273 +26,351 @@ import { ProductCard } from '@components/Product/ProductCard'
 import { Loading } from '@components/Loading'
 import { HomeScreen } from '@components/HomeScreen'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
-import debounce from 'lodash.debounce'
 import { CityContext } from '@contexts/CityContext'
 
-// remove acentos
+const PAGE_SIZE = 24
+
 const removeAccents = (str: string) =>
   str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-const INITIAL_SUGGESTIONS = 5
-const PAGE_SIZE = 10
-
-// gera id fallback estável
 const makeTmpId = (seed: string, page: number, idx: number) =>
   `tmp-${page}-${idx}-${(seed || 'x').slice(0, 6)}`
 
-// normaliza e garante id
 const normalizeProducts = (raw: ProductDTO[], currentPage: number) =>
   (raw || []).map((p, idx) => {
     const base = String((p as any)?.id ?? (p as any)?._id ?? '')
     const safeId = base || makeTmpId(p?.name ?? '', currentPage, idx)
-    return { ...p, id: safeId }
+
+    return {
+      ...p,
+      id: safeId,
+    }
   })
 
 export function SearchProducts() {
   const toast = useToast()
   const navigation = useNavigation<AppNavigatorRoutesProps>()
   const inputRef = useRef<TextInput>(null)
+
   const { city } = useContext(CityContext)
 
   const [searchTerm, setSearchTerm] = useState('')
   const [products, setProducts] = useState<ProductDTO[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [hasLoaded, setHasLoaded] = useState(false)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
+
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
-  const [isSearching, setIsSearching] = useState(false)
 
-  // foca no input ao abrir
-  useFocusEffect(
-    useCallback(() => {
-      setTimeout(() => inputRef.current?.focus(), 100)
-    }, []),
-  )
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
 
   const handleOpenProductDetails = (productId: string) => {
     navigation.navigate('productDetails', { productId })
   }
 
-  // busca ativa (com fallback)
-  const fetchInitialSuggestions = useCallback(async () => {
-    setIsLoading(true)
-    setHasMore(true)
-    try {
-      // 1) tenta ativos
-      const res = await api.get('/products/active', {
-        params: {
-          cityId: city?.id,
-          page: 1,
-          pageSize: INITIAL_SUGGESTIONS,
-        },
-      })
-      let fetched = normalizeProducts(res.data?.products || [], 1)
+  useFocusEffect(
+    useCallback(() => {
+      setTimeout(() => inputRef.current?.focus(), 150)
+    }, []),
+  )
 
-      // 2) fallback: tenta retornar “algo”
-      if (fetched.length === 0) {
-        try {
-          const res2 = await api.get('/products/search', {
-            params: { query: 'a' },
-          })
-          fetched = normalizeProducts(res2.data?.products || [], 1).slice(
-            0,
-            INITIAL_SUGGESTIONS,
-          )
-        } catch {
-          // ignora erro do fallback
-        }
+  async function loadProducts(pageNumber = 1, shouldRefresh = false) {
+    if (!city?.id) {
+      setProducts([])
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      if (pageNumber === 1 && !shouldRefresh) {
+        setIsLoading(true)
       }
 
-      setProducts(fetched)
-      setHasMore(fetched.length >= INITIAL_SUGGESTIONS)
+      const response = await api.get('/products/active', {
+        params: {
+          cityId: city.id,
+          page: pageNumber,
+          pageSize: PAGE_SIZE,
+        },
+      })
+
+      const fetched = normalizeProducts(
+        response.data?.products || response.data || [],
+        pageNumber,
+      )
+
+      setProducts((prev) =>
+        pageNumber === 1 ? fetched : [...prev, ...fetched],
+      )
+
+      setHasMore(fetched.length >= PAGE_SIZE)
+      setPage(pageNumber)
     } catch (error) {
       const title =
         error instanceof AppError ? error.message : 'Erro ao carregar produtos.'
-      toast.show({ title, placement: 'top', bgColor: 'red.500' })
-      setProducts([])
+
+      toast.show({
+        title,
+        placement: 'top',
+        bgColor: 'red.500',
+      })
+
+      if (pageNumber === 1) {
+        setProducts([])
+      }
+
       setHasMore(false)
     } finally {
       setIsLoading(false)
-      setHasLoaded(true)
-    }
-  }, [toast])
-
-  // paginação padrão (ativos)
-  const fetchMore = useCallback(async (currentPage: number) => {
-    try {
-      const res = await api.get('/products/active', {
-        params: { cityId: city?.id, page: currentPage, pageSize: PAGE_SIZE },
-      })
-      const fetched = normalizeProducts(res.data?.products || [], currentPage)
-      setProducts((prev) => [...prev, ...fetched])
-      setHasMore(fetched.length >= PAGE_SIZE)
-    } catch {
-      setHasMore(false)
-    } finally {
       setIsLoadingMore(false)
+      setIsRefreshing(false)
     }
-  }, [])
+  }
 
-  // busca por texto
   const searchProducts = useCallback(
     debounce(async (query: string) => {
+      if (!city?.id) return
+
       try {
         setIsSearching(true)
         setIsLoading(true)
+        setHasMore(false)
 
         const response = await api.get('/products/search', {
           params: {
             query,
-            cityId: city?.id,
+            cityId: city.id,
             page: 1,
-            pageSize: PAGE_SIZE, // ✅ OBRIGATÓRIO
+            pageSize: PAGE_SIZE,
           },
         })
 
-        const fetched = normalizeProducts(response.data?.products || [], 1)
+        const fetched = normalizeProducts(
+          response.data?.products || response.data || [],
+          1,
+        )
+
         setProducts(fetched)
-        setHasMore(false)
       } catch (error) {
         const title =
           error instanceof AppError ? error.message : 'Erro ao buscar produtos.'
-        toast.show({ title, placement: 'top', bgColor: 'red.500' })
+
+        toast.show({
+          title,
+          placement: 'top',
+          bgColor: 'red.500',
+        })
+
         setProducts([])
       } finally {
         setIsLoading(false)
-        setHasLoaded(true)
         setIsLoadingMore(false)
+        setIsRefreshing(false)
       }
-    }, 500),
-    [toast],
+    }, 400),
+    [city?.id, toast],
   )
 
-  // input change
-  const handleSearchChange = (text: string) => {
+  function handleSearchChange(text: string) {
     setSearchTerm(text)
+
     const formattedQuery = removeAccents(text.trim())
 
-    if (formattedQuery === '') {
-      // volta p/ sugestões iniciais
+    if (!formattedQuery) {
+      searchProducts.cancel()
       setIsSearching(false)
-      setPage(1)
-      setHasLoaded(false)
-      fetchInitialSuggestions()
-    } else {
-      searchProducts(formattedQuery)
+      setHasMore(true)
+      loadProducts(1)
+      return
     }
+
+    searchProducts(formattedQuery)
   }
 
-  // scroll infinito (somente quando NÃO está buscando)
-  const handleLoadMore = () => {
-    if (isLoadingMore || !hasMore || isSearching) return
+  function handleClearSearch() {
+    setSearchTerm('')
+    searchProducts.cancel()
+    setIsSearching(false)
+    setHasMore(true)
+    loadProducts(1)
+  }
+
+  function handleLoadMore() {
+    if (isLoadingMore || isLoading || !hasMore || isSearching) return
+
     setIsLoadingMore(true)
-    const next = page + 1
-    setPage(next)
-    fetchMore(next)
+    loadProducts(page + 1)
   }
 
-  // primeira carga → sugestões iniciais
-  useEffect(() => {
-    fetchInitialSuggestions()
-  }, [fetchInitialSuggestions])
+  async function handleRefresh() {
+    setIsRefreshing(true)
+    searchProducts.cancel()
+    setSearchTerm('')
+    setIsSearching(false)
+    setHasMore(true)
+    await loadProducts(1, true)
+  }
 
-  // loading inicial
-  if (!hasLoaded && isLoading) {
-    return (
-      <VStack flex={1} bg="white" safeArea>
-        <HomeScreen title="Pesquisar" />
-        <Box px={4} pt={4}>
+  useEffect(() => {
+    loadProducts(1)
+
+    return () => {
+      searchProducts.cancel()
+    }
+  }, [city?.id])
+
+  return (
+    <VStack flex={1} bg="#F8FAFC">
+      <HomeScreen title="Pesquisar" />
+
+      <Box px={3} pt={3} pb={2} bg="#F8FAFC">
+        <HStack
+          h={12}
+          bg="white"
+          borderRadius={16}
+          px={3}
+          alignItems="center"
+          borderWidth={1}
+          borderColor="coolGray.200"
+          shadow={1}
+        >
+          <Icon
+            as={MaterialIcons}
+            name="search"
+            size={5}
+            color="coolGray.400"
+            mr={2}
+          />
+
           <TextInput
             ref={inputRef}
             style={styles.input}
-            placeholder="Buscar produtos..."
-            placeholderTextColor="#777"
+            placeholder="Buscar produtos no IAki"
+            placeholderTextColor="#94A3B8"
             value={searchTerm}
             onChangeText={handleSearchChange}
             returnKeyType="search"
             autoCorrect={false}
           />
-        </Box>
-        <Loading />
-      </VStack>
-    )
-  }
 
-  return (
-    <VStack flex={1} bg="white">
-      <HomeScreen title="Pesquisar" />
+          {searchTerm.length > 0 && (
+            <Pressable onPress={handleClearSearch}>
+              <Icon
+                as={MaterialIcons}
+                name="close"
+                size={5}
+                color="coolGray.500"
+              />
+            </Pressable>
+          )}
+        </HStack>
 
-      {/* Campo de busca */}
-      <Box px={4} pt={4}>
-        <TextInput
-          ref={inputRef}
-          style={styles.input}
-          placeholder="Digite o nome do produto"
-          placeholderTextColor="#777"
-          value={searchTerm}
-          onChangeText={handleSearchChange}
-          returnKeyType="search"
-          autoCorrect={false}
-        />
-      </Box>
-
-      {/* Banner cashback */}
-      <Box px={4} py={2} mx={4} mt={2} bg="primary.100" borderRadius="md">
-        <HStack alignItems="center" space={1}>
-          <MaterialIcons name="local-offer" size={18} color="#00875F" />
-          <Text color="#00875F" fontWeight="bold">
-            Todos os produtos oferecem cashback!
+        <HStack mt={2} justifyContent="space-between" alignItems="center">
+          <Text fontSize="xs" color="coolGray.500">
+            {isSearching
+              ? `${products.length} resultado(s) encontrados`
+              : `${products.length} produto(s) carregados`}
           </Text>
+
+          {!isSearching && (
+            <Text fontSize="xs" color="blue.600" fontWeight="700">
+              Todos os produtos
+            </Text>
+          )}
         </HStack>
       </Box>
 
-      <FlatList
-        data={products}
-        keyExtractor={(item, index) =>
-          item?.id ? `prod-${item.id}` : `idx-${index}`
-        }
-        numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
-        contentContainerStyle={styles.contentContainer}
-        renderItem={({ item }) => (
-          <ProductCard
-            product={item}
-            onPress={() => handleOpenProductDetails(item.id)}
-          />
-        )}
-        onEndReached={!isSearching ? handleLoadMore : null}
-        onEndReachedThreshold={0.1}
-        ListEmptyComponent={
-          isLoading ? (
-            <Loading />
-          ) : (
-            <Text textAlign="center" mt={10}>
-              Nenhum produto encontrado.
-            </Text>
-          )
-        }
-        ListFooterComponent={isLoadingMore ? <Loading /> : null}
-      />
+      {isLoading && products.length === 0 ? (
+        <Loading />
+      ) : (
+        <FlatList
+          data={products}
+          keyExtractor={(item, index) =>
+            item?.id ? `prod-${item.id}-${index}` : `idx-${index}`
+          }
+          numColumns={3}
+          showsVerticalScrollIndicator={false}
+          columnWrapperStyle={styles.columnWrapper}
+          contentContainerStyle={[
+            styles.contentContainer,
+            products.length === 0 && styles.emptyContainer,
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+            />
+          }
+          renderItem={({ item }) => (
+            <Box style={styles.cardWrapper}>
+              <ProductCard
+                product={item}
+                onPress={() => handleOpenProductDetails(item.id)}
+              />
+            </Box>
+          )}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.35}
+          ListEmptyComponent={
+            <VStack alignItems="center" mt={20} px={8}>
+              <Icon
+                as={MaterialIcons}
+                name="search-off"
+                size={16}
+                color="coolGray.300"
+              />
+
+              <Text mt={4} fontSize="lg" fontWeight="700" color="coolGray.700">
+                Nenhum produto encontrado
+              </Text>
+
+              <Text
+                mt={1}
+                fontSize="sm"
+                textAlign="center"
+                color="coolGray.500"
+              >
+                Tente buscar por outro nome ou confira se a cidade selecionada
+                possui produtos cadastrados.
+              </Text>
+            </VStack>
+          }
+          ListFooterComponent={
+            isLoadingMore ? (
+              <Box py={4}>
+                <Loading />
+              </Box>
+            ) : null
+          }
+        />
+      )}
     </VStack>
   )
 }
 
 const styles = StyleSheet.create({
   input: {
-    height: 50,
-    backgroundColor: '#f1f1f1',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    marginBottom: 8,
+    flex: 1,
+    height: 48,
+    fontSize: 15,
+    color: '#111827',
+    paddingVertical: 0,
   },
   columnWrapper: {
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: 8,
   },
   contentContainer: {
-    paddingBottom: 16,
+    paddingHorizontal: 4,
+    paddingTop: 4,
+    paddingBottom: 120,
+  },
+  cardWrapper: {
+    width: '32%',
+    marginBottom: 8,
+  },
+  emptyContainer: {
+    flexGrow: 1,
   },
 })

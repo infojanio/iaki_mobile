@@ -101,21 +101,12 @@ export function StoreHeader({ store }: Props) {
       <VStack safeArea mb={2} bg="gray.100">
         {/* IMAGEM DA LOJA */}
         <Box bg={'blue.200'} position="relative">
-          <Image
-            source={{ uri: store.avatar }}
-            alt={store.name}
-            h={180}
-            w="100%"
-            resizeMode="stretch"
-          />
-
           {/* BOTÃO VOLTAR */}
           <IconButton
             position="absolute"
-            top={4}
+            top={2}
             left={2}
-            bg="white"
-            borderRadius="full"
+            borderRadius="md"
             opacity={0.85}
             shadow={3}
             icon={
@@ -134,15 +125,26 @@ export function StoreHeader({ store }: Props) {
           bg="white"
           opacity={0.87}
           mx={4}
-          mt={-4}
-          p={4}
+          mt={16}
+          p={2}
           borderRadius="xl"
           shadow={4}
         >
           <VStack space={2}>
-            <Text fontSize="md" color="gray.800" fontWeight="bold">
-              {store.name}
-            </Text>
+            <Box>
+              <HStack alignItems={'center'}>
+                <Image
+                  source={{ uri: store.avatar }}
+                  alt={store.name}
+                  h={60}
+                  w={60}
+                  resizeMode="stretch"
+                />
+                <Text fontSize="md" color="gray.800" fontWeight="bold">
+                  {store.name}
+                </Text>
+              </HStack>
+            </Box>
 
             {!!store.city && (
               <Text fontSize="sm" color="gray.600">

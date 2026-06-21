@@ -20,7 +20,6 @@ import { Loading } from '@components/Loading'
 
 import { StoreDTO } from '@dtos/StoreDTO'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
-import { CategoryDTO } from '@dtos/CategoryDTO'
 import { RatingStars } from '@components/RatingStars'
 import { HomeScreen } from '@components/HomeScreen'
 
@@ -28,7 +27,7 @@ type Props = {
   insideScrollView?: boolean
 }
 
-export function StoreList({ insideScrollView = true }: Props) {
+export function StoreList({ insideScrollView = false }: Props) {
   const [stores, setStores] = useState<StoreDTO[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -40,6 +39,7 @@ export function StoreList({ insideScrollView = true }: Props) {
   async function loadStores(showLoader = true) {
     if (!city?.id) {
       setStores([])
+      setIsLoading(false)
       return
     }
 
@@ -75,40 +75,18 @@ export function StoreList({ insideScrollView = true }: Props) {
   }, [city?.id])
 
   function handleOpenSubCategories(storeId: string, categoryId: string) {
-    /**
-     * 🔥 FORÇA REMOUNT DA TELA
-     * Isso garante que ProductsBySubCategory
-     * atualize corretamente ao trocar de loja
-     */
     navigation.navigate('productsBySubCategory', {
       storeId,
       categoryId,
-      screenkey: `${storeId}-${categoryId}-${Date.now()}`, // 👈 chave única
+      screenkey: `${storeId}-${categoryId}-${Date.now()}`,
     } as any)
   }
 
   if (isLoading) return <Loading />
 
   return (
-    <VStack flex={1} bg="coolGray.50" py={2}>
-      <HomeScreen title="Voltar" />
-
-      <HStack
-        px={4}
-        pt={2}
-        pb={3}
-        justifyContent="space-between"
-        alignItems="center"
-      >
-        <Text fontSize="xl" fontWeight="700" color="coolGray.800">
-          🏪 Lojas Parceiras
-        </Text>
-
-        <Text fontSize="sm" color="blue.600" fontWeight="600">
-          {stores.length} lojas
-        </Text>
-      </HStack>
-
+    <VStack flex={1} bg="coolGray.50">
+      <HomeScreen title="Lojas" />
       <RNFlatList
         data={stores}
         keyExtractor={(item) => item.id}
@@ -119,15 +97,51 @@ export function StoreList({ insideScrollView = true }: Props) {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           ) : undefined
         }
+        ListHeaderComponent={
+          <>
+            <HStack
+              px={4}
+              pt={4}
+              pb={3}
+              justifyContent="space-between"
+              alignItems="center"
+            >
+              <Text fontSize="md" fontWeight="700" color="coolGray.800">
+                🏪 Pesquise por categoria
+              </Text>
+
+              <Text fontSize="sm" color="blue.600" fontWeight="600">
+                {stores.length} lojas
+              </Text>
+            </HStack>
+          </>
+        }
+        ListEmptyComponent={
+          <Box px={4} mt={8}>
+            <Box bg="white" borderRadius={24} p={6} alignItems="center">
+              <Text fontSize="md" fontWeight="700" color="coolGray.700">
+                Nenhuma loja encontrada
+              </Text>
+
+              <Text
+                mt={2}
+                fontSize="sm"
+                color="coolGray.500"
+                textAlign="center"
+              >
+                Ainda não há estabelecimentos cadastrados para esta cidade.
+              </Text>
+            </Box>
+          </Box>
+        }
         contentContainerStyle={{
-          paddingHorizontal: 16,
           paddingBottom: 120,
         }}
-        ItemSeparatorComponent={() => <Box h={4} />}
+        ItemSeparatorComponent={() => <Box h={2} />}
         renderItem={({ item: store }) => (
-          <Box bg="white" borderRadius={24} shadow={2} px={4} py={4}>
+          <Box mx={4} bg="white" borderRadius={24} shadow={2} px={4} py={2}>
             <VStack space={3}>
-              <Text fontSize="lg" fontWeight="700">
+              <Text fontSize="sm" fontWeight="700" color="coolGray.800">
                 {store.name}
               </Text>
 
@@ -139,6 +153,9 @@ export function StoreList({ insideScrollView = true }: Props) {
                   horizontal
                   keyExtractor={(cat) => cat.id}
                   showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{
+                    paddingTop: 2,
+                  }}
                   renderItem={({ item: cat }) => (
                     <Pressable
                       onPress={() => handleOpenSubCategories(store.id, cat.id)}
@@ -155,9 +172,7 @@ export function StoreList({ insideScrollView = true }: Props) {
                         >
                           {cat.image ? (
                             <Image
-                              source={{
-                                uri: cat.image,
-                              }}
+                              source={{ uri: cat.image }}
                               alt={cat.name}
                               w="100%"
                               h="100%"
@@ -177,6 +192,7 @@ export function StoreList({ insideScrollView = true }: Props) {
                           fontSize="xs"
                           textAlign="center"
                           numberOfLines={1}
+                          color="coolGray.700"
                         >
                           {cat.name}
                         </Text>

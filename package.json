@@ -21,6 +21,7 @@
     "@types/react-native-snap-carousel": "^3.8.5",
     "axios": "^1.2.2",
     "expo": "~52.0.47",
+    "expo-asset": "^56.0.17",
     "expo-file-system": "~18.0.6",
     "expo-font": "~13.0.2",
     "expo-image-picker": "~16.0.6",

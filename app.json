@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Clube IAki",
-    "slug": "IAki",
+    "slug": "iaki",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./src/assets/icon.png",
@@ -20,11 +20,11 @@
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
-      "bundleIdentifier": "com.iaki.rahdar",
+      "bundleIdentifier": "com.club.iaki",
       "buildNumber": "1"
     },
     "android": {
-      "package": "com.iaki.rahdar",
+      "package": "com.club.iaki",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon.png",
