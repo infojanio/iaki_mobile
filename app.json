@@ -18,7 +18,9 @@
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "bundleIdentifier": "com.club.iaki",
       "buildNumber": "1"
@@ -57,7 +59,8 @@
           "locationPermission": "Precisamos da sua localização para encontrar lojas próximas."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-asset"
     ],
     "newArchEnabled": true,
     "runtimeVersion": "1.0.0",
