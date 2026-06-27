@@ -6,8 +6,10 @@ import {
 } from '@storage/storageAuthToken'
 import { signOutApp } from './authHelpers'
 
-const baseURL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.1.50:3333' //  substitua pelo seu IP
-//'https://iakibackend-production.up.railway.app'
+const baseURL =
+  process.env.EXPO_PUBLIC_API_URL ??
+  'https://iakibackend-production.up.railway.app' //  substitua pelo seu IP
+//'http://192.168.1.50:3333'
 
 export const api = axios.create({
   baseURL,

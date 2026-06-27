@@ -18,9 +18,7 @@
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "bundleIdentifier": "com.club.iaki",
       "buildNumber": "1"
@@ -62,12 +60,13 @@
       "expo-font",
       "expo-asset"
     ],
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "runtimeVersion": "1.0.0",
     "extra": {
       "eas": {
-        "projectId": "e4c3f372-e992-47dd-8c7c-5227b57468d1"
+        "projectId": "eef26f23-cf39-415d-b47d-1efedaa2354a"
       }
-    }
+    },
+    "owner": "grejaninflorencio"
   }
 }

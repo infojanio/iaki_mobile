@@ -1,4 +1,4 @@
-package com.iaki.rahdar
+package com.club.iaki
 
 import android.app.Application
 import android.content.res.Configuration

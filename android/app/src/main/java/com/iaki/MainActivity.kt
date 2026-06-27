@@ -1,4 +1,4 @@
-package com.iaki.rahdar
+package com.club.iaki
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
