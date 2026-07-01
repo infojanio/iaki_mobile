@@ -1,5 +1,6 @@
 module.exports = function (api) {
   api.cache(true)
+
   return {
     presets: ['babel-preset-expo'],
     plugins: [
@@ -20,8 +21,10 @@ module.exports = function (api) {
             '@routes': './src/routes',
           },
         },
-        'react-native-reanimated/plugin', // <- TEM que ser o último
       ],
+
+      // ⚠️ SEMPRE o último plugin
+      'react-native-reanimated/plugin',
     ],
   }
 }

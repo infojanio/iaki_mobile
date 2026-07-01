@@ -15,7 +15,7 @@ import RequestSvg from '@assets/pedidos.svg'
 
 import { Home } from '@screens/Home'
 import { Cart } from '@screens/Cart'
-import { ProfileCashback } from '@screens/Cashbacks/ProfileCashback'
+
 import { ProfileWallet } from '@screens/ProfileWallet'
 import { OrderHistory } from '@screens/OrderHistory'
 import { OrderValidation } from '@screens/OrderValidation'
@@ -38,8 +38,6 @@ import { AllProductsCashback } from '@screens/AllProductsCashback'
 import { About } from '@screens/About'
 import { PrivacyPolicy } from '@screens/PrivacyPolicy'
 import { TermsOfUse } from '@screens/TermsOfUse'
-
-import { StorageCartProps } from '@storage/storageCart'
 
 import { ProductsByStore } from '@screens/Product/ProductsByStore'
 import { StoresByBusiness } from '@screens/StoresByBusiness'

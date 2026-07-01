@@ -60,7 +60,7 @@
       "expo-font",
       "expo-asset"
     ],
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "runtimeVersion": "1.0.0",
     "extra": {
       "eas": {

@@ -1,6 +1,8 @@
 node_modules
 .env
 .expo/
+android/
+ios/
 # Sensitive Android signing artifacts
 *.jks
 *.keystore
