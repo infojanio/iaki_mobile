@@ -8,9 +8,9 @@ import { signOutApp } from './authHelpers'
 
 const baseURL =
   process.env.EXPO_PUBLIC_API_URL ??
-  'https://iakibackend-production.up.railway.app' //  substitua pelo seu IP
+  'https://iakibackend-production.up.railway.app' //  substitua pelo seu IP https://iakibackend-production.up.railway.app'
 //'http://192.168.1.50:3333'
-
+//'http://192.168.0.239:3333'
 export const api = axios.create({
   baseURL,
   timeout: 10000,

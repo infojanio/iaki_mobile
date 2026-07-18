@@ -103,7 +103,7 @@ export function Reel() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.text}>🚀 Fidelize seus clientes </Text>
+      <Text style={styles.text}>🟡 Aproveite </Text>
       <FlatList
         ref={listRef}
         data={reels}

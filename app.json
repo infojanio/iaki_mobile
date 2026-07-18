@@ -4,7 +4,7 @@
     "slug": "iaki",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./src/assets/icon.png",
+    "icon": "./src/assets/icon-fixed.png",
     "androidStatusBar": {
       "translucent": false,
       "backgroundColor": "#FFFFFF",
@@ -12,8 +12,8 @@
     },
     "splash": {
       "image": "./src/assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F9EFEF"
+      "resizeMode": "cover",
+      "backgroundColor": "#F2F8FB"
     },
     "updates": {
       "fallbackToCacheTimeout": 0
@@ -27,8 +27,8 @@
       "package": "com.club.iaki",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/adaptive-icon.png",
-        "backgroundColor": "#F9EFEF"
+        "foregroundImage": "./src/assets/adaptive-icon-fixed.png",
+        "backgroundColor": "#F2F8FB"
       },
       "permissions": [
         "android.permission.RECORD_AUDIO",

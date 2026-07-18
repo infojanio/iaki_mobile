@@ -1,4 +1,8 @@
-import { TouchableOpacity, TouchableOpacityProps } from 'react-native'
+import {
+  Pressable,
+  TouchableOpacity,
+  TouchableOpacityProps,
+} from 'react-native'
 import { VStack, Image, Text, Center, Box, Badge } from 'native-base'
 
 import { ProductDTO } from '@dtos/ProductDTO'

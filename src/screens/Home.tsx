@@ -1,5 +1,6 @@
 import { useCallback, useContext, useState } from 'react'
-import { Box, VStack, useToast, ScrollView } from 'native-base'
+import { FlatList } from 'react-native'
+import { VStack, useToast } from 'native-base'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 
 import { api } from '@services/api'
@@ -17,17 +18,17 @@ import { Promotion } from '@components/Promotion'
 import { SearchBar } from '@components/SearchBar'
 import { FeaturedStores } from '@components/FeaturedStores'
 import { Loading } from '@components/Loading'
+import { BenefitsBar } from '@components/BenefitsBar'
+import { Reel } from '@components/Reel'
 
 import { ProductDiscount } from './Product/ProductDiscount'
 import { ProductQuantity } from './Product/ProductQuantity'
-
 import { CashbackRegulationCard } from './CashbackRegulationCard'
 import { BusinessCategory } from '@screens/BusinessCategory'
-import { Reel } from '@components/Reel'
+import { StoreList } from './StoreList'
 
 import { CityContext } from '@contexts/CityContext'
 import { CartContext } from '@contexts/CartContext'
-import { BenefitsBar } from '@components/BenefitsBar'
 
 export function Home() {
   const toast = useToast()
@@ -35,10 +36,9 @@ export function Home() {
   const navigation = useNavigation<AppNavigatorRoutesProps>()
 
   const { city, cityBanners } = useContext(CityContext)
-
   const { syncCartBadge } = useContext(CartContext)
 
-  const { userId } = useAuth()
+  useAuth()
 
   const [products, setProducts] = useState<ProductDTO[]>([])
   const [stores, setStores] = useState<StoreDTO[]>([])
@@ -66,7 +66,6 @@ export function Home() {
   async function fetchProducts() {
     try {
       const response = await api.get('/products')
-
       setProducts(response.data)
     } catch (error) {
       const title =
@@ -84,15 +83,16 @@ export function Home() {
 
   async function fetchStores() {
     try {
-      if (!city?.id) return
+      if (!city?.id) {
+        setStores([])
+        return
+      }
 
       setIsLoadingStores(true)
 
       const response = await api.get(`/stores/city/${city.id}`)
 
       setStores(response.data.stores ?? response.data)
-    } catch (error) {
-      console.log(error)
     } finally {
       setIsLoadingStores(false)
     }
@@ -120,47 +120,53 @@ export function Home() {
     }, [city?.id]),
   )
 
+  if (isLoading) {
+    return (
+      <VStack flex={1} bg="blue.100">
+        <HomeHeader />
+        <SearchBar />
+        <Loading />
+      </VStack>
+    )
+  }
+
   return (
     <VStack flex={1} bg="blue.100">
-      {/* HEADER */}
       <HomeHeader />
-
-      {/* BUSCA */}
       <SearchBar />
 
-      {isLoading ? (
-        <Loading />
-      ) : (
-        <ScrollView flex={1} showsVerticalScrollIndicator={false}>
-          <VStack flex={1} bg="blue.50" ml={1} mr={1} pb={10}>
-            {/* BANNERS */}
+      <FlatList
+        data={[{ id: 'home' }]}
+        keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        renderItem={() => (
+          <StoreList stores={stores} isLoading={isLoadingStores} />
+        )}
+        ListHeaderComponent={
+          <VStack bg="blue.50" mx={1}>
             <Promotion banners={cityBanners} />
 
-            {/* CATEGORIAS */}
             <BusinessCategory />
 
-            {/* LOJAS EM DESTAQUE */}
             <FeaturedStores
               stores={stores.slice(0, 10)}
               isLoading={isLoadingStores}
             />
 
-            {/* OFERTAS */}
             <ProductDiscount onPressProduct={handleOpenProductDetails} />
 
-            {/* REELS */}
             <Reel />
 
-            {/* MAIS VENDIDOS */}
             <ProductQuantity onPressProduct={handleOpenProductDetails} />
 
             <BenefitsBar />
-
-            {/* REGRAS */}
-            <CashbackRegulationCard />
           </VStack>
-        </ScrollView>
-      )}
+        }
+        ListFooterComponent={<CashbackRegulationCard />}
+        contentContainerStyle={{
+          paddingBottom: 40,
+        }}
+      />
     </VStack>
   )
 }

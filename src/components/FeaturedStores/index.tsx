@@ -44,14 +44,8 @@ export function FeaturedStores({
       {/* HEADER */}
       <HStack justifyContent="space-between" alignItems="center" px={4} mb={3}>
         <Text fontSize="xl" fontWeight="700" color="gray.800">
-          🏪 Lojas em destaque
+          🏪 Lojas Premium
         </Text>
-
-        <Pressable onPress={handleViewAllStores}>
-          <Text color="blue.600" fontWeight="600" fontSize="sm">
-            Ver todas →
-          </Text>
-        </Pressable>
       </HStack>
 
       {/* LISTA */}
@@ -117,7 +111,7 @@ export function FeaturedStores({
 
                 {/* DESCRIÇÃO */}
                 <Text fontSize="sm" color="gray.500" numberOfLines={1}>
-                  Loja parceira IAki
+                  Destaque IAki
                 </Text>
 
                 {/* CASHBACK */}

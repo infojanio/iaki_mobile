@@ -25,6 +25,8 @@ import { HomeScreen } from '@components/HomeScreen'
 
 type Props = {
   insideScrollView?: boolean
+  stores: StoreDTO[]
+  isLoading?: boolean
 }
 
 export function StoreList({ insideScrollView = false }: Props) {
@@ -86,7 +88,6 @@ export function StoreList({ insideScrollView = false }: Props) {
 
   return (
     <VStack flex={1} bg="coolGray.50">
-      <HomeScreen title="Lojas" />
       <RNFlatList
         data={stores}
         keyExtractor={(item) => item.id}
@@ -107,7 +108,7 @@ export function StoreList({ insideScrollView = false }: Props) {
               alignItems="center"
             >
               <Text fontSize="md" fontWeight="700" color="coolGray.800">
-                🏪 Pesquise por categoria
+                🏪 Estabelecimentos
               </Text>
 
               <Text fontSize="sm" color="blue.600" fontWeight="600">
@@ -135,7 +136,7 @@ export function StoreList({ insideScrollView = false }: Props) {
           </Box>
         }
         contentContainerStyle={{
-          paddingBottom: 120,
+          paddingBottom: 20,
         }}
         ItemSeparatorComponent={() => <Box h={2} />}
         renderItem={({ item: store }) => (

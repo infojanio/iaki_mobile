@@ -39,7 +39,7 @@ export function HomeHeader() {
       <Box
         bg={'blue.700'}
         px={4}
-        pb={4}
+        pb={1}
         ml={1}
         mr={1}
         borderTopRadius={'3xl'}
@@ -106,7 +106,7 @@ export function HomeHeader() {
             borderRadius={20}
             px={1}
             py={1}
-            mb={4}
+            mb={8}
             mr={16}
             shadow={2}
           >
