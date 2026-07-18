@@ -19,6 +19,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { MaterialIcons } from '@expo/vector-icons'
 import debounce from 'lodash.debounce'
 
+import { CartContext } from '@contexts/CartContext'
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 import { ProductDTO } from '@dtos/ProductDTO'
@@ -53,6 +54,16 @@ export function SearchProducts() {
   const inputRef = useRef<TextInput>(null)
 
   const { city } = useContext(CityContext)
+
+  const {
+    cartItems,
+    activeStoreId,
+    addProductCart,
+    incrementProduct,
+    decrementProduct,
+  } = useContext(CartContext)
+
+  const [updatingProductIds, setUpdatingProductIds] = useState<string[]>([])
 
   const [searchTerm, setSearchTerm] = useState('')
   const [products, setProducts] = useState<ProductDTO[]>([])
@@ -220,6 +231,158 @@ export function SearchProducts() {
     }
   }, [city?.id])
 
+  //funções para adicionar e remover produtos diretamente no carrinho:
+  function getProductStoreId(currentProduct: ProductDTO) {
+    return currentProduct.storeId ?? currentProduct.store?.id ?? null
+  }
+
+  function getCartQuantity(currentProduct: ProductDTO) {
+    const productStoreId = getProductStoreId(currentProduct)
+
+    if (!productStoreId || activeStoreId !== productStoreId) {
+      return 0
+    }
+
+    return (
+      cartItems.find((cartItem) => cartItem.productId === currentProduct.id)
+        ?.quantity ?? 0
+    )
+  }
+
+  function isProductUpdating(productId: string) {
+    return updatingProductIds.includes(productId)
+  }
+
+  function setProductUpdating(productId: string, updating: boolean) {
+    setUpdatingProductIds((current) => {
+      if (updating) {
+        if (current.includes(productId)) {
+          return current
+        }
+
+        return [...current, productId]
+      }
+
+      return current.filter((id) => id !== productId)
+    })
+  }
+
+  async function handleIncrementProduct(currentProduct: ProductDTO) {
+    if (isProductUpdating(currentProduct.id)) {
+      return
+    }
+
+    const productStoreId = getProductStoreId(currentProduct)
+
+    if (!productStoreId) {
+      console.error('[SearchProducts] Produto sem storeId:', currentProduct)
+
+      toast.show({
+        title: 'Não foi possível identificar a loja',
+        description: 'Atualize a tela e tente novamente.',
+        placement: 'top',
+        bgColor: 'red.500',
+      })
+
+      return
+    }
+
+    const stockQuantity = Number(currentProduct.quantity ?? 0)
+
+    const cartQuantity = getCartQuantity(currentProduct)
+
+    if (stockQuantity <= 0) {
+      toast.show({
+        title: 'Produto esgotado',
+        placement: 'top',
+        bgColor: 'orange.500',
+      })
+
+      return
+    }
+
+    if (cartQuantity >= stockQuantity) {
+      toast.show({
+        title: 'Estoque insuficiente',
+        description: 'Quantidade máxima disponível atingida.',
+        placement: 'top',
+        bgColor: 'orange.500',
+      })
+
+      return
+    }
+
+    try {
+      setProductUpdating(currentProduct.id, true)
+
+      if (cartQuantity === 0) {
+        await addProductCart({
+          productId: currentProduct.id,
+          storeId: productStoreId,
+          quantity: 1,
+        })
+      } else {
+        await incrementProduct(currentProduct.id)
+      }
+    } catch (error: any) {
+      console.error(
+        '[SearchProducts] Erro ao adicionar:',
+        error?.response?.status,
+        error?.response?.data,
+        error?.message,
+      )
+
+      toast.show({
+        title: 'Erro ao adicionar produto',
+        description:
+          error?.response?.data?.message ??
+          error?.message ??
+          'Não foi possível adicionar o produto.',
+        placement: 'top',
+        bgColor: 'red.500',
+      })
+    } finally {
+      setProductUpdating(currentProduct.id, false)
+    }
+  }
+
+  async function handleDecrementProduct(currentProduct: ProductDTO) {
+    if (isProductUpdating(currentProduct.id)) {
+      return
+    }
+
+    const cartQuantity = getCartQuantity(currentProduct)
+
+    if (cartQuantity <= 0) {
+      return
+    }
+
+    try {
+      setProductUpdating(currentProduct.id, true)
+
+      await decrementProduct(currentProduct.id)
+    } catch (error: any) {
+      console.error(
+        '[SearchProducts] Erro ao diminuir:',
+        error?.response?.status,
+        error?.response?.data,
+        error?.message,
+      )
+
+      toast.show({
+        title: 'Erro ao atualizar produto',
+        description:
+          error?.response?.data?.message ??
+          error?.message ??
+          'Não foi possível diminuir a quantidade.',
+        placement: 'top',
+        bgColor: 'red.500',
+      })
+    } finally {
+      setProductUpdating(currentProduct.id, false)
+    }
+  }
+
   return (
     <VStack flex={1} bg="#F8FAFC">
       <HomeScreen title="Pesquisar" />
@@ -286,9 +449,12 @@ export function SearchProducts() {
       ) : (
         <FlatList
           data={products}
-          keyExtractor={(item, index) =>
-            item?.id ? `prod-${item.id}-${index}` : `idx-${index}`
-          }
+          extraData={{
+            cartItems,
+            activeStoreId,
+            updatingProductIds,
+          }}
+          keyExtractor={(item) => item.id}
           numColumns={3}
           showsVerticalScrollIndicator={false}
           columnWrapperStyle={styles.columnWrapper}
@@ -306,6 +472,10 @@ export function SearchProducts() {
             <Box style={styles.cardWrapper}>
               <ProductCard
                 product={item}
+                cartQuantity={getCartQuantity(item)}
+                isUpdating={isProductUpdating(item.id)}
+                onIncrement={() => handleIncrementProduct(item)}
+                onDecrement={() => handleDecrementProduct(item)}
                 onPress={() => handleOpenProductDetails(item.id)}
               />
             </Box>
