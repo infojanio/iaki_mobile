@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useContext, useEffect, useState } from 'react'
 import { HomeProduct } from '@components/Product/HomeProduct'
 import {
   Text,
@@ -20,7 +20,7 @@ import {
 import { AppError } from '@utils/AppError'
 import { api } from '@services/api'
 
-import { Group } from '@components/Product/SubcategoryCard'
+import { SubcategoryCard } from '@components/Product/SubcategoryCard'
 
 import { ProductDTO } from '@dtos/ProductDTO'
 import { SubCategoryDTO } from '@dtos/SubCategoryDTO'
@@ -28,6 +28,7 @@ import { ProductCard } from '@components/Product/ProductCard'
 import { Loading } from '@components/Loading'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CategoryDTO } from '@dtos/CategoryDTO'
+import { CartContext } from '@contexts/CartContext'
 
 type RouteParamsProps = {
   categoryId: string
@@ -51,9 +52,19 @@ export function ProductCategory() {
   const [categorySelected, setCategorySelected] = useState(categoryId)
   const [subCategorySelected, setSubCategorySelected] = useState('')
 
-  const navigation = useNavigation<AppNavigatorRoutesProps>()
-
   const toast = useToast()
+
+  //add produto carrinho
+  const navigation = useNavigation<AppNavigatorRoutesProps>()
+  const {
+    cartItems,
+    activeStoreId,
+    addProductCart,
+    incrementProduct,
+    decrementProduct,
+  } = useContext(CartContext)
+
+  const [updatingProductIds, setUpdatingProductIds] = useState<string[]>([])
 
   function handleOpenProductDetails(productId: string) {
     navigation.navigate('productDetails', { productId })
@@ -89,6 +100,158 @@ export function ProductCategory() {
 
   const firstProduct = products.length > 0 ? products[0] : null
 
+  //funções para adicionar e remover produtos diretamente no carrinho:
+  function getProductStoreId(currentProduct: ProductDTO) {
+    return currentProduct.storeId ?? currentProduct.store?.id ?? null
+  }
+
+  function getCartQuantity(currentProduct: ProductDTO) {
+    const productStoreId = getProductStoreId(currentProduct)
+
+    if (!productStoreId || activeStoreId !== productStoreId) {
+      return 0
+    }
+
+    return (
+      cartItems.find((cartItem) => cartItem.productId === currentProduct.id)
+        ?.quantity ?? 0
+    )
+  }
+
+  function isProductUpdating(productId: string) {
+    return updatingProductIds.includes(productId)
+  }
+
+  function setProductUpdating(productId: string, updating: boolean) {
+    setUpdatingProductIds((current) => {
+      if (updating) {
+        if (current.includes(productId)) {
+          return current
+        }
+
+        return [...current, productId]
+      }
+
+      return current.filter((id) => id !== productId)
+    })
+  }
+
+  async function handleIncrementProduct(currentProduct: ProductDTO) {
+    if (isProductUpdating(currentProduct.id)) {
+      return
+    }
+
+    const productStoreId = getProductStoreId(currentProduct)
+
+    if (!productStoreId) {
+      console.error('[SearchProducts] Produto sem storeId:', currentProduct)
+
+      toast.show({
+        title: 'Não foi possível identificar a loja',
+        description: 'Atualize a tela e tente novamente.',
+        placement: 'top',
+        bgColor: 'red.500',
+      })
+
+      return
+    }
+
+    const stockQuantity = Number(currentProduct.quantity ?? 0)
+
+    const cartQuantity = getCartQuantity(currentProduct)
+
+    if (stockQuantity <= 0) {
+      toast.show({
+        title: 'Produto esgotado',
+        placement: 'top',
+        bgColor: 'orange.500',
+      })
+
+      return
+    }
+
+    if (cartQuantity >= stockQuantity) {
+      toast.show({
+        title: 'Estoque insuficiente',
+        description: 'Quantidade máxima disponível atingida.',
+        placement: 'top',
+        bgColor: 'orange.500',
+      })
+
+      return
+    }
+
+    try {
+      setProductUpdating(currentProduct.id, true)
+
+      if (cartQuantity === 0) {
+        await addProductCart({
+          productId: currentProduct.id,
+          storeId: productStoreId,
+          quantity: 1,
+        })
+      } else {
+        await incrementProduct(currentProduct.id)
+      }
+    } catch (error: any) {
+      console.error(
+        '[SearchProducts] Erro ao adicionar:',
+        error?.response?.status,
+        error?.response?.data,
+        error?.message,
+      )
+
+      toast.show({
+        title: 'Erro ao adicionar produto',
+        description:
+          error?.response?.data?.message ??
+          error?.message ??
+          'Não foi possível adicionar o produto.',
+        placement: 'top',
+        bgColor: 'red.500',
+      })
+    } finally {
+      setProductUpdating(currentProduct.id, false)
+    }
+  }
+
+  async function handleDecrementProduct(currentProduct: ProductDTO) {
+    if (isProductUpdating(currentProduct.id)) {
+      return
+    }
+
+    const cartQuantity = getCartQuantity(currentProduct)
+
+    if (cartQuantity <= 0) {
+      return
+    }
+
+    try {
+      setProductUpdating(currentProduct.id, true)
+
+      await decrementProduct(currentProduct.id)
+    } catch (error: any) {
+      console.error(
+        '[SearchProducts] Erro ao diminuir:',
+        error?.response?.status,
+        error?.response?.data,
+        error?.message,
+      )
+
+      toast.show({
+        title: 'Erro ao atualizar produto',
+        description:
+          error?.response?.data?.message ??
+          error?.message ??
+          'Não foi possível diminuir a quantidade.',
+        placement: 'top',
+        bgColor: 'red.500',
+      })
+    } finally {
+      setProductUpdating(currentProduct.id, false)
+    }
+  }
+
   return (
     <VStack flex={1}>
       <HomeProduct />
@@ -99,7 +262,7 @@ export function ProductCategory() {
             data={products}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <Group
+              <SubcategoryCard
                 name={item.name}
                 subcategory={item.id}
                 isActive={
@@ -143,10 +306,19 @@ export function ProductCategory() {
 
             <FlatList
               data={products}
+              extraData={{
+                cartItems,
+                activeStoreId,
+                updatingProductIds,
+              }}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <ProductCard
                   product={item}
+                  cartQuantity={getCartQuantity(item)}
+                  isUpdating={isProductUpdating(item.id)}
+                  onIncrement={() => handleIncrementProduct(item)}
+                  onDecrement={() => handleDecrementProduct(item)}
                   onPress={() => handleOpenProductDetails(item.id)}
                 />
               )}

@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from 'react'
+
 import {
   Box,
   FlatList,
@@ -19,14 +20,16 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { MaterialIcons } from '@expo/vector-icons'
 import debounce from 'lodash.debounce'
 
+//add produto carrinho
 import { CartContext } from '@contexts/CartContext'
+import { AppNavigatorRoutesProps } from '@routes/app.routes'
+
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 import { ProductDTO } from '@dtos/ProductDTO'
 import { ProductCard } from '@components/Product/ProductCard'
 import { Loading } from '@components/Loading'
 import { HomeScreen } from '@components/HomeScreen'
-import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CityContext } from '@contexts/CityContext'
 
 const PAGE_SIZE = 24
@@ -50,11 +53,12 @@ const normalizeProducts = (raw: ProductDTO[], currentPage: number) =>
 
 export function SearchProducts() {
   const toast = useToast()
-  const navigation = useNavigation<AppNavigatorRoutesProps>()
   const inputRef = useRef<TextInput>(null)
 
   const { city } = useContext(CityContext)
 
+  //add produto carrinho
+  const navigation = useNavigation<AppNavigatorRoutesProps>()
   const {
     cartItems,
     activeStoreId,
@@ -64,7 +68,6 @@ export function SearchProducts() {
   } = useContext(CartContext)
 
   const [updatingProductIds, setUpdatingProductIds] = useState<string[]>([])
-
   const [searchTerm, setSearchTerm] = useState('')
   const [products, setProducts] = useState<ProductDTO[]>([])
 
@@ -76,6 +79,7 @@ export function SearchProducts() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
 
+  //add produto carrinho
   const handleOpenProductDetails = (productId: string) => {
     navigation.navigate('productDetails', { productId })
   }

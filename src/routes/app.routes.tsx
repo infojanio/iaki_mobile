@@ -34,7 +34,7 @@ import { ProductsBySubCategory } from '@screens/Product/ProductsBySubCategory'
 import { ProductBySubCategory } from '@screens/Product/ProductBySubCategory'
 import { Category } from '@components/Category'
 import { AllProductsQuantity } from '@screens/AllProductsQuantity'
-import { AllProductsCashback } from '@screens/AllProductsCashback'
+import { AllProductsDiscount } from '@screens/AllProductsDiscount'
 import { About } from '@screens/About'
 import { PrivacyPolicy } from '@screens/PrivacyPolicy'
 import { TermsOfUse } from '@screens/TermsOfUse'
@@ -83,7 +83,7 @@ type AppRoutes = {
   storesByBusiness: { businessCategoryId: string }
   category: undefined
   allProductsQuantity: undefined
-  allProductsCashback: undefined
+  allProductsDiscount: undefined
   about: undefined
   privacy: undefined
   terms: undefined
@@ -278,8 +278,8 @@ export function AppRoutes() {
         options={{ tabBarButton: () => null }}
       />
       <Screen
-        name="allProductsCashback"
-        component={AllProductsCashback}
+        name="allProductsDiscount"
+        component={AllProductsDiscount}
         options={{ tabBarButton: () => null }}
       />
       <Screen
