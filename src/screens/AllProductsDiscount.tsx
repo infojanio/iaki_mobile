@@ -22,7 +22,7 @@ import { MaterialIcons } from '@expo/vector-icons'
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 import { ProductDTO } from '@dtos/ProductDTO'
-import { ProductCard } from '@components/Product/ProductCard'
+import { ProductCard } from '@components/ProductCard'
 import { Loading } from '@components/Loading'
 import { HomeScreen } from '@components/HomeScreen'
 //add produto carrinho
@@ -383,7 +383,7 @@ export function AllProductsDiscount() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <ProductCard
-              product={item}
+              data={item}
               cartQuantity={getCartQuantity(item)}
               isUpdating={isProductUpdating(item.id)}
               onIncrement={() => handleIncrementProduct(item)}
@@ -396,7 +396,7 @@ export function AllProductsDiscount() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingBottom: 16,
-            paddingHorizontal: 16,
+            paddingHorizontal: 4,
           }}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.1}

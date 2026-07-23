@@ -1,6 +1,9 @@
-import { useCallback, useContext, useState } from 'react'
+import { useCallback, useContext, useEffect, useState } from 'react'
+
 import { FlatList } from 'react-native'
+
 import { VStack, useToast } from 'native-base'
+
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 
 import { api } from '@services/api'
@@ -10,6 +13,7 @@ import { useAuth } from '@hooks/useAuth'
 
 import { ProductDTO } from '@dtos/ProductDTO'
 import { StoreDTO } from '@dtos/StoreDTO'
+import { BannerDTO } from '@dtos/BannerDTO'
 
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
@@ -22,12 +26,17 @@ import { BenefitsBar } from '@components/BenefitsBar'
 import { Reel } from '@components/Reel'
 
 import { ProductDiscount } from './Product/ProductDiscount'
+
 import { ProductQuantity } from './Product/ProductQuantity'
+
 import { CashbackRegulationCard } from './CashbackRegulationCard'
+
 import { BusinessCategory } from '@screens/BusinessCategory'
+
 import { StoreList } from './StoreList'
 
 import { CityContext } from '@contexts/CityContext'
+
 import { CartContext } from '@contexts/CartContext'
 
 export function Home() {
@@ -35,15 +44,18 @@ export function Home() {
 
   const navigation = useNavigation<AppNavigatorRoutesProps>()
 
-  const { city, cityBanners } = useContext(CityContext)
+  const { city } = useContext(CityContext)
+
   const { syncCartBadge } = useContext(CartContext)
 
   useAuth()
 
-  const [products, setProducts] = useState<ProductDTO[]>([])
   const [stores, setStores] = useState<StoreDTO[]>([])
 
+  const [banners, setBanners] = useState<BannerDTO[]>([])
+
   const [isLoading, setIsLoading] = useState(true)
+
   const [isLoadingStores, setIsLoadingStores] = useState(false)
 
   function handleOpenProductDetails(product: ProductDTO) {
@@ -63,46 +75,73 @@ export function Home() {
     })
   }
 
-  async function fetchProducts() {
+  async function loadPremiumBanners() {
+    if (!city?.id) {
+      setBanners([])
+      return
+    }
+
     try {
-      const response = await api.get('/products')
-      setProducts(response.data)
+      const response = await api.get(`/banners/premium/city/${city.id}`)
+
+      const fetchedBanners = response.data?.banners ?? response.data ?? []
+
+      setBanners(Array.isArray(fetchedBanners) ? fetchedBanners : [])
+    } catch (error: any) {
+      console.error('[Home] Erro ao carregar banners PREMIUM:', {
+        status: error?.response?.status,
+        data: error?.response?.data,
+        message: error?.message,
+      })
+
+      setBanners([])
+    }
+  }
+
+  async function loadPremiumStores() {
+    if (!city?.id) {
+      setStores([])
+      return
+    }
+
+    try {
+      setIsLoadingStores(true)
+
+      const response = await api.get(`/stores/premium/city/${city.id}`)
+
+      const fetchedStores = response.data?.stores ?? response.data ?? []
+
+      setStores(Array.isArray(fetchedStores) ? fetchedStores : [])
     } catch (error) {
       const title =
         error instanceof AppError
           ? error.message
-          : 'Não foi possível carregar os produtos.'
+          : 'Não foi possível carregar as lojas.'
 
       toast.show({
         title,
         placement: 'top',
         bgColor: 'red.500',
       })
-    }
-  }
 
-  async function fetchStores() {
-    try {
-      if (!city?.id) {
-        setStores([])
-        return
-      }
-
-      setIsLoadingStores(true)
-
-      const response = await api.get(`/stores/city/${city.id}`)
-
-      setStores(response.data.stores ?? response.data)
+      setStores([])
     } finally {
       setIsLoadingStores(false)
     }
   }
 
   async function loadHomeData() {
+    if (!city?.id) {
+      setStores([])
+      setBanners([])
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
 
-      await Promise.all([fetchProducts(), fetchStores()])
+      await Promise.all([loadPremiumStores(), loadPremiumBanners()])
     } finally {
       setIsLoading(false)
     }
@@ -117,7 +156,7 @@ export function Home() {
   useFocusEffect(
     useCallback(() => {
       syncCartBadge()
-    }, [city?.id]),
+    }, [syncCartBadge]),
   )
 
   if (isLoading) {
@@ -133,10 +172,15 @@ export function Home() {
   return (
     <VStack flex={1} bg="blue.100">
       <HomeHeader />
+
       <SearchBar />
 
       <FlatList
-        data={[{ id: 'home' }]}
+        data={[
+          {
+            id: 'home',
+          },
+        ]}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         renderItem={() => (
@@ -144,7 +188,7 @@ export function Home() {
         )}
         ListHeaderComponent={
           <VStack bg="blue.50" mx={1}>
-            <Promotion banners={cityBanners} />
+            <Promotion banners={banners} />
 
             <BusinessCategory />
 

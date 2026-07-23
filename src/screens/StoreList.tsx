@@ -1,80 +1,34 @@
-import { useCallback, useContext, useEffect, useState } from 'react'
-import { RefreshControl, FlatList as RNFlatList } from 'react-native'
-import {
-  VStack,
-  Box,
-  Text,
-  Pressable,
-  Icon,
-  useToast,
-  Image,
-  HStack,
-} from 'native-base'
+import { FlatList as RNFlatList, RefreshControl } from 'react-native'
+
+import { VStack, Box, Text, Pressable, Icon, Image, HStack } from 'native-base'
+
 import { useNavigation } from '@react-navigation/native'
+
 import { Image as ImageIcon } from 'lucide-react-native'
 
-import { api } from '@services/api'
-import { CityContext } from '@contexts/CityContext'
-import { AppError } from '@utils/AppError'
 import { Loading } from '@components/Loading'
+import { RatingStars } from '@components/RatingStars'
 
 import { StoreDTO } from '@dtos/StoreDTO'
+
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
-import { RatingStars } from '@components/RatingStars'
-import { HomeScreen } from '@components/HomeScreen'
 
 type Props = {
   insideScrollView?: boolean
   stores: StoreDTO[]
   isLoading?: boolean
+  refreshing?: boolean
+  onRefresh?: () => void | Promise<void>
 }
 
-export function StoreList({ insideScrollView = false }: Props) {
-  const [stores, setStores] = useState<StoreDTO[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-
-  const { city } = useContext(CityContext)
+export function StoreList({
+  insideScrollView = false,
+  stores,
+  isLoading = false,
+  refreshing = false,
+  onRefresh,
+}: Props) {
   const navigation = useNavigation<AppNavigatorRoutesProps>()
-  const toast = useToast()
-
-  async function loadStores(showLoader = true) {
-    if (!city?.id) {
-      setStores([])
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      if (showLoader) setIsLoading(true)
-
-      const response = await api.get(`/stores/city/${city.id}`)
-      setStores(response.data)
-    } catch (error) {
-      const title =
-        error instanceof AppError
-          ? error.message
-          : 'Não foi possível carregar lojas.'
-
-      toast.show({
-        title,
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      if (showLoader) setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    loadStores(true)
-  }, [city?.id])
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await loadStores(false)
-    setRefreshing(false)
-  }, [city?.id])
 
   function handleOpenSubCategories(storeId: string, categoryId: string) {
     navigation.navigate('productsBySubCategory', {
@@ -84,44 +38,44 @@ export function StoreList({ insideScrollView = false }: Props) {
     } as any)
   }
 
-  if (isLoading) return <Loading />
+  if (isLoading) {
+    return <Loading />
+  }
 
   return (
     <VStack flex={1} bg="coolGray.50">
       <RNFlatList
         data={stores}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(store) => store.id}
         scrollEnabled={!insideScrollView}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          !insideScrollView ? (
+          !insideScrollView && onRefresh ? (
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           ) : undefined
         }
         ListHeaderComponent={
-          <>
-            <HStack
-              px={4}
-              pt={4}
-              pb={3}
-              justifyContent="space-between"
-              alignItems="center"
-            >
-              <Text fontSize="md" fontWeight="700" color="coolGray.800">
-                🏪 Estabelecimentos
-              </Text>
+          <HStack
+            px={4}
+            pt={4}
+            pb={3}
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <Text fontSize="md" fontWeight="700" color="coolGray.800">
+              ⭐ Lojas em destaque
+            </Text>
 
-              <Text fontSize="sm" color="blue.600" fontWeight="600">
-                {stores.length} lojas
-              </Text>
-            </HStack>
-          </>
+            <Text fontSize="sm" color="blue.600" fontWeight="600">
+              {stores.length} {stores.length === 1 ? 'loja' : 'lojas'}
+            </Text>
+          </HStack>
         }
         ListEmptyComponent={
           <Box px={4} mt={8}>
             <Box bg="white" borderRadius={24} p={6} alignItems="center">
               <Text fontSize="md" fontWeight="700" color="coolGray.700">
-                Nenhuma loja encontrada
+                Nenhuma loja PREMIUM encontrada
               </Text>
 
               <Text
@@ -130,7 +84,7 @@ export function StoreList({ insideScrollView = false }: Props) {
                 color="coolGray.500"
                 textAlign="center"
               >
-                Ainda não há estabelecimentos cadastrados para esta cidade.
+                Ainda não há lojas em destaque nesta cidade.
               </Text>
             </Box>
           </Box>
@@ -140,26 +94,47 @@ export function StoreList({ insideScrollView = false }: Props) {
         }}
         ItemSeparatorComponent={() => <Box h={2} />}
         renderItem={({ item: store }) => (
-          <Box mx={4} bg="white" borderRadius={24} shadow={2} px={4} py={2}>
+          <Box mx={4} bg="white" borderRadius={24} shadow={2} px={4} py={3}>
             <VStack space={3}>
-              <Text fontSize="sm" fontWeight="700" color="coolGray.800">
-                {store.name}
-              </Text>
+              <HStack justifyContent="space-between" alignItems="center">
+                <Text
+                  flex={1}
+                  fontSize="sm"
+                  fontWeight="700"
+                  color="coolGray.800"
+                  numberOfLines={1}
+                >
+                  {store.name}
+                </Text>
+
+                <Box ml={2} px={2} py={1} borderRadius="full" bg="yellow.100">
+                  <Text fontSize="2xs" color="yellow.800" fontWeight="700">
+                    PREMIUM
+                  </Text>
+                </Box>
+              </HStack>
 
               <RatingStars rating={store.rating} count={store.ratingCount} />
 
-              {store.categories?.length ? (
+              {Array.isArray(store.categories) &&
+              store.categories.length > 0 ? (
                 <RNFlatList
                   data={store.categories}
                   horizontal
-                  keyExtractor={(cat) => cat.id}
+                  keyExtractor={(category) => `${store.id}-${category.id}`}
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={{
                     paddingTop: 2,
+                    paddingRight: 8,
                   }}
-                  renderItem={({ item: cat }) => (
+                  renderItem={({ item: category }) => (
                     <Pressable
-                      onPress={() => handleOpenSubCategories(store.id, cat.id)}
+                      onPress={() =>
+                        handleOpenSubCategories(store.id, category.id)
+                      }
+                      _pressed={{
+                        opacity: 0.7,
+                      }}
                     >
                       <VStack width={90} mr={4} alignItems="center">
                         <Box
@@ -171,10 +146,12 @@ export function StoreList({ insideScrollView = false }: Props) {
                           alignItems="center"
                           justifyContent="center"
                         >
-                          {cat.image ? (
+                          {category.image ? (
                             <Image
-                              source={{ uri: cat.image }}
-                              alt={cat.name}
+                              source={{
+                                uri: category.image,
+                              }}
+                              alt={category.name}
                               w="100%"
                               h="100%"
                               resizeMode="cover"
@@ -195,7 +172,7 @@ export function StoreList({ insideScrollView = false }: Props) {
                           numberOfLines={1}
                           color="coolGray.700"
                         >
-                          {cat.name}
+                          {category.name}
                         </Text>
                       </VStack>
                     </Pressable>

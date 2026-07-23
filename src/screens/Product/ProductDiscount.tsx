@@ -298,7 +298,7 @@ export function ProductDiscount({ onPressProduct }: Props) {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{
-          paddingLeft: 16,
+          paddingLeft: 12,
           paddingBottom: 32,
         }}
       />

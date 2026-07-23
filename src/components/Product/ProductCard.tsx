@@ -66,6 +66,8 @@ export function ProductCard({
       mt={1}
       mb={1}
       w={120}
+      borderRadius="xl"
+      shadow={1}
       minH={230}
       bg="white"
       rounded="lg"

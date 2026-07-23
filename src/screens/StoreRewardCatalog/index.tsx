@@ -194,13 +194,13 @@ export function StoreRewardCatalog() {
                 overflow="hidden"
               >
                 {item.image && (
-                  <Box height={180} bg="gray.200" borderWidth={0.24}>
+                  <Box height={180} bg="gray.50" borderWidth={0.24}>
                     <Image
                       source={{ uri: item.image }}
                       alt={item.title}
                       width="100%"
                       height="100%"
-                      resizeMode="stretch"
+                      resizeMode="contain"
                     />
                   </Box>
                 )}

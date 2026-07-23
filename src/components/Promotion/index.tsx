@@ -39,20 +39,31 @@ export function Promotion({ banners: bannersFromProps }: Props) {
 
   // 🔹 Normaliza banners recebidos
   const banners: PromoBanner[] = useMemo(() => {
-    const normalized = (bannersFromProps ?? []).map((b) => ({
-      id: b.id,
-      imageUrl: b.imageUrl,
-      position: b.position,
-      storeId: b.storeId,
-      link: b.link ?? undefined,
-    }))
-
-    // 🔥 embaralha
-    const shuffled = [...normalized].sort(() => Math.random() - 0.5)
-
-    // 🔥 pega apenas 3
-    return shuffled.slice(0, 3)
+    return (bannersFromProps ?? [])
+      .map((banner) => ({
+        id: banner.id,
+        imageUrl: banner.imageUrl,
+        position: banner.position ?? 0,
+        storeId: banner.storeId,
+        link: banner.link ?? undefined,
+      }))
+      .sort(
+        (firstBanner, secondBanner) =>
+          firstBanner.position - secondBanner.position,
+      )
+      .slice(0, 4)
   }, [bannersFromProps])
+
+  useEffect(() => {
+    setActiveIndex(0)
+
+    if (banners.length > 0) {
+      listRef.current?.scrollToOffset({
+        offset: 0,
+        animated: false,
+      })
+    }
+  }, [banners])
 
   // 🔹 Autoplay (mantido)
   useEffect(() => {

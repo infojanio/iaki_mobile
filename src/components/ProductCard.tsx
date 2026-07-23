@@ -90,14 +90,18 @@ export function ProductCard({
   }
 
   return (
-    <Box
-      mr={4}
-      bg="white"
+    <VStack
+      mr={1}
+      ml={-0.5}
+      mt={1}
+      mb={1}
+      w={120}
       borderRadius="xl"
-      shadow={3}
-      width={CARD_WIDTH}
-      minH={235}
-      borderWidth={1}
+      shadow={1}
+      minH={230}
+      bg="white"
+      rounded="lg"
+      borderWidth={2}
       borderColor="gray.100"
     >
       {discountPercent > 0 && (
@@ -238,6 +242,6 @@ export function ProductCard({
           </Text>
         )}
       </Center>
-    </Box>
+    </VStack>
   )
 }

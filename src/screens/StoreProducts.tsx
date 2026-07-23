@@ -260,28 +260,55 @@ export function StoreProducts() {
           return
         }
 
-        setStore(storeResponse.data)
+        const storeData = storeResponse.data?.store ?? storeResponse.data
 
-        setCategories(categoriesResponse.data ?? [])
+        const categoriesData =
+          categoriesResponse.data?.categories ?? categoriesResponse.data ?? []
 
-        setBanners(bannersResponse.data ?? [])
+        const bannersData = bannersResponse.data?.banners ?? []
+
+        /*
+        console.log('[StoreProducts] storeId:', storeId)
+        console.log(
+          '[StoreProducts] Resposta banners:',
+          JSON.stringify(bannersResponse.data, null, 2),
+        )
+        console.log('[StoreProducts] Banners tratados:', bannersData)
+        */
+
+        setStore(storeData)
+
+        setCategories(Array.isArray(categoriesData) ? categoriesData : [])
+
+        setBanners(bannersData)
 
         setCategorySelected(null)
         setSubCategories([])
         setSubCategorySelected(null)
         setProducts([])
-      } catch (error) {
+      } catch (error: any) {
         if (!active) {
           return
         }
 
-        console.error('[StoreProducts] Erro inicial:', error)
+        console.error('[StoreProducts] Erro inicial:', {
+          status: error?.response?.status,
+          url: error?.config?.url,
+          data: error?.response?.data,
+          message: error?.message,
+          storeId,
+        })
 
         toast.show({
           title: 'Erro ao carregar loja',
+          description:
+            error?.response?.data?.message ??
+            'Não foi possível carregar os dados da loja.',
           placement: 'top',
           bgColor: 'red.500',
         })
+
+        setBanners([])
       } finally {
         if (active) {
           setIsLoading(false)

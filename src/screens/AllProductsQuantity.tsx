@@ -11,8 +11,7 @@ import {
   CheckIcon,
   Spinner,
 } from 'native-base'
-
-import { TouchableOpacity } from 'react-native'
+import { StyleSheet } from 'react-native'
 
 import { useNavigation } from '@react-navigation/native'
 
@@ -361,24 +360,23 @@ export function AllProductsQuantity() {
               updatingProductIds,
             }}
             keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <ProductCard
+                product={item}
+                cartQuantity={getCartQuantity(item)}
+                isUpdating={isProductUpdating(item.id)}
+                onIncrement={() => handleIncrementProduct(item)}
+                onDecrement={() => handleDecrementProduct(item)}
+                onPress={() => handleOpenProductDetails(item.id)}
+              />
+            )}
+            numColumns={3}
+            columnWrapperStyle={styles.columnWrapper}
+            showsVerticalScrollIndicator={false}
             contentContainerStyle={{
-              paddingHorizontal: 12,
+              paddingHorizontal: 4,
               paddingBottom: 32,
             }}
-            renderItem={({ item }) => (
-              <Box mr={2}>
-                <ProductCard
-                  product={item}
-                  cartQuantity={getCartQuantity(item)}
-                  isUpdating={isProductUpdating(item.id)}
-                  onIncrement={() => handleIncrementProduct(item)}
-                  onDecrement={() => handleDecrementProduct(item)}
-                  onPress={() => handleOpenProductDetails(item.id)}
-                />
-              </Box>
-            )}
             ListEmptyComponent={
               <VStack width="full" alignItems="center" mt={8} px={8}>
                 <MaterialIcons name="inventory-2" size={48} color="#9CA3AF" />
@@ -394,3 +392,10 @@ export function AllProductsQuantity() {
     </VStack>
   )
 }
+
+const styles = StyleSheet.create({
+  columnWrapper: {
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+})

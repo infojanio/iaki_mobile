@@ -27,7 +27,7 @@ import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 import { ProductDTO } from '@dtos/ProductDTO'
-import { ProductCard } from '@components/Product/ProductCard'
+import { ProductCard } from '@components/ProductCard'
 import { Loading } from '@components/Loading'
 import { HomeScreen } from '@components/HomeScreen'
 import { CityContext } from '@contexts/CityContext'
@@ -475,7 +475,7 @@ export function SearchProducts() {
           renderItem={({ item }) => (
             <Box style={styles.cardWrapper}>
               <ProductCard
-                product={item}
+                data={item}
                 cartQuantity={getCartQuantity(item)}
                 isUpdating={isProductUpdating(item.id)}
                 onIncrement={() => handleIncrementProduct(item)}
