@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+
 import {
   Dimensions,
   Pressable,
@@ -6,92 +7,125 @@ import {
   SafeAreaView,
   StyleSheet,
   Linking,
+  FlatList,
 } from 'react-native'
-import { Box, View, Image, Spinner, useToast } from 'native-base'
-import { FlatList } from 'react-native' // ✅ usa o RN puro p/ ref sem dor de cabeça
-import type { FlatList as RNFlatList } from 'react-native'
-import { api } from '@services/api'
 
-type ReelDTO = {
+import type { FlatList as RNFlatList } from 'react-native'
+
+import { Box, View, Image, Spinner, useToast } from 'native-base'
+
+import { ReelDTO } from '@dtos/ReelDTO'
+
+type PromoReel = {
   id: string
   title: string
   imageUrl: string
   link?: string | null
+  storeId?: string | null
 }
 
-type Reel = {
-  id: string
-  imageUrl: string
-  link?: string | null
+type Props = {
+  reels?: ReelDTO[]
+  isLoading?: boolean
 }
 
 const { width } = Dimensions.get('window')
-// ✅ Deixe o card ocupar quase a tela inteira (com folga de 24)
+
 const CARD_W = Math.min(180, width - 24)
+
 const CARD_H = 330
-const CARD_GAP = 14 // soma das margens laterais (12 + 2) do seu Pressable
+const CARD_GAP = 14
 
-export function Reel() {
+const SNAP_INTERVAL = CARD_W + CARD_GAP
+
+export function Reel({ reels: reelsFromProps = [], isLoading = false }: Props) {
   const toast = useToast()
-  const listRef = useRef<RNFlatList<Reel>>(null)
 
-  const [reels, setReels] = useState<Reel[]>([])
-  const [loading, setLoading] = useState(true)
-  const [activeIndex, setActiveIndex] = useState<number>(0)
+  const listRef = useRef<RNFlatList<PromoReel>>(null)
 
-  async function fetchReels() {
-    try {
-      setLoading(true)
-      const { data } = await api.get<ReelDTO[]>('/reels')
-      const mapped: Reel[] = (data ?? []).map((b) => ({
-        id: b.id,
-        imageUrl: b.imageUrl,
-        link: b.link ?? undefined,
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  /*
+   * A Home já buscou somente reels
+   * de lojas PREMIUM.
+   *
+   * Este componente apenas normaliza
+   * e exibe os dados recebidos.
+   */
+  const reels = useMemo<PromoReel[]>(() => {
+    return reelsFromProps
+      .filter((reel) => Boolean(reel.id && reel.imageUrl))
+      .map((reel) => ({
+        id: reel.id,
+        title: reel.title ?? 'Reel promocional',
+        imageUrl: reel.imageUrl,
+        link: reel.link ?? null,
+        storeId: reel.storeId ?? null,
       }))
-      setReels(mapped)
-    } catch {
-      toast.show({
-        title: 'Não foi possível carregar os reels.',
-        placement: 'top',
+  }, [reelsFromProps])
+
+  /*
+   * Quando a cidade mudar e a Home
+   * fornecer novos reels, volta para
+   * o primeiro item.
+   */
+  useEffect(() => {
+    setActiveIndex(0)
+
+    if (reels.length > 0) {
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToOffset({
+          offset: 0,
+          animated: false,
+        })
       })
-    } finally {
-      setLoading(false)
     }
-  }
+  }, [reels])
 
+  /*
+   * Autoplay circular.
+   */
   useEffect(() => {
-    fetchReels()
-  }, [])
+    if (reels.length <= 1) {
+      return
+    }
 
-  // ✅ Autoplay
-  useEffect(() => {
-    if (reels.length <= 1) return
     const timer = setInterval(() => {
-      setActiveIndex((prev) => {
-        const next = (prev + 1) % reels.length
-        listRef.current?.scrollToIndex({ index: next, animated: true })
-        return next
+      setActiveIndex((currentIndex) => {
+        const nextIndex = (currentIndex + 1) % reels.length
+
+        listRef.current?.scrollToIndex({
+          index: nextIndex,
+          animated: true,
+        })
+
+        return nextIndex
       })
     }, 5000)
+
     return () => clearInterval(timer)
   }, [reels.length])
 
   function handlePress(link?: string | null) {
-    if (!link) return
+    if (!link?.trim()) {
+      return
+    }
 
     let formattedLink = link.trim()
 
-    // Se não começa com http:// ou https://, adiciona https://
     if (!/^https?:\/\//i.test(formattedLink)) {
       formattedLink = `https://${formattedLink}`
     }
 
-    Linking.openURL(formattedLink).catch(() =>
-      toast.show({ title: 'Link inválido.', placement: 'top' }),
-    )
+    Linking.openURL(formattedLink).catch(() => {
+      toast.show({
+        title: 'Não foi possível abrir o link.',
+        placement: 'top',
+      })
+    })
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Box alignItems="center" justifyContent="center" h={CARD_H}>
         <Spinner accessibilityLabel="Carregando reels" />
@@ -99,27 +133,41 @@ export function Reel() {
     )
   }
 
-  if (!reels.length) return null
+  if (reels.length === 0) {
+    return null
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.text}>🟡 Aproveite </Text>
+      <Text style={styles.title}>🟡 Aproveite</Text>
+
       <FlatList
         ref={listRef}
         data={reels}
         horizontal
-        pagingEnabled
+        keyExtractor={(item) => item.id}
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => String(item.id)}
-        style={{ maxHeight: CARD_H + 12 }}
-        // ✅ diz ao FlatList exatamente o tamanho de cada item (facilita scrollToIndex)
+        snapToInterval={SNAP_INTERVAL}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        disableIntervalMomentum
+        contentContainerStyle={{
+          paddingRight: 12,
+        }}
+        style={{
+          maxHeight: CARD_H + 12,
+        }}
         getItemLayout={(_, index) => ({
-          length: CARD_W + CARD_GAP,
-          offset: (CARD_W + CARD_GAP) * index,
+          length: SNAP_INTERVAL,
+          offset: SNAP_INTERVAL * index,
           index,
         })}
         onScrollToIndexFailed={(info) => {
-          // tenta de novo rapidamente
+          listRef.current?.scrollToOffset({
+            offset: SNAP_INTERVAL * info.index,
+            animated: true,
+          })
+
           setTimeout(() => {
             listRef.current?.scrollToIndex({
               index: info.index,
@@ -127,20 +175,32 @@ export function Reel() {
             })
           }, 250)
         }}
-        // ✅ calcula o índice com base no CARD_W + GAP, não no width da tela
         onMomentumScrollEnd={(event) => {
-          const x = event.nativeEvent.contentOffset.x
-          const idx = Math.round(x / (CARD_W + CARD_GAP))
-          setActiveIndex(idx)
+          const offsetX = event.nativeEvent.contentOffset.x
+
+          const calculatedIndex = Math.round(offsetX / SNAP_INTERVAL)
+
+          const safeIndex = Math.min(
+            Math.max(calculatedIndex, 0),
+            reels.length - 1,
+          )
+
+          setActiveIndex(safeIndex)
         }}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => handlePress(item.link)}
-            style={{ marginLeft: 12, marginRight: 2 }}
+            style={{
+              width: CARD_W,
+              marginLeft: 12,
+              marginRight: 2,
+            }}
           >
             <Image
-              source={{ uri: item.imageUrl }}
-              alt="Reel promocional"
+              source={{
+                uri: item.imageUrl,
+              }}
+              alt={item.title || 'Reel promocional'}
               w={CARD_W}
               h={CARD_H}
               borderRadius="xl"
@@ -150,33 +210,39 @@ export function Reel() {
         )}
       />
 
-      {reels.length > 1 ? (
+      {reels.length > 1 && (
         <Box flexDirection="row" justifyContent="center" mt={2}>
-          {reels.map((_, i) => (
+          {reels.map((reel, index) => (
             <View
-              key={i}
-              style={[styles.dot, { opacity: i === activeIndex ? 1 : 0.35 }]}
+              key={reel.id}
+              style={[
+                styles.dot,
+                {
+                  opacity: index === activeIndex ? 1 : 0.35,
+                },
+              ]}
             />
           ))}
         </Box>
-      ) : null}
+      )}
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     marginTop: 2,
     marginBottom: 4,
   },
-  text: {
+
+  title: {
     marginTop: 2,
-    fontSize: 16,
-    fontWeight: 'bold',
     marginLeft: 10,
     marginBottom: 4,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
+
   dot: {
     width: 8,
     height: 8,

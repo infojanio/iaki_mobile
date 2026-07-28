@@ -43,7 +43,7 @@ export function StoreList({
   }
 
   return (
-    <VStack flex={1} bg="coolGray.50">
+    <VStack flex={1} bg="blue.50" mb={2}>
       <RNFlatList
         data={stores}
         keyExtractor={(store) => store.id}
@@ -58,7 +58,7 @@ export function StoreList({
           <HStack
             px={4}
             pt={4}
-            pb={3}
+            pb={4}
             justifyContent="space-between"
             alignItems="center"
           >

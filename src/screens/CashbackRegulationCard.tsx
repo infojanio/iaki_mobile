@@ -22,7 +22,7 @@ export function CashbackRegulationCard() {
       my={2}
       shadow={1}
       borderWidth={1}
-      borderColor="primary.100"
+      borderColor="blue.100"
     >
       <TouchableOpacity
         style={{
@@ -30,7 +30,7 @@ export function CashbackRegulationCard() {
           marginBottom: 16,
           paddingVertical: 4,
           borderBottomWidth: 1,
-          borderBottomColor: '#E5E7EB',
+          borderBottomColor: '#c0cbe1ff',
         }}
         onPress={() => handleOpenAbout()}
       >

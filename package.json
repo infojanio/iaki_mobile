@@ -36,6 +36,7 @@
     "@types/lodash.debounce": "^4.0.9",
     "@types/react-native-snap-carousel": "^3.8.5",
     "axios": "^1.2.2",
+    "date-fns": "^4.4.0",
     "expo": "~52.0.47",
     "expo-asset": "~11.0.5",
     "expo-file-system": "~18.0.6",

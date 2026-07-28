@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react'
+import { useCallback, useContext, useState } from 'react'
 
 import { FlatList } from 'react-native'
 
@@ -14,6 +14,7 @@ import { useAuth } from '@hooks/useAuth'
 import { ProductDTO } from '@dtos/ProductDTO'
 import { StoreDTO } from '@dtos/StoreDTO'
 import { BannerDTO } from '@dtos/BannerDTO'
+import { ReelDTO } from '@dtos/ReelDTO'
 
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
@@ -54,6 +55,8 @@ export function Home() {
 
   const [banners, setBanners] = useState<BannerDTO[]>([])
 
+  const [reels, setReels] = useState<ReelDTO[]>([])
+
   const [isLoading, setIsLoading] = useState(true)
 
   const [isLoadingStores, setIsLoadingStores] = useState(false)
@@ -84,7 +87,8 @@ export function Home() {
     try {
       const response = await api.get(`/banners/premium/city/${city.id}`)
 
-      const fetchedBanners = response.data?.banners ?? response.data ?? []
+      const fetchedBanners =
+        response.data?.banners ?? response.data?.data ?? response.data ?? []
 
       setBanners(Array.isArray(fetchedBanners) ? fetchedBanners : [])
     } catch (error: any) {
@@ -109,7 +113,8 @@ export function Home() {
 
       const response = await api.get(`/stores/premium/city/${city.id}`)
 
-      const fetchedStores = response.data?.stores ?? response.data ?? []
+      const fetchedStores =
+        response.data?.stores ?? response.data?.data ?? response.data ?? []
 
       setStores(Array.isArray(fetchedStores) ? fetchedStores : [])
     } catch (error) {
@@ -130,10 +135,37 @@ export function Home() {
     }
   }
 
+  async function loadPremiumReels() {
+    if (!city?.id) {
+      setReels([])
+      return
+    }
+
+    try {
+      const response = await api.get(`/reels/premium/city/${city.id}`)
+
+      const fetchedReels =
+        response.data?.reels ?? response.data?.data ?? response.data ?? []
+
+      console.log('[Home] Reels PREMIUM:', fetchedReels)
+
+      setReels(Array.isArray(fetchedReels) ? fetchedReels : [])
+    } catch (error: any) {
+      console.error('[Home] Erro ao carregar reels PREMIUM:', {
+        status: error?.response?.status,
+        data: error?.response?.data,
+        message: error?.message,
+      })
+
+      setReels([])
+    }
+  }
+
   async function loadHomeData() {
     if (!city?.id) {
       setStores([])
       setBanners([])
+      setReels([])
       setIsLoading(false)
       return
     }
@@ -141,7 +173,11 @@ export function Home() {
     try {
       setIsLoading(true)
 
-      await Promise.all([loadPremiumStores(), loadPremiumBanners()])
+      await Promise.all([
+        loadPremiumStores(),
+        loadPremiumBanners(),
+        loadPremiumReels(),
+      ])
     } finally {
       setIsLoading(false)
     }
@@ -163,14 +199,16 @@ export function Home() {
     return (
       <VStack flex={1} bg="blue.100">
         <HomeHeader />
+
         <SearchBar />
+
         <Loading />
       </VStack>
     )
   }
 
   return (
-    <VStack flex={1} bg="blue.100">
+    <VStack flex={1} bg="blue.50">
       <HomeHeader />
 
       <SearchBar />
@@ -199,7 +237,7 @@ export function Home() {
 
             <ProductDiscount onPressProduct={handleOpenProductDetails} />
 
-            <Reel />
+            <Reel reels={reels} />
 
             <ProductQuantity onPressProduct={handleOpenProductDetails} />
 
