@@ -2,7 +2,7 @@ import { useCallback, useContext, useState } from 'react'
 
 import { FlatList } from 'react-native'
 
-import { VStack, useToast } from 'native-base'
+import { Center, Text, VStack, useToast } from 'native-base'
 
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 
@@ -15,6 +15,7 @@ import { ProductDTO } from '@dtos/ProductDTO'
 import { StoreDTO } from '@dtos/StoreDTO'
 import { BannerDTO } from '@dtos/BannerDTO'
 import { ReelDTO } from '@dtos/ReelDTO'
+import { RewardDTO } from '@dtos/RewardDTO'
 
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
@@ -25,6 +26,7 @@ import { FeaturedStores } from '@components/FeaturedStores'
 import { Loading } from '@components/Loading'
 import { BenefitsBar } from '@components/BenefitsBar'
 import { Reel } from '@components/Reel'
+import { HomeRewards } from '@components/Reward/HomeRewards'
 
 import { ProductDiscount } from './Product/ProductDiscount'
 
@@ -57,9 +59,13 @@ export function Home() {
 
   const [reels, setReels] = useState<ReelDTO[]>([])
 
+  const [rewards, setRewards] = useState<RewardDTO[]>([])
+
   const [isLoading, setIsLoading] = useState(true)
 
   const [isLoadingStores, setIsLoadingStores] = useState(false)
+
+  const [isLoadingRewards, setIsLoadingRewards] = useState(false)
 
   function handleOpenProductDetails(product: ProductDTO) {
     if (!product.id) {
@@ -78,6 +84,22 @@ export function Home() {
     })
   }
 
+  function handleOpenReward(reward: RewardDTO) {
+    if (!reward.storeId) {
+      toast.show({
+        title: 'Loja do brinde não encontrada.',
+        placement: 'top',
+        bgColor: 'orange.500',
+      })
+
+      return
+    }
+
+    navigation.navigate('storeRewardCatalog', {
+      storeId: reward.storeId,
+      storeName: reward.store?.name,
+    })
+  }
   async function loadPremiumBanners() {
     if (!city?.id) {
       setBanners([])
@@ -105,6 +127,7 @@ export function Home() {
   async function loadPremiumStores() {
     if (!city?.id) {
       setStores([])
+      setIsLoadingStores(false)
       return
     }
 
@@ -147,8 +170,6 @@ export function Home() {
       const fetchedReels =
         response.data?.reels ?? response.data?.data ?? response.data ?? []
 
-      console.log('[Home] Reels PREMIUM:', fetchedReels)
-
       setReels(Array.isArray(fetchedReels) ? fetchedReels : [])
     } catch (error: any) {
       console.error('[Home] Erro ao carregar reels PREMIUM:', {
@@ -161,12 +182,48 @@ export function Home() {
     }
   }
 
+  async function loadRewards() {
+    if (!city?.id) {
+      setRewards([])
+      setIsLoadingRewards(false)
+      return
+    }
+
+    try {
+      setIsLoadingRewards(true)
+
+      const response = await api.get(`/rewards/city/${city.id}`)
+
+      const fetchedRewards =
+        response.data?.rewards ?? response.data?.data ?? response.data ?? []
+
+      setRewards(Array.isArray(fetchedRewards) ? fetchedRewards : [])
+    } catch (error: any) {
+      console.error('[Home] Erro ao carregar brindes:', {
+        status: error?.response?.status,
+
+        data: error?.response?.data,
+
+        message: error?.message,
+      })
+
+      setRewards([])
+    } finally {
+      setIsLoadingRewards(false)
+    }
+  }
+
   async function loadHomeData() {
     if (!city?.id) {
       setStores([])
       setBanners([])
       setReels([])
+      setRewards([])
+
+      setIsLoadingStores(false)
+      setIsLoadingRewards(false)
       setIsLoading(false)
+
       return
     }
 
@@ -177,6 +234,7 @@ export function Home() {
         loadPremiumStores(),
         loadPremiumBanners(),
         loadPremiumReels(),
+        loadRewards(),
       ])
     } finally {
       setIsLoading(false)
@@ -194,6 +252,32 @@ export function Home() {
       syncCartBadge()
     }, [syncCartBadge]),
   )
+
+  if (!city?.id) {
+    return (
+      <VStack flex={1} bg="blue.50">
+        <HomeHeader />
+
+        <SearchBar />
+
+        <Center flex={1} px={6}>
+          <Text
+            fontSize="lg"
+            fontWeight="bold"
+            color="coolGray.700"
+            textAlign="center"
+          >
+            Selecione uma cidade
+          </Text>
+
+          <Text mt={2} color="coolGray.500" textAlign="center">
+            Escolha sua cidade para visualizar lojas, produtos e brindes
+            disponíveis.
+          </Text>
+        </Center>
+      </VStack>
+    )
+  }
 
   if (isLoading) {
     return (
@@ -233,6 +317,13 @@ export function Home() {
             <FeaturedStores
               stores={stores.slice(0, 10)}
               isLoading={isLoadingStores}
+            />
+
+            <HomeRewards
+              rewards={rewards}
+              isLoading={isLoadingRewards}
+              onSeeAll={() => navigation.navigate('rewards')}
+              onPressReward={handleOpenReward}
             />
 
             <ProductDiscount onPressProduct={handleOpenProductDetails} />

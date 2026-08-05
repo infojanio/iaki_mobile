@@ -44,7 +44,7 @@ export function BusinessCategoryCard({
               //uri: `${api.defaults.baseURL}/images/thumb/${data.image}`, //busca o arquivo salvo no banco
             }}
             alt="Imagem"
-            resizeMode="center"
+            resizeMode="stretch"
           />
 
           <HStack flex={1}>

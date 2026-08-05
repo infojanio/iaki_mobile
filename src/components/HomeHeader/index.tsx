@@ -1,5 +1,5 @@
 import React from 'react'
-import { TouchableOpacity } from 'react-native'
+import { Pressable, TouchableOpacity } from 'react-native'
 import {
   Box,
   HStack,
@@ -19,8 +19,11 @@ import { useAuth } from '@hooks/useAuth'
 import { useCart } from '@hooks/useCart'
 
 import { LocationSelector } from '@components/LocationSelector'
+import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { useNavigation } from '@react-navigation/native'
 
 export function HomeHeader() {
+  const navigation = useNavigation<AppNavigatorRoutesProps>()
   const { user, signOut } = useAuth()
 
   const { colors, sizes } = useTheme()
@@ -54,15 +57,17 @@ export function HomeHeader() {
           mt={2}
           mb={2}
         >
-          <Avatar
-            bg="blue.400"
-            size="md"
-            source={{
-              uri:
-                user?.avatar ||
-                `https://ui-avatars.com/api/?name=${user?.name}`,
-            }}
-          ></Avatar>
+          <Pressable onPress={() => navigation.navigate('profileEdit')}>
+            <Avatar
+              bg="blue.400"
+              size="md"
+              source={{
+                uri:
+                  user?.avatar ||
+                  `https://ui-avatars.com/api/?name=${user?.name}`,
+              }}
+            ></Avatar>
+          </Pressable>
           <VStack mr={16}>
             <Text fontSize="md" color="white" fontWeight="medium" opacity={0.9}>
               Olá,

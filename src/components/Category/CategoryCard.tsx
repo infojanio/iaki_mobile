@@ -40,7 +40,7 @@ export function CategoryCard({ data, isSelected = false, ...rest }: Props) {
               //uri: `${api.defaults.baseURL}/images/thumb/${data.image}`, //busca o arquivo salvo no banco
             }}
             alt="Imagem"
-            resizeMode="center"
+            resizeMode="stretch"
           />
 
           <HStack flex={1}>

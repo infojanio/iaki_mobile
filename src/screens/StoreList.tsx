@@ -154,7 +154,7 @@ export function StoreList({
                               alt={category.name}
                               w="100%"
                               h="100%"
-                              resizeMode="cover"
+                              resizeMode="stretch"
                             />
                           ) : (
                             <Icon

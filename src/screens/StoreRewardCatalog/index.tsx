@@ -281,7 +281,7 @@ export function StoreRewardCatalog() {
                     })
                   }
                 >
-                  Mostrar QR
+                  Solicitar Resgate
                 </Button>
               </HStack>
             </Box>

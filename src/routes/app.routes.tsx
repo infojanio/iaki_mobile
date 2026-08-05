@@ -10,7 +10,7 @@ import { useContext } from 'react'
 import HomeSvg from '@assets/home.svg'
 import SearchSvg from '@assets/search.svg'
 import CashbackSvg from '@assets/checked.svg'
-import ProfileSvg from '@assets/money.svg'
+import ProfileSvg from '@assets/bank.svg'
 import RequestSvg from '@assets/pedidos.svg'
 
 import { Home } from '@screens/Home'
@@ -47,6 +47,7 @@ import { StoreRatings } from '@screens/StoreRatings'
 import { StoreRewardCatalog } from '@screens/StoreRewardCatalog'
 import { RewardQRCodeScreen } from '@screens/RewardQRCodeScreen'
 import { StoreList } from '@screens/StoreList'
+import { Rewards } from '@screens/Rewards'
 
 /* =======================
    TIPAGEM DAS ROTAS
@@ -62,6 +63,7 @@ type AppRoutes = {
   orderValidation: { orderId: string } | undefined
   profile: undefined
   wallet: undefined
+  rewards: undefined
 
   checkout: undefined
   orderConfirmation: {
@@ -88,7 +90,7 @@ type AppRoutes = {
   privacy: undefined
   terms: undefined
   storeRatings: { storeId: string; storeName: string }
-  storeRewardCatalog: { storeId: string }
+  storeRewardCatalog: { storeId: string; storeName?: string }
   rewardQRCode: { redemptionId: string; storeId: string }
 }
 
@@ -197,7 +199,7 @@ export function AppRoutes() {
         name="wallet"
         component={ProfileWallet}
         options={{
-          title: 'Resgate',
+          title: 'Pontos',
           tabBarIcon: ({ color }) => (
             <ProfileSvg fill={color} width={iconSize} height={iconSize} />
           ),
@@ -282,6 +284,13 @@ export function AppRoutes() {
         component={AllProductsDiscount}
         options={{ tabBarButton: () => null }}
       />
+
+      <Screen
+        name="rewards"
+        component={Rewards}
+        options={{ tabBarButton: () => null }}
+      />
+
       <Screen
         name="about"
         component={About}
