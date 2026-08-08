@@ -1,5 +1,7 @@
-import React, { useContext, useEffect, useState } from 'react'
-import { FlatList } from 'react-native'
+import React, { useCallback, useContext, useEffect, useState } from 'react'
+
+import { FlatList, ImageBackground, ListRenderItemInfo } from 'react-native'
+
 import {
   Box,
   Text,
@@ -12,21 +14,18 @@ import {
   Icon,
 } from 'native-base'
 
-import { ImageBackground } from 'react-native'
-
 import { MaterialIcons } from '@expo/vector-icons'
 
 import MapBackground from '@assets/selectCity.png'
 
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { RootStackParamList } from '@routes/types'
 
+import { RootStackParamList } from '@routes/types'
 import { CityContext } from '@contexts/CityContext'
 import { stateService, State } from '@services/stateService'
 import { cityService, City } from '@services/cityService'
 import { useAuth } from '@hooks/useAuth'
-import { api } from '@services/api'
 
 type NavigationProps = NativeStackNavigationProp<
   RootStackParamList,
@@ -35,71 +34,172 @@ type NavigationProps = NativeStackNavigationProp<
 
 export function SelectCity() {
   const navigation = useNavigation<NavigationProps>()
+
   const { setUserCity } = useContext(CityContext)
   const { signOut } = useAuth()
-
   const { colors, sizes } = useTheme()
 
   const [states, setStates] = useState<State[]>([])
   const [cities, setCities] = useState<City[]>([])
   const [selectedState, setSelectedState] = useState<State | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [selectingCity, setSelectingCity] = useState(false)
 
-  const ctx = useContext(CityContext)
-  console.log('CityContext no SelectCity:', ctx)
+  const [loadingStates, setLoadingStates] = useState(true)
+  const [loadingCities, setLoadingCities] = useState(false)
+  const [selectingCityId, setSelectingCityId] = useState<string | null>(null)
 
-  async function loadStates() {
+  const loadStates = useCallback(async () => {
     try {
+      setLoadingStates(true)
+
       const data = await stateService.listStates()
-      setStates(data)
-    } catch {
+
+      setStates(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('[SelectCity] Erro ao carregar estados:', error)
       setStates([])
-    }
-  }
-
-  async function loadCities(state: State) {
-    setSelectedState(state)
-    setLoading(true)
-
-    try {
-      const data = await cityService.listCitiesByState(state.id)
-      setCities(data)
-    } catch {
-      setCities([])
     } finally {
-      setLoading(false)
+      setLoadingStates(false)
     }
-  }
+  }, [])
 
-  async function handleSelectCity(city: City) {
-    try {
-      setSelectingCity(true)
+  const loadCities = useCallback(
+    async (state: State) => {
+      if (loadingCities || state.id === selectedState?.id) {
+        return
+      }
 
-      await setUserCity({
+      try {
+        setSelectedState(state)
+        setCities([])
+        setLoadingCities(true)
+
+        const data = await cityService.listCitiesByState(state.id)
+
+        setCities(Array.isArray(data) ? data : [])
+      } catch (error) {
+        console.error('[SelectCity] Erro ao carregar cidades:', error)
+        setCities([])
+      } finally {
+        setLoadingCities(false)
+      }
+    },
+    [loadingCities, selectedState?.id],
+  )
+
+  const handleSelectCity = useCallback(
+    (city: City) => {
+      if (selectingCityId) {
+        return
+      }
+
+      setSelectingCityId(city.id)
+
+      const selectedCity = {
         id: city.id,
         name: city.name,
-        uf: city.uf,
-      })
+        uf: city.uf ?? selectedState?.uf ?? '',
+      }
+
+      /*
+       * Atualiza a cidade localmente e sincroniza com o backend
+       * em segundo plano. A navegação não aguarda a API.
+       */
+      void setUserCity(selectedCity)
 
       navigation.reset({
         index: 0,
-        routes: [{ name: 'appRoutes' as never }],
+        routes: [{ name: 'appRoutes' }],
       })
-    } catch (error) {
-      console.error('Erro ao selecionar cidade', error)
-    } finally {
-      setSelectingCity(false)
-    }
-  }
+    },
+    [navigation, selectedState?.uf, selectingCityId, setUserCity],
+  )
 
-  async function handleBackToLogin() {
-    await signOut()
-  }
+  const handleBackToLogin = useCallback(async () => {
+    try {
+      await signOut()
+    } catch (error) {
+      console.error('[SelectCity] Erro ao sair:', error)
+    }
+  }, [signOut])
+
+  const renderState = useCallback(
+    ({ item }: ListRenderItemInfo<State>) => {
+      const isSelected = selectedState?.id === item.id
+
+      return (
+        <Pressable
+          onPress={() => loadCities(item)}
+          disabled={loadingCities}
+          mr={2}
+          minW={24}
+          h={10}
+          px={4}
+          alignItems="center"
+          justifyContent="center"
+          borderRadius="full"
+          bg={isSelected ? 'green.600' : 'gray.200'}
+          borderWidth={1}
+          borderColor={isSelected ? 'green.600' : 'gray.300'}
+          opacity={loadingCities && !isSelected ? 0.6 : 1}
+        >
+          <Text
+            fontSize="sm"
+            color={isSelected ? 'white' : 'gray.800'}
+            fontWeight="bold"
+            numberOfLines={1}
+          >
+            {item.name}
+          </Text>
+        </Pressable>
+      )
+    },
+    [loadCities, loadingCities, selectedState?.id],
+  )
+
+  const renderCity = useCallback(
+    ({ item }: ListRenderItemInfo<City>) => {
+      const isSelecting = selectingCityId === item.id
+
+      return (
+        <Pressable
+          onPress={() => handleSelectCity(item)}
+          disabled={selectingCityId !== null}
+          bg="gray.100"
+          borderRadius="md"
+          p={3}
+          mb={2}
+          borderWidth={1}
+          borderColor={isSelecting ? 'green.500' : 'gray.300'}
+          opacity={selectingCityId !== null && !isSelecting ? 0.6 : 1}
+        >
+          <HStack alignItems="center" justifyContent="space-between">
+            <Text
+              flex={1}
+              fontSize="md"
+              color="gray.700"
+              fontWeight="semibold"
+              numberOfLines={1}
+            >
+              {item.name}
+            </Text>
+
+            {isSelecting ? (
+              <Spinner size="sm" color="green.600" />
+            ) : (
+              <Text ml={3} fontSize="xs" color="gray.700">
+                {item.uf ?? selectedState?.uf ?? ''}
+              </Text>
+            )}
+          </HStack>
+        </Pressable>
+      )
+    },
+    [handleSelectCity, selectedState?.uf, selectingCityId],
+  )
 
   useEffect(() => {
-    loadStates()
-  }, [])
+    void loadStates()
+  }, [loadStates])
 
   return (
     <ImageBackground
@@ -107,12 +207,11 @@ export function SelectCity() {
       style={{ flex: 1 }}
       resizeMode="stretch"
     >
-      {/* OVERLAY */}
-      <Box flex={1} bg="white" opacity={0.92}>
+      <Box flex={1} bg="rgba(255,255,255,0.92)">
         <Box flex={1} px={6} pt={10}>
-          {/* VOLTAR */}
           <HStack alignItems="flex-start" ml={-4}>
             <IconButton
+              accessibilityLabel="Voltar para o login"
               icon={
                 <MaterialIcons
                   name="arrow-back"
@@ -124,88 +223,70 @@ export function SelectCity() {
             />
           </HStack>
 
-          <VStack space={4} mt={4} ml={2}>
-            <HStack>
+          <VStack flex={1} space={4} mt={4} ml={2}>
+            <HStack alignItems="center" space={1}>
               <Icon
                 as={MaterialIcons}
                 name="location-on"
-                size={sizes[2]}
+                size={sizes[6]}
                 color={colors.orange[600]}
               />
+
               <Text fontSize="2xl" fontWeight="bold">
                 Onde você está?
               </Text>
             </HStack>
 
-            {/* ESTADOS */}
-            <FlatList
-              data={states}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={{ marginVertical: 16 }}
-              renderItem={({ item }) => {
-                const active = selectedState?.id === item.id
-
-                return (
-                  <Pressable
-                    onPress={() => loadCities(item)}
-                    mr={2}
-                    px={5}
-                    py={2}
-                    borderRadius="full"
-                    bg={active ? 'green.600' : 'gray.200'}
-                  >
-                    <Text
-                      color={active ? 'white' : 'gray.800'}
-                      fontWeight="bold"
-                    >
-                      {item.name}
-                    </Text>
-                  </Pressable>
-                )
-              }}
-            />
+            {loadingStates ? (
+              <Box h={14} justifyContent="center">
+                <Spinner size="sm" color="green.600" />
+              </Box>
+            ) : (
+              <Box h={20}>
+                <FlatList
+                  data={states}
+                  horizontal
+                  renderItem={renderState}
+                  keyExtractor={(item) => item.id}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{
+                    alignItems: 'center',
+                    paddingRight: 16,
+                  }}
+                  initialNumToRender={6}
+                  maxToRenderPerBatch={8}
+                  windowSize={3}
+                  ListEmptyComponent={
+                    <Box h={14} justifyContent="center">
+                      <Text color="gray.700">Nenhum estado encontrado.</Text>
+                    </Box>
+                  }
+                />
+              </Box>
+            )}
 
             <Text fontSize="lg" fontWeight="bold">
               Selecione sua cidade
             </Text>
 
-            {loading ? (
-              <Spinner size="lg" mt={6} />
+            {loadingCities ? (
+              <Box flex={1} alignItems="center" pt={6}>
+                <Spinner size="lg" color="green.600" />
+              </Box>
             ) : (
               <FlatList
                 data={cities}
+                renderItem={renderCity}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <Pressable
-                    onPress={() => !selectingCity && handleSelectCity(item)}
-                    disabled={selectingCity}
-                    bg="gray.100"
-                    borderRadius="md"
-                    p={2}
-                    mb={2}
-                    borderWidth={1}
-                    borderColor="gray.300"
-                  >
-                    <HStack justifyContent={'space-between'}>
-                      <Box>
-                        <Text
-                          fontSize="md"
-                          color="gray.700"
-                          fontWeight="semibold"
-                        >
-                          {item.name}
-                        </Text>
-                      </Box>
-                      <Box justifyContent={'right'}>
-                        <Text fontSize="xs" color="gray.700">
-                          {selectedState?.uf}
-                        </Text>
-                      </Box>
-                    </HStack>
-                  </Pressable>
-                )}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                initialNumToRender={12}
+                maxToRenderPerBatch={12}
+                windowSize={5}
+                contentContainerStyle={{
+                  paddingBottom: 32,
+                  flexGrow: 1,
+                }}
                 ListEmptyComponent={
                   <Text mt={4} color="gray.700">
                     {selectedState

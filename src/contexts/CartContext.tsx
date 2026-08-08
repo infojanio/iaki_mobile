@@ -1,21 +1,23 @@
 import {
   createContext,
   ReactNode,
-  useEffect,
-  useState,
   useCallback,
+  useEffect,
+  useRef,
+  useState,
 } from 'react'
 
-import { cartService } from '@services/cartService'
 import { api } from '@services/api'
+import { cartService } from '@services/cartService'
+
 import { useAuth } from '@hooks/useAuth'
 import { useCity } from '@hooks/useCity'
 
 /* ==============================
-   🧱 TIPOS
+   TIPOS
 ============================== */
 
-type CartItem = {
+export type CartItem = {
   productId: string
   name: string
   image: string
@@ -26,10 +28,31 @@ type CartItem = {
   stock: number
 }
 
-type AddToCartInput = {
+type AddToCartProduct = {
+  id: string
+  name: string
+  image?: string | null
+  price: number
+  cashbackPercentage?: number | null
+
+  /*
+   * Quantidade disponível em estoque.
+   */
+  quantity: number
+}
+
+export type AddToCartInput = {
   productId: string
   storeId: string
   quantity: number
+
+  /*
+   * Opcional para manter compatibilidade com as chamadas atuais.
+   *
+   * Quando enviado, permite adicionar o produto ao estado local
+   * imediatamente, sem buscar novamente o carrinho.
+   */
+  product?: AddToCartProduct
 }
 
 type ConfirmStoreChangeState = {
@@ -42,28 +65,30 @@ type CartContextData = {
   cartItems: CartItem[]
   activeStoreId: string | null
   activeStoreName: string | null
-
   cartBadgeCount: number
+
   syncCartBadge: () => Promise<void>
   ensureStoreContext: (storeId: string) => Promise<boolean>
+
   addProductCart: (data: AddToCartInput) => Promise<void>
   incrementProduct: (productId: string) => Promise<void>
   decrementProduct: (productId: string) => Promise<void>
   removeProductCart: (productId: string) => Promise<void>
+
   fetchCart: (storeId: string) => Promise<void>
   checkout: () => Promise<void>
   resetCartContext: () => void
-
-  // ⚠️ mantém se você ainda usa em algum lugar, mas NÃO chame automaticamente na Home
-  syncOpenCart: () => Promise<void>
+  syncOpenCart: () => Promise<string | undefined>
 
   confirmStoreChange: ConfirmStoreChangeState
 }
 
 export const CartContext = createContext({} as CartContextData)
 
+const DEFAULT_PRODUCT_IMAGE = 'https://via.placeholder.com/150'
+
 /* ==============================
-   🛒 PROVIDER
+   PROVIDER
 ============================== */
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -73,7 +98,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null)
   const [activeStoreName, setActiveStoreName] = useState<string | null>(null)
-
   const [cartBadgeCount, setCartBadgeCount] = useState(0)
 
   const [confirmStoreChange, setConfirmStoreChange] =
@@ -83,52 +107,152 @@ export function CartProvider({ children }: { children: ReactNode }) {
       onCancel: null,
     })
 
+  /*
+   * Impede duas requisições simultâneas para o mesmo produto.
+   *
+   * O useRef é usado porque não precisamos renderizar o Provider
+   * sempre que um produto entra ou sai da fila.
+   */
+  const pendingProductsRef = useRef<Set<string>>(new Set())
+
+  /*
+   * Evita que uma resposta antiga de fetchCart sobrescreva
+   * uma resposta mais recente.
+   */
+  const fetchRequestIdRef = useRef(0)
+
+  /*
+   * Mantém acesso aos itens mais recentes dentro de callbacks
+   * assíncronos, evitando closures desatualizadas.
+   */
+  const cartItemsRef = useRef<CartItem[]>([])
+
+  useEffect(() => {
+    cartItemsRef.current = cartItems
+  }, [cartItems])
+
   /* ==============================
-     🔄 FETCH CART
+     FUNÇÕES AUXILIARES
   ============================== */
-  const fetchCart = useCallback(async (storeId: string) => {
-    if (!storeId) return
 
-    setActiveStoreId(storeId) // 🔥 GARANTE CONTEXTO
+  const normalizeImage = useCallback((rawImage?: string | null) => {
+    if (!rawImage) {
+      return DEFAULT_PRODUCT_IMAGE
+    }
 
-    const cart = await cartService.getCartFromBackend(storeId)
-    const baseURL = api.defaults.baseURL
+    if (rawImage.startsWith('http')) {
+      return rawImage
+    }
 
-    const normalizedItems: CartItem[] = (cart?.items ?? [])
-      .map((item: any) => {
-        const product = item.product
-        if (!product) return null
+    const baseURL = api.defaults.baseURL?.replace(/\/+$/, '')
 
-        const rawImage = product.image
-        const image =
-          typeof rawImage === 'string'
-            ? rawImage.startsWith('http')
-              ? rawImage
-              : `${baseURL}/uploads/${rawImage}`
-            : 'https://via.placeholder.com/150'
+    if (!baseURL) {
+      return DEFAULT_PRODUCT_IMAGE
+    }
 
-        return {
-          productId: product.id,
-          name: product.name,
-          image,
-          price: Number(item.priceSnapshot ?? product.price ?? 0),
-          quantity: item.quantity,
-          cashbackPercentage: Number(
-            item.cashbackSnapshot ?? product.cashbackPercentage ?? 0,
-          ),
-          storeId,
-          stock: Number(product.quantity ?? 0),
-        }
+    const normalizedImage = rawImage.replace(/^\/+/, '')
+
+    if (normalizedImage.startsWith('uploads/')) {
+      return `${baseURL}/${normalizedImage}`
+    }
+
+    return `${baseURL}/uploads/${normalizedImage}`
+  }, [])
+
+  const updateCartItems = useCallback(
+    (updater: (currentItems: CartItem[]) => CartItem[], badgeVariation = 0) => {
+      setCartItems((currentItems) => {
+        const updatedItems = updater(currentItems)
+        cartItemsRef.current = updatedItems
+
+        return updatedItems
       })
-      .filter(Boolean)
 
-    setCartItems(normalizedItems)
-    setCartBadgeCount(normalizedItems.reduce((sum, i) => sum + i.quantity, 0))
+      if (badgeVariation !== 0) {
+        setCartBadgeCount((current) => Math.max(0, current + badgeVariation))
+      }
+    },
+    [],
+  )
+
+  const acquireProductLock = useCallback((productId: string) => {
+    if (pendingProductsRef.current.has(productId)) {
+      return false
+    }
+
+    pendingProductsRef.current.add(productId)
+
+    return true
+  }, [])
+
+  const releaseProductLock = useCallback((productId: string) => {
+    pendingProductsRef.current.delete(productId)
   }, [])
 
   /* ==============================
-     🔔 BADGE (SÓ META)
+     FETCH CART
   ============================== */
+
+  const fetchCart = useCallback(
+    async (storeId: string) => {
+      if (!storeId) return
+
+      const requestId = ++fetchRequestIdRef.current
+
+      try {
+        const cart = await cartService.getCartFromBackend(storeId)
+
+        /*
+         * Ignora a resposta se outra requisição foi iniciada depois.
+         */
+        if (requestId !== fetchRequestIdRef.current) {
+          return
+        }
+
+        const normalizedItems: CartItem[] = (cart?.items ?? [])
+          .map((item: any): CartItem | null => {
+            const product = item?.product
+
+            if (!product?.id) {
+              return null
+            }
+
+            return {
+              productId: product.id,
+              name: product.name ?? 'Produto',
+              image: normalizeImage(product.image),
+              price: Number(item.priceSnapshot ?? product.price ?? 0),
+              quantity: Number(item.quantity ?? 0),
+              cashbackPercentage: Number(
+                item.cashbackSnapshot ?? product.cashbackPercentage ?? 0,
+              ),
+              storeId,
+              stock: Number(product.quantity ?? 0),
+            }
+          })
+          .filter((item: CartItem | null): item is CartItem => Boolean(item))
+
+        cartItemsRef.current = normalizedItems
+
+        setCartItems(normalizedItems)
+        setActiveStoreId(storeId)
+        setActiveStoreName(cart?.storeName ?? cart?.store?.name ?? null)
+
+        setCartBadgeCount(
+          normalizedItems.reduce((total, item) => total + item.quantity, 0),
+        )
+      } catch (error) {
+        console.error('[CartContext] fetchCart error:', error)
+        throw error
+      }
+    },
+    [normalizeImage],
+  )
+
+  /* ==============================
+     SINCRONIZAÇÃO DO BADGE
+  ============================== */
+
   const syncCartBadge = useCallback(async () => {
     try {
       const openCart = await cartService.getOpenCart()
@@ -138,197 +262,512 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      // backend já garante se o carrinho é válido ou não
-      setCartBadgeCount(openCart.itemsCount ?? 0)
+      setCartBadgeCount(Number(openCart.itemsCount ?? 0))
     } catch (error) {
+      /*
+       * Não zera o badge em uma falha de rede, pois o valor
+       * local ainda pode estar correto.
+       */
       console.error('[CartContext] syncCartBadge error:', error)
-      setCartBadgeCount(0)
     }
   }, [])
 
   /* ==============================
-     🔑 FUNÇÃO CENTRAL
+     CONTEXTO DA LOJA
   ============================== */
+
   const ensureStoreContext = useCallback(
     async (storeId: string): Promise<boolean> => {
-      // 1️⃣ Nenhuma loja ativa
+      if (!storeId) {
+        return false
+      }
+
       if (!activeStoreId) {
         setActiveStoreId(storeId)
+        setActiveStoreName(null)
+
         return true
       }
 
-      // 2️⃣ Mesma loja
       if (activeStoreId === storeId) {
         return true
       }
 
-      // 3️⃣ Loja diferente, mas carrinho vazio → troca silenciosa
-      if (cartItems.length === 0) {
+      if (cartItemsRef.current.length === 0) {
         setActiveStoreId(storeId)
+        setActiveStoreName(null)
+
         return true
       }
 
-      // 4️⃣ Loja diferente + carrinho com itens → confirmar
-      return new Promise((resolve) => {
+      return new Promise<boolean>((resolve) => {
         setConfirmStoreChange({
           visible: true,
+
           onConfirm: () => {
+            /*
+             * Invalida qualquer fetch anterior.
+             */
+            fetchRequestIdRef.current += 1
+
+            cartItemsRef.current = []
+
+            setCartItems([])
+            setCartBadgeCount(0)
+            setActiveStoreId(storeId)
+            setActiveStoreName(null)
+
             setConfirmStoreChange({
               visible: false,
               onConfirm: null,
               onCancel: null,
             })
 
-            // ✅ fecha carrinho visual e troca loja ativa
-            setCartItems([])
-            setCartBadgeCount(0)
-            setActiveStoreId(storeId)
-
             resolve(true)
           },
+
           onCancel: () => {
             setConfirmStoreChange({
               visible: false,
               onConfirm: null,
               onCancel: null,
             })
+
             resolve(false)
           },
         })
       })
     },
-    [activeStoreId, cartItems.length],
+    [activeStoreId],
   )
 
   /* ==============================
-     ➕ ADD PRODUCT
+     ADICIONAR PRODUTO
   ============================== */
-  async function addProductCart({
-    productId,
-    storeId,
-    quantity,
-  }: AddToCartInput) {
-    const canProceed = await ensureStoreContext(storeId)
-    if (!canProceed) return
 
-    await cartService.addToCart({ productId, storeId, quantity })
-    await fetchCart(storeId)
-    // ✅ atualiza badge “passivo” também (caso backend calcule diferente)
-    await syncCartBadge()
-  }
+  const addProductCart = useCallback(
+    async ({ productId, storeId, quantity, product }: AddToCartInput) => {
+      if (!productId || !storeId || quantity <= 0) {
+        return
+      }
+
+      const canProceed = await ensureStoreContext(storeId)
+
+      if (!canProceed) {
+        return
+      }
+
+      if (!acquireProductLock(productId)) {
+        return
+      }
+
+      const previousItems = cartItemsRef.current
+      const previousBadge = cartBadgeCount
+
+      /*
+       * Se o produto completo foi informado, adiciona imediatamente
+       * ao estado local e dispensa o fetchCart depois da requisição.
+       */
+      if (product) {
+        const existingItem = previousItems.find(
+          (item) => item.productId === productId,
+        )
+
+        if (existingItem) {
+          const availableQuantity = Math.max(
+            0,
+            existingItem.stock - existingItem.quantity,
+          )
+
+          const quantityToAdd = Math.min(quantity, availableQuantity)
+
+          if (quantityToAdd <= 0) {
+            releaseProductLock(productId)
+            return
+          }
+
+          updateCartItems(
+            (items) =>
+              items.map((item) =>
+                item.productId === productId
+                  ? {
+                      ...item,
+                      quantity: item.quantity + quantityToAdd,
+                    }
+                  : item,
+              ),
+            quantityToAdd,
+          )
+        } else {
+          const quantityToAdd = Math.min(
+            quantity,
+            Number(product.quantity ?? quantity),
+          )
+
+          if (quantityToAdd <= 0) {
+            releaseProductLock(productId)
+            return
+          }
+
+          const newItem: CartItem = {
+            productId: product.id,
+            name: product.name,
+            image: normalizeImage(product.image),
+            price: Number(product.price ?? 0),
+            quantity: quantityToAdd,
+            cashbackPercentage: Number(product.cashbackPercentage ?? 0),
+            storeId,
+            stock: Number(product.quantity ?? 0),
+          }
+
+          updateCartItems((items) => [...items, newItem], quantityToAdd)
+        }
+      } else {
+        /*
+         * Melhora imediatamente a percepção de velocidade mesmo
+         * quando os dados completos do produto não foram enviados.
+         */
+        setCartBadgeCount((current) => current + quantity)
+      }
+
+      try {
+        await cartService.addToCart({
+          productId,
+          storeId,
+          quantity,
+        })
+
+        /*
+         * Compatibilidade com chamadas antigas.
+         *
+         * Quando product não é enviado, precisamos buscar os dados
+         * completos para preencher cartItems.
+         */
+        if (!product) {
+          await fetchCart(storeId)
+        }
+      } catch (error) {
+        console.error('[CartContext] addProductCart error:', error)
+
+        cartItemsRef.current = previousItems
+        setCartItems(previousItems)
+        setCartBadgeCount(previousBadge)
+
+        throw error
+      } finally {
+        releaseProductLock(productId)
+      }
+    },
+    [
+      acquireProductLock,
+      cartBadgeCount,
+      ensureStoreContext,
+      fetchCart,
+      normalizeImage,
+      releaseProductLock,
+      updateCartItems,
+    ],
+  )
 
   /* ==============================
-     ➕➖ CONTROLES
+     INCREMENTAR PRODUTO
   ============================== */
-  async function incrementProduct(productId: string) {
-    if (!activeStoreId) return
-    await cartService.incrementItem({
-      storeId: activeStoreId,
-      productId,
+
+  const incrementProduct = useCallback(
+    async (productId: string) => {
+      const storeId = activeStoreId
+
+      if (!storeId || !productId) {
+        return
+      }
+
+      if (!acquireProductLock(productId)) {
+        return
+      }
+
+      const currentItem = cartItemsRef.current.find(
+        (item) => item.productId === productId,
+      )
+
+      if (!currentItem || currentItem.quantity >= currentItem.stock) {
+        releaseProductLock(productId)
+        return
+      }
+
+      const previousItems = cartItemsRef.current
+      const previousBadge = cartBadgeCount
+
+      updateCartItems(
+        (items) =>
+          items.map((item) =>
+            item.productId === productId
+              ? {
+                  ...item,
+                  quantity: item.quantity + 1,
+                }
+              : item,
+          ),
+        1,
+      )
+
+      try {
+        await cartService.incrementItem({
+          storeId,
+          productId,
+        })
+      } catch (error) {
+        console.error('[CartContext] incrementProduct error:', error)
+
+        cartItemsRef.current = previousItems
+        setCartItems(previousItems)
+        setCartBadgeCount(previousBadge)
+
+        throw error
+      } finally {
+        releaseProductLock(productId)
+      }
+    },
+    [
+      activeStoreId,
+      acquireProductLock,
+      cartBadgeCount,
+      releaseProductLock,
+      updateCartItems,
+    ],
+  )
+
+  /* ==============================
+     DECREMENTAR PRODUTO
+  ============================== */
+
+  const decrementProduct = useCallback(
+    async (productId: string) => {
+      const storeId = activeStoreId
+
+      if (!storeId || !productId) {
+        return
+      }
+
+      if (!acquireProductLock(productId)) {
+        return
+      }
+
+      const currentItem = cartItemsRef.current.find(
+        (item) => item.productId === productId,
+      )
+
+      if (!currentItem) {
+        releaseProductLock(productId)
+        return
+      }
+
+      const previousItems = cartItemsRef.current
+      const previousBadge = cartBadgeCount
+
+      updateCartItems((items) => {
+        if (currentItem.quantity <= 1) {
+          return items.filter((item) => item.productId !== productId)
+        }
+
+        return items.map((item) =>
+          item.productId === productId
+            ? {
+                ...item,
+                quantity: item.quantity - 1,
+              }
+            : item,
+        )
+      }, -1)
+
+      try {
+        await cartService.decrementItem({
+          storeId,
+          productId,
+        })
+      } catch (error) {
+        console.error('[CartContext] decrementProduct error:', error)
+
+        cartItemsRef.current = previousItems
+        setCartItems(previousItems)
+        setCartBadgeCount(previousBadge)
+
+        throw error
+      } finally {
+        releaseProductLock(productId)
+      }
+    },
+    [
+      activeStoreId,
+      acquireProductLock,
+      cartBadgeCount,
+      releaseProductLock,
+      updateCartItems,
+    ],
+  )
+
+  /* ==============================
+     REMOVER PRODUTO
+  ============================== */
+
+  const removeProductCart = useCallback(
+    async (productId: string) => {
+      const storeId = activeStoreId
+
+      if (!storeId || !productId) {
+        return
+      }
+
+      if (!acquireProductLock(productId)) {
+        return
+      }
+
+      const currentItem = cartItemsRef.current.find(
+        (item) => item.productId === productId,
+      )
+
+      if (!currentItem) {
+        releaseProductLock(productId)
+        return
+      }
+
+      const previousItems = cartItemsRef.current
+      const previousBadge = cartBadgeCount
+
+      updateCartItems(
+        (items) => items.filter((item) => item.productId !== productId),
+        -currentItem.quantity,
+      )
+
+      try {
+        await cartService.removeFromCart(storeId, productId)
+      } catch (error) {
+        console.error('[CartContext] removeProductCart error:', error)
+
+        cartItemsRef.current = previousItems
+        setCartItems(previousItems)
+        setCartBadgeCount(previousBadge)
+
+        throw error
+      } finally {
+        releaseProductLock(productId)
+      }
+    },
+    [
+      activeStoreId,
+      acquireProductLock,
+      cartBadgeCount,
+      releaseProductLock,
+      updateCartItems,
+    ],
+  )
+
+  /* ==============================
+     RESET
+  ============================== */
+
+  const resetCartContext = useCallback(() => {
+    /*
+     * Invalida requisições de fetch que ainda estejam em andamento.
+     */
+    fetchRequestIdRef.current += 1
+    pendingProductsRef.current.clear()
+    cartItemsRef.current = []
+
+    setCartItems([])
+    setActiveStoreId(null)
+    setActiveStoreName(null)
+    setCartBadgeCount(0)
+
+    setConfirmStoreChange({
+      visible: false,
+      onConfirm: null,
+      onCancel: null,
     })
-    await fetchCart(activeStoreId)
-    await syncCartBadge()
-  }
-
-  async function decrementProduct(productId: string) {
-    if (!activeStoreId) return
-    await cartService.decrementItem({
-      storeId: activeStoreId,
-      productId,
-    })
-    await fetchCart(activeStoreId)
-    await syncCartBadge()
-  }
-
-  async function removeProductCart(productId: string) {
-    if (!activeStoreId) return
-    await cartService.removeFromCart(activeStoreId, productId)
-    await fetchCart(activeStoreId)
-    await syncCartBadge()
-  }
+  }, [])
 
   /* ==============================
-     ✅ CHECKOUT
+     SINCRONIZAR CARRINHO ABERTO
   ============================== */
-  async function checkout() {
-    if (!activeStoreId) return
 
-    // 1️⃣ Backend fecha o carrinho
-    await cartService.checkoutCart(activeStoreId)
+  const syncOpenCart = useCallback(async () => {
+    if (!city?.id) {
+      return undefined
+    }
 
-    // 2️⃣ Limpa estado local imediatamente (UX)
-    resetCartContext()
+    try {
+      const openCart = await cartService.getOpenCart()
 
-    // 3️⃣ 🔥 Sincroniza com a verdade do backend
-    await syncOpenCart()
+      if (!openCart) {
+        resetCartContext()
+        return undefined
+      }
 
-    // 4️⃣ 🔔 Atualiza badge final
-    await syncCartBadge()
-  }
+      setActiveStoreId(openCart.storeId)
+      setActiveStoreName(openCart.storeName ?? null)
+
+      await fetchCart(openCart.storeId)
+
+      return openCart.storeId
+    } catch (error) {
+      console.error('[CartContext] syncOpenCart error:', error)
+
+      throw error
+    }
+  }, [city?.id, fetchCart, resetCartContext])
 
   /* ==============================
-     🔄 SYNC OPEN CART (EVITAR NA HOME)
+     CHECKOUT
   ============================== */
-  async function syncOpenCart() {
-    if (!city?.id) return
 
-    const openCart = await cartService.getOpenCart()
+  const checkout = useCallback(async () => {
+    const storeId = activeStoreId
 
-    if (!openCart) {
-      // 🔥 LIMPA TUDO
-      setCartItems([])
-      setActiveStoreId(null)
-      setActiveStoreName(null)
-      setCartBadgeCount(0) // 🔥 GARANTE BADGE ZERADO
+    if (!storeId) {
       return
     }
 
-    setActiveStoreId(openCart.storeId)
-    setActiveStoreName(openCart.storeName) // ✅ AQUI ESTAVA O BUG
+    await cartService.checkoutCart(storeId)
 
-    await fetchCart(openCart.storeId)
-
-    return openCart.storeId
-  }
-
-  /* ==============================
-     🧹 RESET
-  ============================== */
-  function resetCartContext() {
-    setCartItems([])
-    setActiveStoreId(null)
-    setCartBadgeCount(0)
-  }
+    /*
+     * O backend acabou de fechar o carrinho. Não é necessário
+     * chamar syncOpenCart e syncCartBadge em sequência.
+     */
+    resetCartContext()
+  }, [activeStoreId, resetCartContext])
 
   /* ==============================
-     🔐 LOGOUT / TROCA DE CIDADE
-     ✅ regra: trocar cidade SEMPRE limpa visual
-     ✅ e também zera badge local
+     LOGOUT / TROCA DE CIDADE
   ============================== */
+
   useEffect(() => {
     resetCartContext()
-  }, [userId, city?.id])
+  }, [userId, city?.id, resetCartContext])
 
   /* ==============================
-     📦 CONTEXT
+     CONTEXT
   ============================== */
+
   return (
     <CartContext.Provider
       value={{
         cartItems,
         activeStoreId,
-        cartBadgeCount,
         activeStoreName,
+        cartBadgeCount,
+
         syncCartBadge,
         ensureStoreContext,
+
         addProductCart,
         incrementProduct,
         decrementProduct,
         removeProductCart,
+
         fetchCart,
         checkout,
         resetCartContext,
         syncOpenCart,
+
         confirmStoreChange,
       }}
     >

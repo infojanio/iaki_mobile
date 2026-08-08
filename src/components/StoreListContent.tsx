@@ -21,7 +21,7 @@ type Props = {
   onRefresh?: () => void | Promise<void>
 }
 
-export function StoreList({
+export function StoreListContent({
   insideScrollView = false,
   stores,
   isLoading = false,

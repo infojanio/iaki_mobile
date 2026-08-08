@@ -204,7 +204,7 @@ export function Reel({ reels: reelsFromProps = [], isLoading = false }: Props) {
               w={CARD_W}
               h={CARD_H}
               borderRadius="xl"
-              resizeMode="cover"
+              resizeMode="stretch"
             />
           </Pressable>
         )}

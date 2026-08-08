@@ -46,6 +46,11 @@ interface Order {
   status: string
   items: OrderItem[]
   pointsEarned?: number
+  store?: {
+    id: string
+    name: string
+    avatar?: string | null
+  } | null
 }
 
 type ExpirationInfo = {
@@ -160,7 +165,7 @@ function getOrderExpirationInfo(order: Order): ExpirationInfo | null {
   return {
     daysRemaining,
     expirationDate,
-    message: `Você tem ${daysRemaining} dias para validar sua compra na loja.`,
+    message: `Faltam ${daysRemaining} dias para validar sua compra.`,
     backgroundColor: 'blue.50',
     borderColor: 'blue.400',
     textColor: 'blue.700',
@@ -208,6 +213,14 @@ export function OrderHistory() {
 
               pointsEarned: order.pointsEarned,
 
+              store: order.store
+                ? {
+                    id: order.store.id ?? '',
+                    name: order.store.name ?? 'Loja não identificada',
+                    avatar: order.store.avatar ?? null,
+                  }
+                : null,
+
               items: (order.items ?? []).map((item: any, index: number) => ({
                 id: item.id ?? `${order.id}-${index}`,
 
@@ -224,7 +237,6 @@ export function OrderHistory() {
                 },
               })),
             }
-
             parsedOrder.pointsEarned =
               order.pointsEarned ?? calculateOrderPoints(parsedOrder)
 
@@ -388,10 +400,39 @@ export function OrderHistory() {
                   </Badge>
                 </HStack>
 
-                <Text color="gray.500" mb={3}>
-                  Compra realizada em{' '}
-                  {format(new Date(item.createdAt), 'dd/MM/yyyy')}
-                </Text>
+                <HStack alignItems="center" space={3} mb={3}>
+                  {item.store?.avatar ? (
+                    <Image
+                      source={{ uri: item.store.avatar }}
+                      alt={item.store.name}
+                      size="xs"
+                      borderRadius="full"
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Center size={10} borderRadius="full" bg="primary.100">
+                      <Text color="primary.700" fontSize="md" fontWeight="bold">
+                        {item.store?.name?.charAt(0).toUpperCase() ?? 'L'}
+                      </Text>
+                    </Center>
+                  )}
+
+                  <VStack flex={1}>
+                    <Text
+                      fontSize="sm"
+                      fontWeight="bold"
+                      color="coolGray.800"
+                      numberOfLines={1}
+                    >
+                      {item.store?.name ?? 'Loja não identificada'}
+                    </Text>
+
+                    <Text fontSize="xs" color="gray.500">
+                      Compra realizada em{' '}
+                      {format(new Date(item.createdAt), 'dd/MM/yyyy')}
+                    </Text>
+                  </VStack>
+                </HStack>
 
                 {expirationInfo && (
                   <Box

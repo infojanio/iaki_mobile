@@ -30,7 +30,7 @@ import { StoreHeader } from '@components/Store/StoreHeader'
 import { Loading } from '@components/Loading'
 
 import { Reel } from '@components/Reel'
-import { StoreList } from './StoreList'
+import { StoreList } from '../components/StoreListContent'
 import { Promotion } from '@components/Promotion'
 import { SeparatorItem } from '@components/SeparatorItem'
 import { SubCategoryDTO } from '@dtos/SubCategoryDTO'

@@ -46,8 +46,9 @@ import { CartTabIcon } from '@components/CartTabIcon'
 import { StoreRatings } from '@screens/StoreRatings'
 import { StoreRewardCatalog } from '@screens/StoreRewardCatalog'
 import { RewardQRCodeScreen } from '@screens/RewardQRCodeScreen'
-import { StoreList } from '@screens/StoreList'
+import { StoreListContent } from '@components/StoreListContent'
 import { Rewards } from '@screens/Rewards'
+import { StoreList } from '@screens/StoreList'
 
 /* =======================
    TIPAGEM DAS ROTAS

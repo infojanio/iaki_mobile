@@ -2,6 +2,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -33,6 +34,7 @@ import { HomeScreen } from '@components/HomeScreen'
 import { CityContext } from '@contexts/CityContext'
 
 const PAGE_SIZE = 24
+const SEARCH_DEBOUNCE_MS = 450
 
 const removeAccents = (str: string) =>
   str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -69,6 +71,7 @@ export function SearchProducts() {
 
   const [updatingProductIds, setUpdatingProductIds] = useState<string[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeQuery, setActiveQuery] = useState('')
   const [products, setProducts] = useState<ProductDTO[]>([])
 
   const [page, setPage] = useState(1)
@@ -78,6 +81,10 @@ export function SearchProducts() {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
+
+  const requestControllerRef = useRef<AbortController | null>(null)
+  const requestSequenceRef = useRef(0)
+  const loadingMoreRef = useRef(false)
 
   //add produto carrinho
   const handleOpenProductDetails = (productId: string) => {
@@ -90,86 +97,86 @@ export function SearchProducts() {
     }, []),
   )
 
-  async function loadProducts(pageNumber = 1, shouldRefresh = false) {
-    if (!city?.id) {
-      setProducts([])
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      if (pageNumber === 1 && !shouldRefresh) {
-        setIsLoading(true)
-      }
-
-      const response = await api.get('/products/active', {
-        params: {
-          cityId: city.id,
-          page: pageNumber,
-          pageSize: PAGE_SIZE,
-        },
-      })
-
-      const fetched = normalizeProducts(
-        response.data?.products || response.data || [],
-        pageNumber,
-      )
-
-      setProducts((prev) =>
-        pageNumber === 1 ? fetched : [...prev, ...fetched],
-      )
-
-      setHasMore(fetched.length >= PAGE_SIZE)
-      setPage(pageNumber)
-    } catch (error) {
-      const title =
-        error instanceof AppError ? error.message : 'Erro ao carregar produtos.'
-
-      toast.show({
-        title,
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-
-      if (pageNumber === 1) {
+  const loadProducts = useCallback(
+    async (pageNumber = 1, shouldRefresh = false, query = activeQuery) => {
+      if (!city?.id) {
         setProducts([])
+        setIsLoading(false)
+        return
       }
 
-      setHasMore(false)
-    } finally {
-      setIsLoading(false)
-      setIsLoadingMore(false)
-      setIsRefreshing(false)
-    }
-  }
+      if (pageNumber > 1 && loadingMoreRef.current) return
 
-  const searchProducts = useCallback(
-    debounce(async (query: string) => {
-      if (!city?.id) return
+      if (pageNumber === 1) requestControllerRef.current?.abort()
+
+      const controller = new AbortController()
+      requestControllerRef.current = controller
+      const requestSequence = ++requestSequenceRef.current
 
       try {
-        setIsSearching(true)
-        setIsLoading(true)
-        setHasMore(false)
+        if (pageNumber === 1 && !shouldRefresh) {
+          setIsLoading(true)
+        }
 
-        const response = await api.get('/products/search', {
-          params: {
-            query,
-            cityId: city.id,
-            page: 1,
-            pageSize: PAGE_SIZE,
+        if (pageNumber > 1) {
+          loadingMoreRef.current = true
+          setIsLoadingMore(true)
+        }
+
+        const response = await api.get(
+          query ? '/products/search' : '/products/active',
+          {
+            signal: controller.signal,
+            params: {
+              cityId: city.id,
+              page: pageNumber,
+              pageSize: PAGE_SIZE,
+              ...(query ? { query } : {}),
+            },
           },
-        })
-
-        const fetched = normalizeProducts(
-          response.data?.products || response.data || [],
-          1,
         )
 
-        setProducts(fetched)
-      } catch (error) {
+        if (requestSequence !== requestSequenceRef.current) return
+
+        const responseData =
+          response.data?.products ?? response.data?.data ?? response.data ?? []
+        const fetched = normalizeProducts(
+          Array.isArray(responseData) ? responseData : [],
+          pageNumber,
+        )
+
+        setProducts((current) => {
+          if (pageNumber === 1) return fetched
+
+          const knownIds = new Set(current.map((product) => product.id))
+          return [
+            ...current,
+            ...fetched.filter((product) => !knownIds.has(product.id)),
+          ]
+        })
+
+        const pagination = response.data?.pagination ?? response.data?.meta
+        const totalPages = Number(pagination?.totalPages ?? 0)
+
+        setHasMore(
+          totalPages > 0
+            ? pageNumber < totalPages
+            : fetched.length === PAGE_SIZE,
+        )
+        setPage(pageNumber)
+      } catch (error: any) {
+        if (
+          error?.name === 'CanceledError' ||
+          error?.name === 'AbortError' ||
+          error?.code === 'ERR_CANCELED'
+        ) {
+          return
+        }
+
         const title =
-          error instanceof AppError ? error.message : 'Erro ao buscar produtos.'
+          error instanceof AppError
+            ? error.message
+            : 'Erro ao carregar produtos.'
 
         toast.show({
           title,
@@ -177,14 +184,34 @@ export function SearchProducts() {
           bgColor: 'red.500',
         })
 
-        setProducts([])
+        if (pageNumber === 1) {
+          setProducts([])
+        }
+
+        setHasMore(false)
       } finally {
-        setIsLoading(false)
-        setIsLoadingMore(false)
-        setIsRefreshing(false)
+        if (requestSequence === requestSequenceRef.current) {
+          setIsLoading(false)
+          setIsLoadingMore(false)
+          setIsRefreshing(false)
+        }
+
+        loadingMoreRef.current = false
       }
-    }, 400),
-    [city?.id, toast],
+    },
+    [activeQuery, city?.id, toast],
+  )
+
+  const searchProducts = useMemo(
+    () =>
+      debounce((query: string) => {
+        setActiveQuery(query)
+        setIsSearching(Boolean(query))
+        setPage(1)
+        setHasMore(true)
+        void loadProducts(1, false, query)
+      }, SEARCH_DEBOUNCE_MS),
+    [loadProducts],
   )
 
   function handleSearchChange(text: string) {
@@ -194,9 +221,10 @@ export function SearchProducts() {
 
     if (!formattedQuery) {
       searchProducts.cancel()
+      setActiveQuery('')
       setIsSearching(false)
       setHasMore(true)
-      loadProducts(1)
+      void loadProducts(1, false, '')
       return
     }
 
@@ -206,34 +234,55 @@ export function SearchProducts() {
   function handleClearSearch() {
     setSearchTerm('')
     searchProducts.cancel()
+    setActiveQuery('')
     setIsSearching(false)
     setHasMore(true)
-    loadProducts(1)
+    void loadProducts(1, false, '')
   }
 
   function handleLoadMore() {
-    if (isLoadingMore || isLoading || !hasMore || isSearching) return
+    if (loadingMoreRef.current || isLoading || !hasMore) return
 
-    setIsLoadingMore(true)
-    loadProducts(page + 1)
+    void loadProducts(page + 1, false, activeQuery)
   }
 
   async function handleRefresh() {
     setIsRefreshing(true)
     searchProducts.cancel()
-    setSearchTerm('')
-    setIsSearching(false)
     setHasMore(true)
-    await loadProducts(1, true)
+    await loadProducts(1, true, activeQuery)
   }
 
   useEffect(() => {
-    loadProducts(1)
+    setSearchTerm('')
+    setActiveQuery('')
+    setIsSearching(false)
+    setPage(1)
+    setHasMore(true)
+    void loadProducts(1, false, '')
 
     return () => {
       searchProducts.cancel()
+      requestControllerRef.current?.abort()
     }
   }, [city?.id])
+
+  const cartQuantityByProductId = useMemo(() => {
+    const quantities = new Map<string, number>()
+
+    if (!activeStoreId) return quantities
+
+    cartItems.forEach((item) => {
+      quantities.set(item.productId, item.quantity)
+    })
+
+    return quantities
+  }, [activeStoreId, cartItems])
+
+  const updatingProductIdSet = useMemo(
+    () => new Set(updatingProductIds),
+    [updatingProductIds],
+  )
 
   //funções para adicionar e remover produtos diretamente no carrinho:
   function getProductStoreId(currentProduct: ProductDTO) {
@@ -247,14 +296,11 @@ export function SearchProducts() {
       return 0
     }
 
-    return (
-      cartItems.find((cartItem) => cartItem.productId === currentProduct.id)
-        ?.quantity ?? 0
-    )
+    return cartQuantityByProductId.get(currentProduct.id) ?? 0
   }
 
   function isProductUpdating(productId: string) {
-    return updatingProductIds.includes(productId)
+    return updatingProductIdSet.has(productId)
   }
 
   function setProductUpdating(productId: string, updating: boolean) {
@@ -486,6 +532,11 @@ export function SearchProducts() {
           )}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.35}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          updateCellsBatchingPeriod={50}
+          windowSize={7}
+          removeClippedSubviews
           ListEmptyComponent={
             <VStack alignItems="center" mt={20} px={8}>
               <Icon

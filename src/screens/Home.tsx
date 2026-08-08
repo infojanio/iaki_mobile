@@ -36,11 +36,10 @@ import { CashbackRegulationCard } from './CashbackRegulationCard'
 
 import { BusinessCategory } from '@screens/BusinessCategory'
 
-import { StoreList } from './StoreList'
-
 import { CityContext } from '@contexts/CityContext'
 
 import { CartContext } from '@contexts/CartContext'
+import { StoreListContent } from '@components/StoreListContent'
 
 export function Home() {
   const toast = useToast()
@@ -298,15 +297,16 @@ export function Home() {
       <SearchBar />
 
       <FlatList
-        data={[
-          {
-            id: 'home',
-          },
-        ]}
+        data={[{ id: 'home' }]}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         renderItem={() => (
-          <StoreList stores={stores} isLoading={isLoadingStores} />
+          <StoreListContent
+            insideScrollView
+            stores={stores}
+            isLoading={isLoadingStores}
+          />
         )}
         ListHeaderComponent={
           <VStack bg="blue.50" mx={1}>
