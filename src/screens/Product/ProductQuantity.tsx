@@ -1,25 +1,32 @@
-import { useEffect, useState, useContext, useMemo } from 'react'
-import { VStack, Text, FlatList, useToast, Box, HStack } from 'native-base'
-import { TouchableOpacity } from 'react-native'
-import { CartContext } from '@contexts/CartContext'
-import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
-import { ProductDTO } from '@dtos/ProductDTO'
-import { api } from '@services/api'
-import { AppError } from '@utils/AppError'
+import { Box, FlatList, HStack, Text, useToast, VStack } from 'native-base'
+
+import { ListRenderItem, TouchableOpacity } from 'react-native'
+
+import { useNavigation } from '@react-navigation/native'
 
 import { ProductCard } from '@components/Product/ProductCard'
 
+import { CartContext } from '@contexts/CartContext'
 import { CityContext } from '@contexts/CityContext'
-import { useNavigation } from '@react-navigation/native'
+
+import { ProductDTO } from '@dtos/ProductDTO'
+
+import { AppNavigatorRoutesProps } from '@routes/app.routes'
+
+import { api } from '@services/api'
+
+import { AppError } from '@utils/AppError'
 
 type Props = {
   onPressProduct: (product: ProductDTO) => void
 }
 
 export function ProductQuantity({ onPressProduct }: Props) {
-  const [products, setProducts] = useState<ProductDTO[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const navigation = useNavigation<AppNavigatorRoutesProps>()
+
+  const toast = useToast()
 
   const { city } = useContext(CityContext)
 
@@ -31,212 +38,396 @@ export function ProductQuantity({ onPressProduct }: Props) {
     decrementProduct,
   } = useContext(CartContext)
 
-  const [updatingProductIds, setUpdatingProductIds] = useState<string[]>([])
+  const [products, setProducts] = useState<ProductDTO[]>([])
 
-  const toast = useToast()
+  const [isLoading, setIsLoading] = useState(true)
 
-  const navigation = useNavigation<AppNavigatorRoutesProps>()
+  /*
+   * Set possui busca mais eficiente do que array.includes().
+   */
+  const [updatingProductIds, setUpdatingProductIds] = useState<Set<string>>(
+    () => new Set(),
+  )
 
-  const handleOpenProductDetails = (productId: string) => {
-    navigation.navigate('productDetails', { productId })
-  }
+  /* =====================================
+     CARREGAR PRODUTOS
+  ===================================== */
 
-  const handleOpenAllProduct = () => {
-    navigation.navigate('allProductsQuantity')
-  }
+  const fetchProductByQuantity = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        setIsLoading(true)
 
-  async function fetchProductByQuantity() {
-    try {
-      setIsLoading(true)
+        /*
+         * Mantém o endpoint atual para preservar
+         * a compatibilidade com o backend.
+         */
+        const response = await api.get<ProductDTO[]>('/products/quantity', {
+          signal,
+        })
 
-      const response = await api.get('/products/quantity')
-      setProducts(response.data)
-    } catch (error) {
-      const title =
-        error instanceof AppError
-          ? error.message
-          : 'Não foi possível carregar os produtos que estão acabando.'
+        setProducts(response.data ?? [])
+      } catch (error: any) {
+        /*
+         * Não apresenta toast quando a requisição foi cancelada
+         * porque o componente saiu da tela.
+         */
+        if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+          return
+        }
 
-      toast.show({
-        title,
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
+        const title =
+          error instanceof AppError
+            ? error.message
+            : 'Não foi possível carregar os produtos que estão acabando.'
+
+        toast.show({
+          title,
+          placement: 'top',
+          bgColor: 'red.500',
+        })
+
+        setProducts([])
+      } finally {
+        if (!signal?.aborted) {
+          setIsLoading(false)
+        }
+      }
+    },
+    [toast],
+  )
 
   useEffect(() => {
-    fetchProductByQuantity()
-  }, [])
+    const controller = new AbortController()
 
-  /**
-   * 🔹 Filtra produtos pela cidade selecionada
-   */
+    fetchProductByQuantity(controller.signal)
+
+    return () => {
+      controller.abort()
+    }
+  }, [fetchProductByQuantity])
+
+  /* =====================================
+     FILTRAR POR CIDADE
+  ===================================== */
+
   const filteredProducts = useMemo(() => {
-    if (!city) return []
+    if (!city?.id) {
+      return []
+    }
 
     return products.filter((product) => product.store?.cityId === city.id)
-  }, [products, city])
+  }, [city?.id, products])
 
-  if (!city || filteredProducts.length === 0) {
+  /* =====================================
+     MAPA DE QUANTIDADES DO CARRINHO
+  ===================================== */
+
+  /*
+   * Evita executar cartItems.find() para cada produto
+   * durante cada renderização da lista.
+   */
+  const cartQuantityByProductId = useMemo(() => {
+    const quantities = new Map<string, number>()
+
+    if (!activeStoreId) {
+      return quantities
+    }
+
+    for (const cartItem of cartItems) {
+      if (cartItem.storeId === activeStoreId) {
+        quantities.set(cartItem.productId, cartItem.quantity)
+      }
+    }
+
+    return quantities
+  }, [activeStoreId, cartItems])
+
+  const getProductStoreId = useCallback((currentProduct: ProductDTO) => {
+    return currentProduct.storeId ?? currentProduct.store?.id ?? null
+  }, [])
+
+  const getCartQuantity = useCallback(
+    (currentProduct: ProductDTO) => {
+      const productStoreId = getProductStoreId(currentProduct)
+
+      /*
+       * O IAki mantém somente um carrinho ativo por loja.
+       */
+      if (!productStoreId || activeStoreId !== productStoreId) {
+        return 0
+      }
+
+      return cartQuantityByProductId.get(currentProduct.id) ?? 0
+    },
+    [activeStoreId, cartQuantityByProductId, getProductStoreId],
+  )
+
+  /* =====================================
+     CONTROLE DE ATUALIZAÇÃO
+  ===================================== */
+
+  const isProductUpdating = useCallback(
+    (productId: string) => {
+      return updatingProductIds.has(productId)
+    },
+    [updatingProductIds],
+  )
+
+  const setProductUpdating = useCallback(
+    (productId: string, updating: boolean) => {
+      setUpdatingProductIds((current) => {
+        const updated = new Set(current)
+
+        if (updating) {
+          updated.add(productId)
+        } else {
+          updated.delete(productId)
+        }
+
+        return updated
+      })
+    },
+    [],
+  )
+
+  /* =====================================
+     NAVEGAÇÃO
+  ===================================== */
+
+  const handleOpenProductDetails = useCallback(
+    (currentProduct: ProductDTO) => {
+      /*
+       * Utiliza a callback recebida do componente pai.
+       * Ela existia nas props, mas não era utilizada.
+       */
+      onPressProduct(currentProduct)
+    },
+    [onPressProduct],
+  )
+
+  const handleOpenAllProduct = useCallback(() => {
+    navigation.navigate('allProductsQuantity')
+  }, [navigation])
+
+  /* =====================================
+     ADICIONAR / INCREMENTAR
+  ===================================== */
+
+  const handleIncrementProduct = useCallback(
+    async (currentProduct: ProductDTO) => {
+      const productId = currentProduct.id
+
+      if (isProductUpdating(productId)) {
+        return
+      }
+
+      const productStoreId = getProductStoreId(currentProduct)
+
+      if (!productStoreId) {
+        console.error('[ProductQuantity] Produto sem storeId:', currentProduct)
+
+        toast.show({
+          title: 'Não foi possível identificar a loja',
+          description: 'Atualize a tela e tente novamente.',
+          placement: 'top',
+          bgColor: 'red.500',
+        })
+
+        return
+      }
+
+      const stockQuantity = Number(currentProduct.quantity ?? 0)
+
+      const cartQuantity = getCartQuantity(currentProduct)
+
+      if (stockQuantity <= 0) {
+        toast.show({
+          title: 'Produto esgotado',
+          placement: 'top',
+          bgColor: 'orange.500',
+        })
+
+        return
+      }
+
+      if (cartQuantity >= stockQuantity) {
+        toast.show({
+          title: 'Estoque insuficiente',
+          description: 'Quantidade máxima disponível atingida.',
+          placement: 'top',
+          bgColor: 'orange.500',
+        })
+
+        return
+      }
+
+      setProductUpdating(productId, true)
+
+      try {
+        if (cartQuantity === 0) {
+          /*
+           * Enviar o produto completo permite que CartContext
+           * atualize cartItems imediatamente.
+           *
+           * Com isso, não é executado um GET do carrinho depois
+           * da primeira inclusão.
+           */
+          await addProductCart({
+            productId,
+            storeId: productStoreId,
+            quantity: 1,
+
+            product: {
+              id: productId,
+              name: currentProduct.name,
+              image: currentProduct.image,
+              price: Number(currentProduct.price ?? 0),
+              cashbackPercentage: Number(
+                currentProduct.cashbackPercentage ?? 0,
+              ),
+              quantity: stockQuantity,
+            },
+          })
+
+          return
+        }
+
+        /*
+         * O incremento também é otimista dentro
+         * do CartContext.
+         */
+        await incrementProduct(productId)
+      } catch (error: any) {
+        console.error('[ProductQuantity] Erro ao adicionar:', {
+          productId,
+          status: error?.response?.status,
+          data: error?.response?.data,
+          message: error?.message,
+        })
+
+        toast.show({
+          title: 'Erro ao adicionar produto',
+          description:
+            error?.response?.data?.message ??
+            error?.message ??
+            'Não foi possível adicionar o produto.',
+          placement: 'top',
+          bgColor: 'red.500',
+        })
+      } finally {
+        setProductUpdating(productId, false)
+      }
+    },
+    [
+      addProductCart,
+      getCartQuantity,
+      getProductStoreId,
+      incrementProduct,
+      isProductUpdating,
+      setProductUpdating,
+      toast,
+    ],
+  )
+
+  /* =====================================
+     DECREMENTAR
+  ===================================== */
+
+  const handleDecrementProduct = useCallback(
+    async (currentProduct: ProductDTO) => {
+      const productId = currentProduct.id
+
+      if (isProductUpdating(productId)) {
+        return
+      }
+
+      const cartQuantity = getCartQuantity(currentProduct)
+
+      if (cartQuantity <= 0) {
+        return
+      }
+
+      setProductUpdating(productId, true)
+
+      try {
+        /*
+         * CartContext diminui a quantidade local imediatamente
+         * e restaura o valor anterior se a API falhar.
+         */
+        await decrementProduct(productId)
+      } catch (error: any) {
+        console.error('[ProductQuantity] Erro ao diminuir:', {
+          productId,
+          status: error?.response?.status,
+          data: error?.response?.data,
+          message: error?.message,
+        })
+
+        toast.show({
+          title: 'Erro ao atualizar produto',
+          description:
+            error?.response?.data?.message ??
+            error?.message ??
+            'Não foi possível diminuir a quantidade.',
+          placement: 'top',
+          bgColor: 'red.500',
+        })
+      } finally {
+        setProductUpdating(productId, false)
+      }
+    },
+    [
+      decrementProduct,
+      getCartQuantity,
+      isProductUpdating,
+      setProductUpdating,
+      toast,
+    ],
+  )
+
+  /* =====================================
+     RENDERIZAÇÃO DOS PRODUTOS
+  ===================================== */
+
+  const renderProduct: ListRenderItem<ProductDTO> = useCallback(
+    ({ item }) => {
+      return (
+        <Box>
+          <ProductCard
+            product={item}
+            cartQuantity={getCartQuantity(item)}
+            isUpdating={isProductUpdating(item.id)}
+            onIncrement={() => handleIncrementProduct(item)}
+            onDecrement={() => handleDecrementProduct(item)}
+            onPress={() => handleOpenProductDetails(item)}
+          />
+        </Box>
+      )
+    },
+    [
+      getCartQuantity,
+      handleDecrementProduct,
+      handleIncrementProduct,
+      handleOpenProductDetails,
+      isProductUpdating,
+    ],
+  )
+
+  /*
+   * A seção não ocupa espaço enquanto carrega, sem cidade
+   * selecionada ou quando não há produtos disponíveis.
+   */
+  if (isLoading || !city?.id || filteredProducts.length === 0) {
     return null
   }
 
-  function getProductStoreId(currentProduct: ProductDTO) {
-    return currentProduct.storeId ?? currentProduct.store?.id ?? null
-  }
-
-  function getCartQuantity(currentProduct: ProductDTO) {
-    const productStoreId = getProductStoreId(currentProduct)
-
-    if (!productStoreId || activeStoreId !== productStoreId) {
-      return 0
-    }
-
-    return (
-      cartItems.find((cartItem) => cartItem.productId === currentProduct.id)
-        ?.quantity ?? 0
-    )
-  }
-
-  function isProductUpdating(productId: string) {
-    return updatingProductIds.includes(productId)
-  }
-
-  function setProductUpdating(productId: string, updating: boolean) {
-    setUpdatingProductIds((current) => {
-      if (updating) {
-        if (current.includes(productId)) {
-          return current
-        }
-
-        return [...current, productId]
-      }
-
-      return current.filter((id) => id !== productId)
-    })
-  }
-
-  async function handleIncrementProduct(currentProduct: ProductDTO) {
-    if (isProductUpdating(currentProduct.id)) {
-      return
-    }
-
-    const productStoreId = getProductStoreId(currentProduct)
-
-    if (!productStoreId) {
-      console.error('[SearchProducts] Produto sem storeId:', currentProduct)
-
-      toast.show({
-        title: 'Não foi possível identificar a loja',
-        description: 'Atualize a tela e tente novamente.',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-
-      return
-    }
-
-    const stockQuantity = Number(currentProduct.quantity ?? 0)
-
-    const cartQuantity = getCartQuantity(currentProduct)
-
-    if (stockQuantity <= 0) {
-      toast.show({
-        title: 'Produto esgotado',
-        placement: 'top',
-        bgColor: 'orange.500',
-      })
-
-      return
-    }
-
-    if (cartQuantity >= stockQuantity) {
-      toast.show({
-        title: 'Estoque insuficiente',
-        description: 'Quantidade máxima disponível atingida.',
-        placement: 'top',
-        bgColor: 'orange.500',
-      })
-
-      return
-    }
-
-    try {
-      setProductUpdating(currentProduct.id, true)
-
-      if (cartQuantity === 0) {
-        await addProductCart({
-          productId: currentProduct.id,
-          storeId: productStoreId,
-          quantity: 1,
-        })
-      } else {
-        await incrementProduct(currentProduct.id)
-      }
-    } catch (error: any) {
-      console.error(
-        '[SearchProducts] Erro ao adicionar:',
-        error?.response?.status,
-        error?.response?.data,
-        error?.message,
-      )
-
-      toast.show({
-        title: 'Erro ao adicionar produto',
-        description:
-          error?.response?.data?.message ??
-          error?.message ??
-          'Não foi possível adicionar o produto.',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setProductUpdating(currentProduct.id, false)
-    }
-  }
-
-  async function handleDecrementProduct(currentProduct: ProductDTO) {
-    if (isProductUpdating(currentProduct.id)) {
-      return
-    }
-
-    const cartQuantity = getCartQuantity(currentProduct)
-
-    if (cartQuantity <= 0) {
-      return
-    }
-
-    try {
-      setProductUpdating(currentProduct.id, true)
-
-      await decrementProduct(currentProduct.id)
-    } catch (error: any) {
-      console.error(
-        '[SearchProducts] Erro ao diminuir:',
-        error?.response?.status,
-        error?.response?.data,
-        error?.message,
-      )
-
-      toast.show({
-        title: 'Erro ao atualizar produto',
-        description:
-          error?.response?.data?.message ??
-          error?.message ??
-          'Não foi possível diminuir a quantidade.',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setProductUpdating(currentProduct.id, false)
-    }
-  }
+  /* =====================================
+     TELA
+  ===================================== */
 
   return (
-    <VStack bg="gray.100" h={240} mb={6}>
+    <VStack bg="gray.100" height={240} mb={6}>
       <VStack>
         <VStack ml={1} mb={1}>
           <HStack justifyContent="space-between" mr={2}>
@@ -244,7 +435,12 @@ export function ProductQuantity({ onPressProduct }: Props) {
               Tá acabando
             </Text>
 
-            <TouchableOpacity onPress={() => handleOpenAllProduct()}>
+            <TouchableOpacity
+              onPress={handleOpenAllProduct}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Ver todos os produtos que estão acabando"
+            >
               <Box
                 mr={6}
                 borderBottomWidth={3}
@@ -267,22 +463,17 @@ export function ProductQuantity({ onPressProduct }: Props) {
         </VStack>
 
         <FlatList
+          horizontal
           data={filteredProducts}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <Box>
-              <ProductCard
-                product={item}
-                cartQuantity={getCartQuantity(item)}
-                isUpdating={isProductUpdating(item.id)}
-                onIncrement={() => handleIncrementProduct(item)}
-                onDecrement={() => handleDecrementProduct(item)}
-                onPress={() => handleOpenProductDetails(item.id)}
-              />
-            </Box>
-          )}
-          horizontal
+          renderItem={renderProduct}
           showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          removeClippedSubviews
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          updateCellsBatchingPeriod={50}
+          windowSize={5}
           contentContainerStyle={{
             marginLeft: 12,
             paddingBottom: 32,

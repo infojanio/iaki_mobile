@@ -1,59 +1,53 @@
-import { useCallback, useContext, useEffect, useState } from 'react'
-import { HomeProduct } from '@components/Product/HomeProduct'
+import { useCallback, useContext, useMemo, useState } from 'react'
+
 import {
-  Text,
   Box,
-  FlatList,
-  HStack,
-  Heading,
-  VStack,
-  useToast,
   Center,
+  FlatList,
+  Heading,
+  HStack,
+  Text,
+  useToast,
+  VStack,
 } from 'native-base'
+
+import { ListRenderItem } from 'react-native'
+
 import {
   useFocusEffect,
   useNavigation,
   useRoute,
 } from '@react-navigation/native'
-import { AppError } from '@utils/AppError'
-import { api } from '@services/api'
+
+import { HomeProduct } from '@components/Product/HomeProduct'
+import { Loading } from '@components/Loading'
+import { ProductCard } from '@components/Product/ProductCard'
 import { SubcategoryCard } from '@components/Product/SubcategoryCard'
+
+import { CartContext } from '@contexts/CartContext'
+
 import { ProductDTO } from '@dtos/ProductDTO'
 import { SubCategoryDTO } from '@dtos/SubCategoryDTO'
-import { ProductCard } from '@components/Product/ProductCard'
-import { Loading } from '@components/Loading'
-import { CategoryDTO } from '@dtos/CategoryDTO'
 
-//add produto carrinho
-import { CartContext } from '@contexts/CartContext'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
+
+import { api } from '@services/api'
+
+import { AppError } from '@utils/AppError'
 
 type RouteParamsProps = {
   categoryId: string
 }
 
-type Props = {
-  subcategory: string
-  data: ProductDTO[]
-}
-
 export function ProductBySubCategory() {
-  const [isLoading, setIsLoading] = useState(true)
-  const [categories, setCategories] = useState<CategoryDTO[]>([])
-
-  const [subCategories, setSubCategories] = useState<SubCategoryDTO[]>([])
-  const [products, setProducts] = useState<ProductDTO[]>([])
-
   const route = useRoute()
+
   const { categoryId } = route.params as RouteParamsProps
 
-  console.log('ID =>', categoryId)
-  //const [categorySelected, setCategorySelected] = useState(categoryId)
-  const [subCategorySelected, setSubCategorySelected] = useState('')
-  const [updatingProductIds, setUpdatingProductIds] = useState<string[]>([])
-
-  //add produto carrinho
   const navigation = useNavigation<AppNavigatorRoutesProps>()
+
+  const toast = useToast()
+
   const {
     cartItems,
     activeStoreId,
@@ -62,339 +56,532 @@ export function ProductBySubCategory() {
     decrementProduct,
   } = useContext(CartContext)
 
-  const toast = useToast()
+  const [isLoadingSubcategories, setIsLoadingSubcategories] = useState(true)
 
-  function handleOpenProductDetails(productId: string) {
-    navigation.navigate('productDetails', { productId })
-  }
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false)
 
-  async function fetchCategories() {
-    try {
-      setIsLoading(true)
-      //      const response = await api.get(`/categories/${categoryId}`)
-      const response = await api.get(`/categories/${categoryId}`)
-      setCategories(response.data)
-      console.log(response.data)
-    } catch (error) {
-      const isAppError = error instanceof AppError
-      const title = isAppError
-        ? error.message
-        : 'Não foi possível carregar a categoria'
+  const [subCategories, setSubCategories] = useState<SubCategoryDTO[]>([])
 
-      toast.show({
-        title,
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setIsLoading(false)
+  const [products, setProducts] = useState<ProductDTO[]>([])
+
+  const [subCategorySelected, setSubCategorySelected] = useState('')
+
+  /*
+   * Set oferece busca mais eficiente do que array.includes().
+   */
+  const [updatingProductIds, setUpdatingProductIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+
+  /* =====================================
+     SUBCATEGORIAS
+  ===================================== */
+
+  const fetchSubCategoriesByCategory = useCallback(async () => {
+    if (!categoryId) {
+      setSubCategories([])
+      setSubCategorySelected('')
+      setIsLoadingSubcategories(false)
+
+      return
     }
-  }
 
-  // Buscar subcategorias da categoria selecionada
-  async function fetchSubCategories() {
     try {
-      setIsLoading(true)
-      console.log('Buscando subcategorias para a categoria:', categoryId)
-      const response = await api.get('/subcategories')
-      // const response = await api.get(`/subcategories/category/${categoryId}`) // CORRIGIDO
-      setSubCategories(response.data)
-      console.log('subcategorias carregadas no estado:', subCategories)
-      if (response.data.length > 0) {
-        setSubCategorySelected(response.data[0].id) // Seleciona a primeira subcategoria automaticamente
-        console.log(
-          'Subcategoria selecionada automaticamente:',
-          response.data[0]?.id,
+      setIsLoadingSubcategories(true)
+
+      const response = await api.get<SubCategoryDTO[]>(
+        '/subcategories/category',
+        {
+          params: {
+            categoryId,
+          },
+        },
+      )
+
+      const loadedSubcategories = response.data ?? []
+
+      setSubCategories(loadedSubcategories)
+
+      setSubCategorySelected((currentSelected) => {
+        const selectedStillExists = loadedSubcategories.some(
+          (subcategory) => subcategory.id === currentSelected,
         )
-      } else {
-        setSubCategorySelected('') // Evita problemas caso não existam subcategorias
+
+        if (selectedStillExists) {
+          return currentSelected
+        }
+
+        return loadedSubcategories[0]?.id ?? ''
+      })
+
+      if (loadedSubcategories.length === 0) {
+        setProducts([])
       }
     } catch (error) {
-      toast.show({
-        title:
-          error instanceof AppError
-            ? error.message
-            : 'Erro ao carregar subcategorias',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Buscar subcategorias da categoria selecionada
-  async function fetchSubCategoriesByCategory() {
-    try {
-      setIsLoading(true)
-      console.log('Buscando subcategorias para a categoria:', categoryId)
-      //http://localhost:3333/subcategories/category?categoryId=41302d8e-8660-47c6-a604-4908aea64e35
-      const response = await api.get(
-        `/subcategories/category/?categoryId=${categoryId}`,
-      )
-      setSubCategories(response.data)
-
-      if (response.data.length > 0) {
-        setSubCategorySelected(response.data[0].id) // Seleciona a primeira subcategoria automaticamente
-        console.log('Subcategoria inicial:', response.data[0]?.id)
-      } else {
-        setSubCategorySelected('') // Evita problemas caso não existam subcategorias
-      }
-    } catch (error) {
-      toast.show({
-        title:
-          error instanceof AppError
-            ? error.message
-            : 'Erro ao carregar subcategorias',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Buscar produtos da subcategoria selecionada
-  async function fetchProductsBySubcategory() {
-    // if (!subCategorySelected) return
-    try {
-      setIsLoading(true)
-      const response = await api.get(
-        `/products/subcategory/?subcategoryId=${subCategorySelected}`,
-      )
-      setProducts(response.data)
-      console.log('Produtos', response.data)
-    } catch (error) {
-      const isAppError = error instanceof AppError
-      const title = isAppError
-        ? error.message
-        : 'Não foi possível carregar os exercícios'
+      const title =
+        error instanceof AppError
+          ? error.message
+          : 'Erro ao carregar subcategorias'
 
       toast.show({
         title,
-        placement: 'bottom-left',
+        placement: 'top',
         bgColor: 'red.500',
       })
+
+      setSubCategories([])
+      setSubCategorySelected('')
+      setProducts([])
     } finally {
-      setIsLoading(false)
+      setIsLoadingSubcategories(false)
     }
-  }
+  }, [categoryId, toast])
 
-  // Atualiza as subcategorias sempre que a categoria mudar
-  useEffect(() => {
-    if (categoryId) {
-      fetchCategories()
-      //fetchSubCategories()
+  /*
+   * Atualiza as subcategorias ao entrar na tela ou
+   * quando categoryId mudar.
+   */
+  useFocusEffect(
+    useCallback(() => {
       fetchSubCategoriesByCategory()
+    }, [fetchSubCategoriesByCategory]),
+  )
+
+  /* =====================================
+     PRODUTOS
+  ===================================== */
+
+  const fetchProductsBySubcategory = useCallback(async () => {
+    /*
+     * Impede a chamada:
+     * /products/subcategory?subcategoryId=
+     */
+    if (!subCategorySelected) {
+      setProducts([])
+      setIsLoadingProducts(false)
+
+      return
     }
-  }, [categoryId])
 
-  const firstSubCategory = subCategories.length > 0 ? subCategories[0] : null
+    try {
+      setIsLoadingProducts(true)
 
-  // Atualiza os produtos quando a subcategoria mudar
+      const response = await api.get<ProductDTO[]>('/products/subcategory', {
+        params: {
+          subcategoryId: subCategorySelected,
+        },
+      })
+
+      setProducts(response.data ?? [])
+    } catch (error) {
+      const title =
+        error instanceof AppError
+          ? error.message
+          : 'Não foi possível carregar os produtos'
+
+      toast.show({
+        title,
+        placement: 'top',
+        bgColor: 'red.500',
+      })
+
+      setProducts([])
+    } finally {
+      setIsLoadingProducts(false)
+    }
+  }, [subCategorySelected, toast])
+
+  /*
+   * Atualiza os produtos ao entrar na tela ou quando
+   * o usuário selecionar outra subcategoria.
+   */
   useFocusEffect(
     useCallback(() => {
       fetchProductsBySubcategory()
-    }, [subCategorySelected]),
+    }, [fetchProductsBySubcategory]),
   )
 
-  //funções para adicionar e remover produtos diretamente no carrinho:
-  function getProductStoreId(currentProduct: ProductDTO) {
-    return currentProduct.storeId ?? currentProduct.store?.id ?? null
-  }
+  /* =====================================
+     MAPA DE QUANTIDADES DO CARRINHO
+  ===================================== */
 
-  function getCartQuantity(currentProduct: ProductDTO) {
-    const productStoreId = getProductStoreId(currentProduct)
+  /*
+   * Evita executar cartItems.find() para cada produto
+   * renderizado na lista.
+   */
+  const cartQuantityByProductId = useMemo(() => {
+    const quantities = new Map<string, number>()
 
-    if (!productStoreId || activeStoreId !== productStoreId) {
-      return 0
+    if (!activeStoreId) {
+      return quantities
     }
 
-    return (
-      cartItems.find((cartItem) => cartItem.productId === currentProduct.id)
-        ?.quantity ?? 0
-    )
-  }
+    for (const cartItem of cartItems) {
+      if (cartItem.storeId === activeStoreId) {
+        quantities.set(cartItem.productId, cartItem.quantity)
+      }
+    }
 
-  function isProductUpdating(productId: string) {
-    return updatingProductIds.includes(productId)
-  }
+    return quantities
+  }, [activeStoreId, cartItems])
 
-  function setProductUpdating(productId: string, updating: boolean) {
-    setUpdatingProductIds((current) => {
-      if (updating) {
-        if (current.includes(productId)) {
-          return current
+  const getProductStoreId = useCallback((currentProduct: ProductDTO) => {
+    return currentProduct.storeId ?? currentProduct.store?.id ?? null
+  }, [])
+
+  const getCartQuantity = useCallback(
+    (currentProduct: ProductDTO) => {
+      const productStoreId = getProductStoreId(currentProduct)
+
+      /*
+       * O IAki mantém um carrinho ativo por loja.
+       */
+      if (!productStoreId || activeStoreId !== productStoreId) {
+        return 0
+      }
+
+      return cartQuantityByProductId.get(currentProduct.id) ?? 0
+    },
+    [activeStoreId, cartQuantityByProductId, getProductStoreId],
+  )
+
+  /* =====================================
+     CONTROLE DE PRODUTOS EM ATUALIZAÇÃO
+  ===================================== */
+
+  const isProductUpdating = useCallback(
+    (productId: string) => {
+      return updatingProductIds.has(productId)
+    },
+    [updatingProductIds],
+  )
+
+  const setProductUpdating = useCallback(
+    (productId: string, updating: boolean) => {
+      setUpdatingProductIds((current) => {
+        const updated = new Set(current)
+
+        if (updating) {
+          updated.add(productId)
+        } else {
+          updated.delete(productId)
         }
 
-        return [...current, productId]
+        return updated
+      })
+    },
+    [],
+  )
+
+  /* =====================================
+     NAVEGAÇÃO
+  ===================================== */
+
+  const handleOpenProductDetails = useCallback(
+    (productId: string) => {
+      navigation.navigate('productDetails', {
+        productId,
+      })
+    },
+    [navigation],
+  )
+
+  /* =====================================
+     ADICIONAR / INCREMENTAR
+  ===================================== */
+
+  const handleIncrementProduct = useCallback(
+    async (currentProduct: ProductDTO) => {
+      const productId = currentProduct.id
+
+      if (isProductUpdating(productId)) {
+        return
       }
 
-      return current.filter((id) => id !== productId)
-    })
-  }
+      const productStoreId = getProductStoreId(currentProduct)
 
-  async function handleIncrementProduct(currentProduct: ProductDTO) {
-    if (isProductUpdating(currentProduct.id)) {
-      return
-    }
+      if (!productStoreId) {
+        console.error(
+          '[ProductBySubCategory] Produto sem storeId:',
+          currentProduct,
+        )
 
-    const productStoreId = getProductStoreId(currentProduct)
-
-    if (!productStoreId) {
-      console.error('[SearchProducts] Produto sem storeId:', currentProduct)
-
-      toast.show({
-        title: 'Não foi possível identificar a loja',
-        description: 'Atualize a tela e tente novamente.',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-
-      return
-    }
-
-    const stockQuantity = Number(currentProduct.quantity ?? 0)
-
-    const cartQuantity = getCartQuantity(currentProduct)
-
-    if (stockQuantity <= 0) {
-      toast.show({
-        title: 'Produto esgotado',
-        placement: 'top',
-        bgColor: 'orange.500',
-      })
-
-      return
-    }
-
-    if (cartQuantity >= stockQuantity) {
-      toast.show({
-        title: 'Estoque insuficiente',
-        description: 'Quantidade máxima disponível atingida.',
-        placement: 'top',
-        bgColor: 'orange.500',
-      })
-
-      return
-    }
-
-    try {
-      setProductUpdating(currentProduct.id, true)
-
-      if (cartQuantity === 0) {
-        await addProductCart({
-          productId: currentProduct.id,
-          storeId: productStoreId,
-          quantity: 1,
+        toast.show({
+          title: 'Não foi possível identificar a loja',
+          description: 'Atualize a tela e tente novamente.',
+          placement: 'top',
+          bgColor: 'red.500',
         })
-      } else {
-        await incrementProduct(currentProduct.id)
+
+        return
       }
-    } catch (error: any) {
-      console.error(
-        '[SearchProducts] Erro ao adicionar:',
-        error?.response?.status,
-        error?.response?.data,
-        error?.message,
+
+      const stockQuantity = Number(currentProduct.quantity ?? 0)
+
+      const cartQuantity = getCartQuantity(currentProduct)
+
+      if (stockQuantity <= 0) {
+        toast.show({
+          title: 'Produto esgotado',
+          placement: 'top',
+          bgColor: 'orange.500',
+        })
+
+        return
+      }
+
+      if (cartQuantity >= stockQuantity) {
+        toast.show({
+          title: 'Estoque insuficiente',
+          description: 'Quantidade máxima disponível atingida.',
+          placement: 'top',
+          bgColor: 'orange.500',
+        })
+
+        return
+      }
+
+      setProductUpdating(productId, true)
+
+      try {
+        if (cartQuantity === 0) {
+          /*
+           * O produto completo permite que CartContext atualize
+           * cartItems imediatamente, sem executar depois:
+           *
+           * GET /cart/store/:storeId
+           */
+          await addProductCart({
+            productId,
+            storeId: productStoreId,
+            quantity: 1,
+
+            product: {
+              id: productId,
+              name: currentProduct.name,
+              image: currentProduct.image,
+              price: Number(currentProduct.price ?? 0),
+              cashbackPercentage: Number(
+                currentProduct.cashbackPercentage ?? 0,
+              ),
+              quantity: stockQuantity,
+            },
+          })
+
+          return
+        }
+
+        /*
+         * O incremento também é otimista dentro
+         * do CartContext.
+         */
+        await incrementProduct(productId)
+      } catch (error: any) {
+        console.error('[ProductBySubCategory] Erro ao adicionar:', {
+          productId,
+          status: error?.response?.status,
+          data: error?.response?.data,
+          message: error?.message,
+        })
+
+        toast.show({
+          title: 'Erro ao adicionar produto',
+          description:
+            error?.response?.data?.message ??
+            error?.message ??
+            'Não foi possível adicionar o produto.',
+          placement: 'top',
+          bgColor: 'red.500',
+        })
+      } finally {
+        setProductUpdating(productId, false)
+      }
+    },
+    [
+      addProductCart,
+      getCartQuantity,
+      getProductStoreId,
+      incrementProduct,
+      isProductUpdating,
+      setProductUpdating,
+      toast,
+    ],
+  )
+
+  /* =====================================
+     DECREMENTAR
+  ===================================== */
+
+  const handleDecrementProduct = useCallback(
+    async (currentProduct: ProductDTO) => {
+      const productId = currentProduct.id
+
+      if (isProductUpdating(productId)) {
+        return
+      }
+
+      const cartQuantity = getCartQuantity(currentProduct)
+
+      if (cartQuantity <= 0) {
+        return
+      }
+
+      setProductUpdating(productId, true)
+
+      try {
+        /*
+         * CartContext atualiza a quantidade local antes
+         * de aguardar o backend.
+         */
+        await decrementProduct(productId)
+      } catch (error: any) {
+        console.error('[ProductBySubCategory] Erro ao diminuir:', {
+          productId,
+          status: error?.response?.status,
+          data: error?.response?.data,
+          message: error?.message,
+        })
+
+        toast.show({
+          title: 'Erro ao atualizar produto',
+          description:
+            error?.response?.data?.message ??
+            error?.message ??
+            'Não foi possível diminuir a quantidade.',
+          placement: 'top',
+          bgColor: 'red.500',
+        })
+      } finally {
+        setProductUpdating(productId, false)
+      }
+    },
+    [
+      decrementProduct,
+      getCartQuantity,
+      isProductUpdating,
+      setProductUpdating,
+      toast,
+    ],
+  )
+
+  /* =====================================
+     SUBCATEGORIA SELECIONADA
+  ===================================== */
+
+  const selectedSubcategoryName = useMemo(() => {
+    return (
+      subCategories.find(
+        (subcategory) => subcategory.id === subCategorySelected,
+      )?.name ?? 'Selecionar'
+    )
+  }, [subCategories, subCategorySelected])
+
+  const handleSelectSubcategory = useCallback(
+    (subcategoryId: string) => {
+      if (subcategoryId === subCategorySelected) {
+        return
+      }
+
+      /*
+       * Evita mostrar produtos da subcategoria anterior enquanto
+       * a nova requisição está em andamento.
+       */
+      setProducts([])
+      setSubCategorySelected(subcategoryId)
+    },
+    [subCategorySelected],
+  )
+
+  /* =====================================
+     RENDERIZAÇÃO DAS LISTAS
+  ===================================== */
+
+  const renderSubcategory: ListRenderItem<SubCategoryDTO> = useCallback(
+    ({ item }) => {
+      return (
+        <SubcategoryCard
+          name={item.name}
+          subcategory={item.id}
+          isActive={subCategorySelected === item.id}
+          onPress={() => handleSelectSubcategory(item.id)}
+        />
       )
+    },
+    [handleSelectSubcategory, subCategorySelected],
+  )
 
-      toast.show({
-        title: 'Erro ao adicionar produto',
-        description:
-          error?.response?.data?.message ??
-          error?.message ??
-          'Não foi possível adicionar o produto.',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setProductUpdating(currentProduct.id, false)
-    }
-  }
-
-  async function handleDecrementProduct(currentProduct: ProductDTO) {
-    if (isProductUpdating(currentProduct.id)) {
-      return
-    }
-
-    const cartQuantity = getCartQuantity(currentProduct)
-
-    if (cartQuantity <= 0) {
-      return
-    }
-
-    try {
-      setProductUpdating(currentProduct.id, true)
-
-      await decrementProduct(currentProduct.id)
-    } catch (error: any) {
-      console.error(
-        '[SearchProducts] Erro ao diminuir:',
-        error?.response?.status,
-        error?.response?.data,
-        error?.message,
+  const renderProduct: ListRenderItem<ProductDTO> = useCallback(
+    ({ item }) => {
+      return (
+        <ProductCard
+          product={item}
+          cartQuantity={getCartQuantity(item)}
+          isUpdating={isProductUpdating(item.id)}
+          onIncrement={() => handleIncrementProduct(item)}
+          onDecrement={() => handleDecrementProduct(item)}
+          onPress={() => handleOpenProductDetails(item.id)}
+        />
       )
+    },
+    [
+      getCartQuantity,
+      handleDecrementProduct,
+      handleIncrementProduct,
+      handleOpenProductDetails,
+      isProductUpdating,
+    ],
+  )
 
-      toast.show({
-        title: 'Erro ao atualizar produto',
-        description:
-          error?.response?.data?.message ??
-          error?.message ??
-          'Não foi possível diminuir a quantidade.',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setProductUpdating(currentProduct.id, false)
-    }
-  }
+  /* =====================================
+     TELA
+  ===================================== */
 
   return (
     <VStack flex={1}>
       <HomeProduct />
 
       <Box flex={1} ml={-6} mt={-6}>
-        {subCategories.length > 0 ? (
+        {isLoadingSubcategories ? (
+          <Center mt={6} mb={2} minH={12}>
+            <Loading />
+          </Center>
+        ) : subCategories.length > 0 ? (
           <FlatList
+            horizontal
             data={subCategories}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <SubcategoryCard
-                name={item.name}
-                subcategory={item.id}
-                isActive={subCategorySelected === item.id}
-                onPress={() => setSubCategorySelected(item.id)}
-              />
-            )}
-            horizontal
+            renderItem={renderSubcategory}
             showsHorizontalScrollIndicator={false}
-            _contentContainerStyle={{ px: 8 }}
+            _contentContainerStyle={{
+              px: 8,
+            }}
             mt={6}
             mb={2}
             maxH={12}
             minH={10}
+            initialNumToRender={8}
+            maxToRenderPerBatch={8}
+            windowSize={5}
           />
         ) : (
-          <Center mt={6} mb={2}>
-            <Text color={'red.600'} fontSize={14}>
+          <Center mt={6} mb={2} minH={12}>
+            <Text color="red.600" fontSize={14}>
               Nenhuma subcategoria encontrada!
             </Text>
           </Center>
         )}
 
-        {isLoading ? (
+        {isLoadingProducts ? (
           <Loading />
         ) : (
-          <VStack flex={1} px={2} bg={'gray.200'}>
-            <VStack px={6} bg={'gray.200'}>
+          <VStack flex={1} px={2} bg="gray.200">
+            <VStack px={6} bg="gray.200">
               <HStack justifyContent="space-between" mb={5}>
-                <Heading color={'gray.700'} fontSize={'md'}>
-                  {subCategories.find((sub) => sub.id === subCategorySelected)
-                    ?.name || 'Selecionar'}
+                <Heading color="gray.700" fontSize="md">
+                  {selectedSubcategoryName}
                 </Heading>
 
-                <Text color="gray.700" fontSize={'md'}>
+                <Text color="gray.700" fontSize="md">
                   {products.length}
                 </Text>
               </HStack>
@@ -402,28 +589,27 @@ export function ProductBySubCategory() {
 
             <FlatList
               data={products}
-              extraData={{
-                cartItems,
-                activeStoreId,
-                updatingProductIds,
-              }}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <ProductCard
-                  product={item}
-                  cartQuantity={getCartQuantity(item)}
-                  isUpdating={isProductUpdating(item.id)}
-                  onIncrement={() => handleIncrementProduct(item)}
-                  onDecrement={() => handleDecrementProduct(item)}
-                  onPress={() => handleOpenProductDetails(item.id)}
-                />
-              )}
+              renderItem={renderProduct}
               numColumns={2}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              removeClippedSubviews
+              initialNumToRender={8}
+              maxToRenderPerBatch={8}
+              updateCellsBatchingPeriod={50}
+              windowSize={7}
               _contentContainerStyle={{
                 marginLeft: 8,
                 paddingBottom: 32,
               }}
-              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <Center py={10}>
+                  <Text color="gray.500" fontSize="sm">
+                    Nenhum produto encontrado.
+                  </Text>
+                </Center>
+              }
             />
           </VStack>
         )}
