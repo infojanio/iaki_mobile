@@ -107,7 +107,7 @@ export function SignIn() {
         // })
       }
     } catch (error: any) {
-      let message = 'Não foi possível entrar. Tente novamente mais tarde!'
+      let message = 'Email ou senha incorretos!'
 
       if (error?.response?.data?.message) {
         message = error.response.data.message
