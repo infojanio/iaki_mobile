@@ -132,8 +132,6 @@ export function About() {
           dia.
         </Text>
 
-        <BenefitsStrip />
-
         <VStack space={3} mt={4}>
           <Button
             variant="outline"

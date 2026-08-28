@@ -1,16 +1,7 @@
 import React, { useEffect, useState, useContext } from 'react'
+import { FlatList } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
-import {
-  Box,
-  Text,
-  VStack,
-  HStack,
-  Image,
-  Button,
-  FlatList,
-  Divider,
-  ArrowBackIcon,
-} from 'native-base'
+import { Box, Text, VStack, HStack, Image, Button, Divider } from 'native-base'
 
 import { api } from '@services/api'
 import { formatCurrency } from '@utils/format'

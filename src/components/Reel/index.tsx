@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-
+import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   Dimensions,
   Pressable,
   Text,
-  SafeAreaView,
   StyleSheet,
   Linking,
   FlatList,

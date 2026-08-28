@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react'
-import { Box, FlatList, Text, VStack, useToast } from 'native-base'
+import { Box, Text, VStack, useToast } from 'native-base'
 import { useRoute, useNavigation } from '@react-navigation/native'
 
 import { api } from '@services/api'
@@ -12,6 +12,7 @@ import { StoreCard } from '@components/Store/StoreCard'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CityContext } from '@contexts/CityContext'
 import { BackHome } from '@components/BackHome'
+import { FlatList } from 'react-native'
 
 type RouteParams = {
   businessCategoryId: string

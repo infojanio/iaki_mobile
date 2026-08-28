@@ -46,7 +46,7 @@ function NavigationRoot() {
       }}
     >
       <Stack.Navigator
-        initialRouteName="redirect"
+        //   initialRouteName="redirect"
         screenOptions={{ headerShown: false }}
       >
         {!user || !user.id ? (

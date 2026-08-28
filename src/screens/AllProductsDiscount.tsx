@@ -5,10 +5,11 @@ import React, {
   useContext,
   useMemo,
 } from 'react'
+import { FlatList } from 'react-native'
+
 import {
   VStack,
   Text,
-  FlatList,
   useToast,
   Box,
   HStack,

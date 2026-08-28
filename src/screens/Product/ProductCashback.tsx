@@ -1,7 +1,7 @@
 import { useEffect, useState, useContext, useMemo } from 'react'
-import { VStack, Text, FlatList, useToast, Box, HStack } from 'native-base'
+import { VStack, Text, useToast, Box, HStack } from 'native-base'
 import { TouchableOpacity } from 'react-native'
-
+import { FlatList } from 'react-native'
 import { ProductDTO } from '@dtos/ProductDTO'
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'

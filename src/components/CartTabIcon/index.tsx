@@ -1,41 +1,66 @@
 // CartTabIcon.tsx
+
 import React from 'react'
 import { View, Text } from 'react-native'
+
 import CartSvg from '@assets/cart.svg'
 
 type Props = {
   color: string
   badgeCount?: number
+  size?: number
 }
 
-export function CartTabIcon({ color, badgeCount = 0 }: Props) {
+export function CartTabIcon({ color, badgeCount = 0, size = 20 }: Props) {
+  const displayCount = badgeCount > 99 ? '99+' : badgeCount
+
   return (
-    <View style={{ position: 'relative' }}>
-      <CartSvg fill={color} width={24} height={24} />
+    <View
+      style={{
+        width: 28,
+        height: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+      }}
+    >
+      <CartSvg fill={color} width={size} height={size} />
 
       {badgeCount > 0 && (
         <View
           style={{
             position: 'absolute',
-            top: -4,
-            right: -6,
+
+            top: 0,
+            right: 0,
+
             backgroundColor: '#EF4444',
-            borderRadius: 10,
-            minWidth: 18,
-            height: 18,
-            paddingHorizontal: 4,
+
+            borderRadius: 8,
+
+            minWidth: 14,
+            height: 14,
+
+            paddingHorizontal: 3,
+
             justifyContent: 'center',
             alignItems: 'center',
           }}
         >
           <Text
+            numberOfLines={1}
             style={{
               color: '#fff',
-              fontSize: 10,
-              fontWeight: 'bold',
+
+              fontSize: 8,
+              lineHeight: 10,
+
+              fontWeight: '700',
+
+              textAlign: 'center',
             }}
           >
-            {badgeCount}
+            {displayCount}
           </Text>
         </View>
       )}

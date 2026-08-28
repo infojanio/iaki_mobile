@@ -1,11 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Dimensions,
-  Pressable,
-  SafeAreaView,
-  StyleSheet,
-  Linking,
-} from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { Dimensions, Pressable, StyleSheet, Linking } from 'react-native'
 import { Box, View, Image, useToast } from 'native-base'
 import { FlatList } from 'react-native'
 import type { FlatList as RNFlatList } from 'react-native'

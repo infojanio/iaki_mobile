@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { FlatList } from 'react-native'
 import {
   Box,
   Text,
   VStack,
   HStack,
   Image,
-  FlatList,
   Spinner,
   useToast,
   Badge,

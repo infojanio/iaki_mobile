@@ -1,7 +1,7 @@
 import { useContext, useState } from 'react'
 import { useNavigation } from '@react-navigation/native'
-
-import { FlatList, VStack, HStack, Text, useToast } from 'native-base'
+import { FlatList } from 'react-native'
+import { VStack, HStack, Text, useToast } from 'native-base'
 
 import { ProductCard } from '@components/Product/ProductCard'
 

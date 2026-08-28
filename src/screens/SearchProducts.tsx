@@ -6,16 +6,8 @@ import React, {
   useRef,
   useState,
 } from 'react'
-
-import {
-  Box,
-  FlatList,
-  HStack,
-  Icon,
-  Text,
-  VStack,
-  useToast,
-} from 'native-base'
+import { FlatList } from 'react-native'
+import { Box, HStack, Icon, Text, VStack, useToast } from 'native-base'
 import { TextInput, StyleSheet, Pressable, RefreshControl } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { MaterialIcons } from '@expo/vector-icons'

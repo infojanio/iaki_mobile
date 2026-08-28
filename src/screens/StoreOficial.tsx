@@ -6,7 +6,7 @@ import React, {
   useContext,
 } from 'react'
 import { FlatList, TextInput, StyleSheet } from 'react-native'
-import { Box, HStack, Text, useToast } from 'native-base'
+import { Text, useToast } from 'native-base'
 import {
   useNavigation,
   useRoute,
@@ -30,11 +30,12 @@ import { StoreHeader } from '@components/Store/StoreHeader'
 import { Loading } from '@components/Loading'
 
 import { Reel } from '@components/Reel'
-import { StoreList } from '../components/StoreListContent'
+
 import { Promotion } from '@components/Promotion'
 import { SeparatorItem } from '@components/SeparatorItem'
 import { SubCategoryDTO } from '@dtos/SubCategoryDTO'
 import { CategoryDTO } from '@dtos/CategoryDTO'
+import { StoreList } from './StoreList'
 
 // -------------------- utils --------------------
 const removeAccents = (str: string) =>

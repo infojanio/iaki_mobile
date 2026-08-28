@@ -1,6 +1,7 @@
 import { HStack, VStack, Text, Box, Icon } from 'native-base'
 
-import { MaterialCommunityIcons, Feather, AntDesign } from '@expo/vector-icons'
+import { MaterialCommunityIcons, Feather } from '@expo/vector-icons'
+import { Ionicons } from '@expo/vector-icons'
 
 export function BenefitsBar() {
   return (
@@ -76,7 +77,11 @@ export function BenefitsBar() {
         {/* Vantagens */}
         <HStack flex={1} alignItems="center">
           <Box bg="orange.100" p={3} borderRadius="full" mr={2}>
-            <Icon as={AntDesign} name="staro" size={5} color="orange.500" />
+            <Ionicons
+              name={File ? 'star' : 'star-outline'}
+              size={18}
+              color="#FFD700"
+            />
           </Box>
 
           <VStack flex={1}>

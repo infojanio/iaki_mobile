@@ -1,5 +1,5 @@
 import React from 'react'
-import { Box, Text, Icon, VStack, HStack, Link } from 'native-base'
+import { Box, Text, Icon, VStack, HStack, Link, Center } from 'native-base'
 import { MaterialIcons } from '@expo/vector-icons'
 import { TouchableOpacity } from 'react-native'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
@@ -34,9 +34,7 @@ export function CashbackRegulationCard() {
         }}
         onPress={() => handleOpenAbout()}
       >
-        <Text style={{ fontSize: 16, color: '#374151' }}>
-          ℹ️ Sobre o sistema
-        </Text>
+        <Text style={{ fontSize: 16, color: '#374151' }}>ℹ️ Informações</Text>
       </TouchableOpacity>
       <HStack space={2} alignItems="center" mb={3}>
         <Icon as={MaterialIcons} name="info" size="md" color="primary.500" />
@@ -114,13 +112,33 @@ export function CashbackRegulationCard() {
               fontWeight: 'medium',
               textDecoration: 'none',
             }}
-            href="https://iaki.com.br"
+            href=""
             isExternal
           >
             Depois troque por brindes na loja.
           </Link>
         </Text>
       </Box>
+      <Center>
+        <TouchableOpacity
+          style={{
+            marginLeft: 8,
+            marginTop: 4,
+            marginBottom: 16,
+            paddingVertical: 4,
+            borderBottomWidth: 1,
+            borderBottomColor: '#c0cbe1ff',
+          }}
+          onPress={() => handleOpenAbout()}
+        >
+          <Text style={{ fontSize: 16, color: '#374151' }}>
+            ➡️ Política de Privacidade
+          </Text>
+          <Text style={{ fontSize: 16, color: '#374151' }}>
+            ➡️ Termos de Uso
+          </Text>
+        </TouchableOpacity>
+      </Center>
     </Box>
   )
 }

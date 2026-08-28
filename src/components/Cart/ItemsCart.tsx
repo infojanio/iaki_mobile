@@ -1,4 +1,5 @@
-import { FlatList, VStack, Text, useToast } from 'native-base'
+import { VStack, Text, useToast } from 'native-base'
+import { FlatList } from 'react-native'
 import { useContext } from 'react'
 
 import { CartContext } from '@contexts/CartContext'

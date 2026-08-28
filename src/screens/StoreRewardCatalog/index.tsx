@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react'
+import { FlatList } from 'react-native'
 import {
   Box,
   Text,
-  FlatList,
   Button,
   VStack,
   HStack,

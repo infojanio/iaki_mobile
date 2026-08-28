@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useContext, useCallback } from 'react'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
+import { FlatList } from 'react-native'
 import {
   Box,
   Text,
@@ -7,7 +8,6 @@ import {
   HStack,
   Image,
   Button,
-  FlatList,
   Divider,
   useToast,
   ArrowBackIcon,

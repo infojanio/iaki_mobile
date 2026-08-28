@@ -1,9 +1,8 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
-
+import { FlatList } from 'react-native'
 import {
   Box,
   Center,
-  FlatList,
   Heading,
   HStack,
   Text,

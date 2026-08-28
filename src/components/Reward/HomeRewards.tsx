@@ -1,12 +1,5 @@
-import {
-  Box,
-  FlatList,
-  HStack,
-  Pressable,
-  Spinner,
-  Text,
-  VStack,
-} from 'native-base'
+import { FlatList } from 'react-native'
+import { Box, HStack, Pressable, Spinner, Text, VStack } from 'native-base'
 
 import { RewardDTO } from '@dtos/RewardDTO'
 

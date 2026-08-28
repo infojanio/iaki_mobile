@@ -1,14 +1,12 @@
 import { useRoute, useNavigation } from '@react-navigation/native'
 import { TextInput } from 'react-native'
-
+import { FlatList } from 'react-native'
 import {
   Box,
   VStack,
   Text,
-  FlatList,
   HStack,
   IconButton,
-  Input,
   Button,
   useTheme,
 } from 'native-base'

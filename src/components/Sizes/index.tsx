@@ -1,4 +1,5 @@
-import { FlatList, Heading, VStack } from 'native-base'
+import { Heading, VStack } from 'native-base'
+import { FlatList } from 'react-native'
 
 import { Size } from '../Size'
 

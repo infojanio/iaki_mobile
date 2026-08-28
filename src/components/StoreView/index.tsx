@@ -1,5 +1,6 @@
 import { useContext, useEffect, useState } from 'react'
-import { Box, FlatList, Text, VStack, useToast } from 'native-base'
+import { Box, Text, VStack, useToast } from 'native-base'
+import { FlatList } from 'react-native'
 import { useRoute, useNavigation } from '@react-navigation/native'
 
 import { api } from '@services/api'
@@ -7,7 +8,7 @@ import { AppError } from '@utils/AppError'
 
 import { StoreDTO } from '@dtos/StoreDTO'
 import { Loading } from '@components/Loading'
-import { HomeScreen } from '@components/HomeScreen'
+
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CityContext } from '@contexts/CityContext'
 import { StoreCard } from '@components/Store/StoreCard'

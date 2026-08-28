@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
-
-import { Box, FlatList, HStack, Text, useToast, VStack } from 'native-base'
+import { FlatList } from 'react-native'
+import { Box, HStack, Text, useToast, VStack } from 'native-base'
 
 import { ListRenderItem, TouchableOpacity } from 'react-native'
 

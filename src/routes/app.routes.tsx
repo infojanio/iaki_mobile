@@ -1,4 +1,4 @@
-import { Platform } from 'react-native'
+import { Platform, View } from 'react-native'
 import { useTheme } from 'native-base'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -46,13 +46,31 @@ import { CartTabIcon } from '@components/CartTabIcon'
 import { StoreRatings } from '@screens/StoreRatings'
 import { StoreRewardCatalog } from '@screens/StoreRewardCatalog'
 import { RewardQRCodeScreen } from '@screens/RewardQRCodeScreen'
-import { StoreListContent } from '@components/StoreListContent'
 import { Rewards } from '@screens/Rewards'
 import { StoreList } from '@screens/StoreList'
 
 /* =======================
    TIPAGEM DAS ROTAS
 ======================= */
+
+type TabIconBoxProps = {
+  children: React.ReactNode
+}
+
+function TabIconBox({ children }: TabIconBoxProps) {
+  return (
+    <View
+      style={{
+        width: 24,
+        height: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {children}
+    </View>
+  )
+}
 
 type AppRoutes = {
   home: undefined
@@ -99,15 +117,23 @@ export type AppNavigatorRoutesProps = BottomTabNavigationProp<AppRoutes>
 
 const { Navigator, Screen } = createBottomTabNavigator<AppRoutes>()
 
+const hiddenTabOptions = {
+  tabBarButton: () => null,
+
+  tabBarItemStyle: {
+    display: 'none' as const,
+  },
+}
+
 /* =======================
    APP TABS
 ======================= */
 
 export function AppRoutes() {
-  const { sizes, colors } = useTheme()
-  const iconSize = sizes[5]
+  const { colors } = useTheme()
   const insets = useSafeAreaInsets()
   const { isAdmin } = useAuth()
+  const iconSize = isAdmin ? 24 : 20
 
   // 🔥 AQUI ESTÁ O AJUSTE PRINCIPAL
   const { cartBadgeCount } = useContext(CartContext)
@@ -117,16 +143,51 @@ export function AppRoutes() {
       initialRouteName="home"
       screenOptions={{
         headerShown: false,
+
         tabBarShowLabel: true,
+        tabBarLabelPosition: 'below-icon',
+
         tabBarActiveTintColor: colors.green[500],
         tabBarInactiveTintColor: colors.blueGray[800],
+
+        tabBarHideOnKeyboard: true,
+
         tabBarStyle: {
           backgroundColor: colors.gray[100],
           borderTopWidth: 1,
+
           height:
-            Platform.OS === 'android' ? 52 + insets.bottom : 55 + insets.bottom,
-          paddingBottom: Math.max(insets.bottom, sizes[2]),
-          paddingTop: sizes[2],
+            Platform.OS === 'android' ? 68 + insets.bottom : 70 + insets.bottom,
+
+          paddingTop: 6,
+          paddingBottom: Math.max(insets.bottom, 6),
+        },
+
+        tabBarItemStyle: {
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingHorizontal: 2,
+        },
+
+        tabBarIconStyle: {
+          width: 24,
+          height: 24,
+
+          alignItems: 'center',
+          justifyContent: 'center',
+
+          marginTop: 0,
+          marginBottom: 3,
+        },
+
+        tabBarLabelStyle: {
+          fontSize: isAdmin ? 8 : 10,
+          lineHeight: isAdmin ? 10 : 12,
+
+          textAlign: 'center',
+
+          marginTop: 0,
+          marginBottom: 0,
         },
       }}
     >
@@ -137,7 +198,9 @@ export function AppRoutes() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => (
-            <HomeSvg fill={color} width={iconSize} height={iconSize} />
+            <TabIconBox>
+              <HomeSvg fill={color} width={iconSize} height={iconSize} />
+            </TabIconBox>
           ),
         }}
       />
@@ -149,7 +212,9 @@ export function AppRoutes() {
         options={{
           title: 'Pesquisar',
           tabBarIcon: ({ color }) => (
-            <SearchSvg fill={color} width={iconSize} height={iconSize} />
+            <TabIconBox>
+              <SearchSvg fill={color} width={iconSize} height={iconSize} />
+            </TabIconBox>
           ),
         }}
       />
@@ -161,10 +226,13 @@ export function AppRoutes() {
         options={{
           title: 'Carrinho',
           tabBarIcon: ({ color }) => (
-            <CartTabIcon
-              color={color}
-              badgeCount={cartBadgeCount} // 🔥 AQUI
-            />
+            <TabIconBox>
+              <CartTabIcon
+                color={color}
+                badgeCount={cartBadgeCount}
+                size={iconSize}
+              />
+            </TabIconBox>
           ),
         }}
       />
@@ -176,7 +244,9 @@ export function AppRoutes() {
         options={{
           title: 'Pedidos',
           tabBarIcon: ({ color }) => (
-            <RequestSvg fill={color} width={iconSize} height={iconSize} />
+            <TabIconBox>
+              <RequestSvg fill={color} width={iconSize} height={iconSize} />
+            </TabIconBox>
           ),
         }}
       />
@@ -189,7 +259,9 @@ export function AppRoutes() {
           options={{
             title: 'Validar',
             tabBarIcon: ({ color }) => (
-              <CashbackSvg fill={color} width={iconSize} height={iconSize} />
+              <TabIconBox>
+                <CashbackSvg fill={color} width={iconSize} height={iconSize} />
+              </TabIconBox>
             ),
           }}
         />
@@ -202,128 +274,110 @@ export function AppRoutes() {
         options={{
           title: 'Pontos',
           tabBarIcon: ({ color }) => (
-            <ProfileSvg fill={color} width={iconSize} height={iconSize} />
+            <TabIconBox>
+              <ProfileSvg fill={color} width={iconSize} height={iconSize} />
+            </TabIconBox>
           ),
         }}
       />
 
       {/* ===== ROTAS OCULTAS ===== */}
-      <Screen
-        name="checkout"
-        component={Checkout}
-        options={{ tabBarButton: () => null }}
-      />
+      <Screen name="checkout" component={Checkout} options={hiddenTabOptions} />
       <Screen
         name="orderConfirmation"
         component={OrderConfirmation}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
       <Screen
         name="profileEdit"
         component={ProfileEdit}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
       <Screen
         name="productList"
         component={ProductList}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
 
       <Screen
         name="storeList"
         component={StoreList}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
 
       <Screen
         name="storeProducts"
         component={StoreProducts}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
       <Screen
         name="storeByCategory"
         component={StoresByBusiness}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
       <Screen
         name="storesByBusiness"
         component={StoresByBusiness}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
       <Screen
         name="productDetails"
         component={ProductDetails}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
       <Screen
         name="productsBySubCategory"
         component={ProductsBySubCategory}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
       <Screen
         name="productsByStore"
         component={ProductsByStore}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
       <Screen
         name="productBySubCategory"
         component={ProductBySubCategory}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
-      <Screen
-        name="category"
-        component={Category}
-        options={{ tabBarButton: () => null }}
-      />
+      <Screen name="category" component={Category} options={hiddenTabOptions} />
       <Screen
         name="allProductsQuantity"
         component={AllProductsQuantity}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
       <Screen
         name="allProductsDiscount"
         component={AllProductsDiscount}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
 
-      <Screen
-        name="rewards"
-        component={Rewards}
-        options={{ tabBarButton: () => null }}
-      />
+      <Screen name="rewards" component={Rewards} options={hiddenTabOptions} />
 
-      <Screen
-        name="about"
-        component={About}
-        options={{ tabBarButton: () => null }}
-      />
+      <Screen name="about" component={About} options={hiddenTabOptions} />
       <Screen
         name="privacy"
         component={PrivacyPolicy}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
-      <Screen
-        name="terms"
-        component={TermsOfUse}
-        options={{ tabBarButton: () => null }}
-      />
+      <Screen name="terms" component={TermsOfUse} options={hiddenTabOptions} />
 
       <Screen
         name="storeRatings"
         component={StoreRatings}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
 
       <Screen
         name="storeRewardCatalog"
         component={StoreRewardCatalog}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
 
       <Screen
         name="rewardQRCode"
         component={RewardQRCodeScreen}
-        options={{ tabBarButton: () => null }}
+        options={hiddenTabOptions}
       />
     </Navigator>
   )

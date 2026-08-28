@@ -1,6 +1,6 @@
 import { useContext, useEffect, useRef, useState } from 'react'
-
-import { Box, Text, FlatList, VStack, useToast, Center } from 'native-base'
+import { FlatList } from 'react-native'
+import { Box, Text, VStack, useToast, Center } from 'native-base'
 
 import { useNavigation, useRoute } from '@react-navigation/native'
 

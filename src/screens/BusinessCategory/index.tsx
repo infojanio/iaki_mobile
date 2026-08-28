@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from 'react'
-import { FlatList, HStack, VStack, useToast } from 'native-base'
-
+import { HStack, VStack, useToast } from 'native-base'
+import { FlatList } from 'react-native'
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 
