@@ -1,54 +1,65 @@
 import { useEffect, useState } from 'react'
-import { FlatList, HStack, VStack, useToast } from 'native-base'
+
+import { HStack, VStack, useToast } from 'native-base'
+
+import { FlatList } from 'react-native'
+
+import { useNavigation, useRoute } from '@react-navigation/native'
 
 import { api } from '@services/api'
+
 import { AppError } from '@utils/AppError'
 
 import { CategoryCard } from '@components/Category/CategoryCard'
 
-import { useNavigation, useRoute } from '@react-navigation/native'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
+
 import { CategoryDTO } from '@dtos/CategoryDTO'
+
 import { Loading } from '@components/Loading'
 
 type RouteParamsProps = {
-  categoryId: string
-  //  companyId: string
-}
-
-type Props = {
-  category: string
-  data: CategoryDTO[]
+  storeId: string
 }
 
 export function Category() {
   const [categories, setCategories] = useState<CategoryDTO[]>([])
+
   const [isLoading, setIsLoading] = useState(true)
+
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   )
 
   const navigation = useNavigation<AppNavigatorRoutesProps>()
+
+  const route = useRoute()
+
+  const { storeId } = route.params as RouteParamsProps
+
   const toast = useToast()
 
-  function handleOpenSubCategories(categoryId: string, subcategoryId?: string) {
+  function handleOpenSubCategories(categoryId: string) {
     setSelectedCategoryId(categoryId)
-    navigation.navigate('productsBySubCategory', { categoryId, subcategoryId })
+
+    navigation.navigate('productsBySubCategory', {
+      categoryId,
+      storeId,
+    })
   }
 
-  //listar as categorias
   async function fetchCategories() {
     try {
       setIsLoading(true)
-      //const response = await api.get(`/companies/company/?company_id=${companyId}`,
-      const response = await api.get(`/categories`)
 
-      //const response = await api.get('/categories/category/?categoryId=${categoryId}')
+      const response = await api.get<CategoryDTO[]>(
+        `/stores/${storeId}/categories`,
+      )
 
-      setCategories(response.data)
-      // console.log(response.data)
+      setCategories(response.data ?? [])
     } catch (error) {
       const isAppError = error instanceof AppError
+
       const title = isAppError
         ? error.message
         : 'Não foi possível carregar as categorias cadastradas'
@@ -64,8 +75,12 @@ export function Category() {
   }
 
   useEffect(() => {
+    if (!storeId) {
+      return
+    }
+
     fetchCategories()
-  }, [])
+  }, [storeId])
 
   return (
     <HStack>
@@ -85,9 +100,10 @@ export function Category() {
             )}
             horizontal
             showsHorizontalScrollIndicator={false}
-            _contentContainerStyle={{ px: 2 }}
-            mt={2}
-            mb={2}
+            contentContainerStyle={{
+              paddingHorizontal: 8,
+              paddingVertical: 8,
+            }}
           />
         </VStack>
       )}

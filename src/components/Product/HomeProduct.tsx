@@ -6,7 +6,7 @@ import { Center, HStack, Icon, useTheme, Text, VStack } from 'native-base'
 import { MaterialIcons } from '@expo/vector-icons'
 
 import { Input } from '@components/Input'
-import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { AuthNavigatorRoutesProps } from '@routes/auth.routes'
 import { useNavigation } from '@react-navigation/native'
 import { ProductDTO } from '@dtos/ProductDTO'
 
@@ -15,7 +15,7 @@ type Props = {
 }
 
 export function HomeProduct() {
-  const navigation = useNavigation<AppNavigatorRoutesProps>()
+  const navigation = useNavigation<AuthNavigatorRoutesProps>()
 
   //definição do tamanho dos ícones
   const { sizes, colors } = useTheme()
@@ -54,7 +54,7 @@ export function HomeProduct() {
           />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('signUp')}>
+        <TouchableOpacity onPress={() => navigation.navigate('signup')}>
           <Text fontSize={16}>Categoria</Text>
         </TouchableOpacity>
 

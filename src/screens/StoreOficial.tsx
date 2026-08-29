@@ -456,7 +456,7 @@ export function StoreProducts() {
           <SeparatorItem />
 
           <Promotion />
-          <StoreList category={''} data={[]} />
+          <StoreList />
 
           <Reel />
           {/* Search */}

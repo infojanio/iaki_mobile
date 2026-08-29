@@ -436,7 +436,7 @@ export function ProductList() {
           maxToRenderPerBatch={6}
           windowSize={5}
           updateCellsBatchingPeriod={50}
-          _contentContainerStyle={{
+          contentContainerStyle={{
             marginLeft: 2,
             paddingBottom: 32,
           }}

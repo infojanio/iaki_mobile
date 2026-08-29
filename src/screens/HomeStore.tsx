@@ -15,13 +15,10 @@ import { Category } from '@components/Category'
 import { Promotion } from '@components/Promotion'
 import { Loading } from '@components/Loading'
 
-import { InstagramReelsCarousel } from './InstagramReelsCarousel'
 import { CashbackRegulationCard } from './CashbackRegulationCard'
 import { CartContext } from '@contexts/CartContext'
 import { Reel } from '@components/Reel'
-import { CategoryList } from './CategoryList'
-import { ProductCashback } from './Product/ProductCashback'
-import { ProductQuantity } from './Product/ProductQuantity'
+
 import { LocationSelector } from '@components/LocationSelector'
 
 export function Home() {
@@ -70,7 +67,7 @@ export function Home() {
   // Efeito para carregar o carrinho inicial
   useEffect(() => {
     if (userId) {
-      fetchCart()
+      fetchCart('storeId')
     }
   }, [userId])
 
@@ -91,10 +88,9 @@ export function Home() {
             <Promotion />
 
             {/* Aqui passamos produtos para os componentes */}
-            <ProductCashback />
-            <ProductQuantity />
+
             <Reel />
-            <CategoryList />
+
             <CashbackRegulationCard />
           </VStack>
         </ScrollView>

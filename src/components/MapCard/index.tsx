@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { StyleSheet } from 'react-native'
 import { HStack, Text } from 'native-base'
 import { useNavigation } from '@react-navigation/native'
-import { StackNavigatorRoutesProps } from '@routes/stack.routes'
+
 import { api } from '@services/api'
 import LocationSvg from '@assets/location.svg'
 import { useAuth } from '@hooks/useAuth'
+import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
 type Props = {
   handleLayoutChange: (event: any) => void
@@ -19,7 +20,7 @@ type Address = {
 }
 
 export function MapCard({ handleLayoutChange }: Props) {
-  const navigation = useNavigation<StackNavigatorRoutesProps>()
+  const navigation = useNavigation<AppNavigatorRoutesProps>()
   const { userId } = useAuth()
   const [address, setAddress] = useState<Address | null>(null)
 

@@ -171,8 +171,6 @@ export function StoreRewardCatalog() {
         <FlatList
           data={rewards.filter((r) => r.isActive)}
           keyExtractor={(item) => item.id}
-          px={4}
-          mt={4}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
@@ -243,8 +241,6 @@ export function StoreRewardCatalog() {
         <FlatList
           data={pending}
           keyExtractor={(item) => item.id}
-          px={4}
-          mt={4}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }

@@ -6,7 +6,6 @@ import {
   VStack,
   HStack,
   Image,
-  FlatList,
   Spinner,
   useToast,
   Badge,
@@ -24,6 +23,7 @@ import { formatCurrency } from '@utils/format'
 import { useFocusEffect } from '@react-navigation/native'
 
 import { HomeScreen } from '@components/HomeScreen'
+import { FlatList } from 'react-native'
 
 interface Product {
   id: string

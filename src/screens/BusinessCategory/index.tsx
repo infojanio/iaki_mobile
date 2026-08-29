@@ -98,8 +98,12 @@ export function BusinessCategory() {
           )}
           horizontal
           showsHorizontalScrollIndicator={false}
-          _contentContainerStyle={{ px: 2 }}
-          mt={2}
+          contentContainerStyle={{
+            paddingHorizontal: 2,
+          }}
+          style={{
+            marginTop: 2,
+          }}
         />
       </VStack>
     </HStack>

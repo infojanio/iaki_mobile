@@ -13,7 +13,7 @@ import {
   mapStandardPng,
   mapSatellitePng,
   CloseSvg,
-} from '../../assets'
+} from '@assets/map_terrain.png'
 
 interface Props {
   handleLayoutChange: (event: LayoutChangeEvent) => void

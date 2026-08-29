@@ -7,7 +7,7 @@ import LogoPng from '@assets/logoInitial.png'
 
 import { useNavigation } from '@react-navigation/native'
 import { TouchableOpacity } from 'react-native'
-import { CitySelect } from '@utils/CitySelect'
+import { SelectCity } from '@screens/SelectCity'
 
 export function Initial() {
   const navigation = useNavigation<AuthNavigatorRoutesProps>()
@@ -27,7 +27,7 @@ export function Initial() {
         marginTop={2}
       >
         <Text color={'blue.700'} fontWeight={'bold'} fontSize={'24'}>
-          @iCompras
+          @IAki
         </Text>
 
         <Text color={'blue.700'} fontSize={'16'}>
@@ -45,12 +45,12 @@ export function Initial() {
         padding={4}
         pb={2}
       >
-        <CitySelect />
+        <SelectCity />
 
         <Box mt={4}>
           <Button
             title="Entrar como visitante"
-            onPress={() => navigation.navigate('cityselect')}
+            onPress={() => navigation.navigate('signup')}
           />{' '}
         </Box>
       </VStack>

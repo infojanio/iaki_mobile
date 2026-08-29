@@ -55,9 +55,8 @@ export function MapClient() {
     let { status } = await Location.requestForegroundPermissionsAsync()
     if (status !== 'granted') return
 
-    const { latitude, longitude } = (
-      await Location.getCurrentPositionAsync({})
-    ).coords
+    const { latitude, longitude } = (await Location.getCurrentPositionAsync({}))
+      .coords
     const region = {
       latitude,
       longitude,

@@ -102,7 +102,9 @@ type AppRoutes = {
   productBySubCategory: { categoryId: string; storeId: string }
   storeByCategory: { businessCategoryId: string }
   storesByBusiness: { businessCategoryId: string }
-  category: undefined
+  category: {
+    storeId: string
+  }
   allProductsQuantity: undefined
   allProductsDiscount: undefined
   about: undefined

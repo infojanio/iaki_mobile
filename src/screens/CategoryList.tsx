@@ -24,9 +24,10 @@ import { AppNavigatorRoutesProps } from '@routes/app.routes'
 type Props = {
   /** defina true quando esta lista estiver DENTRO de um ScrollView pai */
   insideScrollView?: boolean
+  storeId: string
 }
 
-export function CategoryList({ insideScrollView = true }: Props) {
+export function CategoryList({ insideScrollView = true, storeId }: Props) {
   const [categories, setCategories] = useState<CategoryDTO[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -89,7 +90,11 @@ export function CategoryList({ insideScrollView = true }: Props) {
   }, [])
 
   function handleOpenSubcategory(categoryId: string, subcategoryId: string) {
-    navigation.navigate('productsBySubCategory', { categoryId, subcategoryId })
+    navigation.navigate('productsBySubCategory', {
+      categoryId,
+      subcategoryId,
+      storeId,
+    })
   }
 
   if (isLoading) return <Loading />

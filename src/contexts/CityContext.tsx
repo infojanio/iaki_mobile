@@ -17,7 +17,7 @@ export type City = {
   uf: string
 }
 
-type CityContextData = {
+export type CityContextData = {
   city: City | null
   cityBanners: BannerDTO[]
   isLoading: boolean

@@ -1,7 +1,8 @@
 import { TouchableOpacity, StyleSheet } from 'react-native'
 import { View } from 'native-base'
 
-import { PlusSvg, CloseSvg } from '../../assets'
+import CloseSvg from '../../assets/Hold.svg'
+import PlusSvg from '../../assets/brand.svg'
 
 interface Props {
   mBottom: number

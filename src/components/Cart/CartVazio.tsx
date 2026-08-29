@@ -7,7 +7,7 @@ import { Button } from '@components/Button'
 export function CartVazio() {
   return (
     <VStack>
-      <HomeCart title={'Carrinho'} price={1435.52} quantity={0} />
+      <HomeCart title={'Carrinho'} price={1435.52} quantity={0} productId="" />
       <Box h={280} alignItems={'center'} justifyContent={'center'}>
         <Image
           alt="Carrinho Vazio"

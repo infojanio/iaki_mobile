@@ -14,7 +14,6 @@ import { ListRenderItem } from 'react-native'
 
 import { useNavigation, useRoute } from '@react-navigation/native'
 
-import { HomeProduct } from '@components/Product/HomeProduct'
 import { Loading } from '@components/Loading'
 import { ProductCard } from '@components/Product/ProductCard'
 import { SubcategoryCard } from '@components/Product/SubcategoryCard'
@@ -28,6 +27,7 @@ import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { api } from '@services/api'
 
 import { AppError } from '@utils/AppError'
+import { BackHome } from '@components/BackHome'
 
 type RouteParamsProps = {
   categoryId: string
@@ -436,7 +436,7 @@ export function ProductCategory() {
 
   return (
     <VStack flex={1}>
-      <HomeProduct />
+      <BackHome title="" />
 
       <Box flex={1} ml={-6} mt={-6}>
         {isLoading ? (
@@ -448,13 +448,16 @@ export function ProductCategory() {
             keyExtractor={(item) => item.id}
             renderItem={renderProductSelector}
             showsHorizontalScrollIndicator={false}
-            _contentContainerStyle={{
-              px: 8,
+            contentContainerStyle={{
+              paddingHorizontal: 32,
+              alignItems: 'center',
             }}
-            mt={6}
-            mb={2}
-            maxH={12}
-            minH={10}
+            style={{
+              marginTop: 24,
+              marginBottom: 8,
+              minHeight: 40,
+              maxHeight: 48,
+            }}
             initialNumToRender={8}
             maxToRenderPerBatch={8}
             windowSize={5}
@@ -493,7 +496,7 @@ export function ProductCategory() {
               maxToRenderPerBatch={8}
               updateCellsBatchingPeriod={50}
               windowSize={7}
-              _contentContainerStyle={{
+              contentContainerStyle={{
                 marginLeft: 8,
                 paddingBottom: 32,
               }}

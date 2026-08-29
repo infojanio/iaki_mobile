@@ -27,9 +27,14 @@ export function Sizes({ onSelect, selected }: Props) {
         )}
         horizontal
         showsHorizontalScrollIndicator={false}
-        _contentContainerStyle={{ pr: 8 }}
-        maxH={10}
-        minH={10}
+        contentContainerStyle={{
+          paddingRight: 32,
+          alignItems: 'center',
+        }}
+        style={{
+          minHeight: 40,
+          maxHeight: 40,
+        }}
       />
     </VStack>
   )

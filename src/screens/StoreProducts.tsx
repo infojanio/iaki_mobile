@@ -500,12 +500,9 @@ export function StoreProducts() {
                       }}
                     />
                   )}
-                  _contentContainerStyle={{
-                    px: 2,
+                  contentContainerStyle={{
+                    paddingHorizontal: 2,
                   }}
-                  mt={2}
-                  mb={2}
-                  maxH={12}
                 />
               ) : (
                 <Center mt={4}>

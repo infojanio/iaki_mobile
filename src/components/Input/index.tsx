@@ -1,6 +1,5 @@
-import React, { forwardRef } from 'react'
+import React, { forwardRef, JSX } from 'react'
 import { TextInput, View, Text, StyleSheet, TextInputProps } from 'react-native'
-import { MaterialIcons } from '@expo/vector-icons' // ou qualquer ícone que você use
 
 type InputProps = {
   label?: string

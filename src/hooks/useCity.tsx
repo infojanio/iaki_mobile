@@ -1,7 +1,7 @@
 import { useContext } from 'react'
-import { CityContext, CityContextDataProps } from '@contexts/CityContext'
+import { CityContext, CityContextData } from '@contexts/CityContext'
 
-export function useCity(): CityContextDataProps {
+export function useCity(): CityContextData {
   const context = useContext(CityContext)
 
   return context
