@@ -146,6 +146,14 @@ export function ProductCard({
 
           {discountPercent > 0 ? (
             <Center>
+              <Text
+                color={'red.500'}
+                fontSize={10}
+                numberOfLines={1}
+                textAlign="center"
+              >
+                {data.store?.name}
+              </Text>
               <Text fontSize="xs" color="gray.400" strikeThrough>
                 R$ {originalPrice.toFixed(2)}
               </Text>

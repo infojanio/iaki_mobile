@@ -451,7 +451,7 @@ export function SearchProducts() {
           <TextInput
             ref={inputRef}
             style={styles.input}
-            placeholder="Buscar produtos no IAki"
+            placeholder="Buscar por produto ou loja"
             placeholderTextColor="#94A3B8"
             value={searchTerm}
             onChangeText={handleSearchChange}

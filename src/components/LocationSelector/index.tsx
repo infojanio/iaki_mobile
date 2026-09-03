@@ -1,5 +1,5 @@
 import { Pressable } from 'react-native'
-import { HStack, Text, Icon, useTheme } from 'native-base'
+import { HStack, Text, Icon, useTheme, Box } from 'native-base'
 import { MaterialIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 
@@ -21,7 +21,7 @@ export function LocationSelector() {
 
   return (
     <Pressable onPress={handleChangeCity}>
-      <HStack alignItems="center" space={1} ml={2}>
+      <HStack alignItems="center" space={1}>
         <Icon
           as={MaterialIcons}
           name="location-on"
@@ -30,7 +30,7 @@ export function LocationSelector() {
         />
 
         <Text
-          fontSize="14"
+          fontSize="12"
           fontWeight="bold"
           color="gray.800"
           numberOfLines={1}
@@ -38,12 +38,14 @@ export function LocationSelector() {
           {city ? `${city.name}` : 'Selecionar cidade'}
         </Text>
 
-        <Icon
-          as={MaterialIcons}
-          name="expand-more"
-          size={sizes[2]}
-          color={colors.gray[500]}
-        />
+        <Box ml={-2}>
+          <Icon
+            as={MaterialIcons}
+            name="expand-more"
+            size={sizes[2]}
+            color={colors.gray[500]}
+          />
+        </Box>
       </HStack>
     </Pressable>
   )

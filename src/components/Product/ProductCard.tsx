@@ -66,15 +66,15 @@ export function ProductCard({
       mt={1}
       mb={1}
       w={120}
-      borderRadius="xl"
-      shadow={1}
       minH={230}
       bg="white"
-      rounded="lg"
+      borderRadius="xl"
       borderWidth={2}
       borderColor="gray.100"
+      shadow={1}
     >
-      {/* Área que abre os detalhes */}
+      {/* ÁREA QUE ABRE OS DETALHES */}
+
       <TouchableOpacity
         {...rest}
         activeOpacity={0.8}
@@ -84,6 +84,22 @@ export function ProductCard({
         }}
       >
         <Center width="100%">
+          {/* LOJA */}
+
+          <Text
+            maxW="100%"
+            px={2}
+            borderBottomWidth={2}
+            borderColor="green.500"
+            fontSize={10}
+            numberOfLines={1}
+            textAlign="center"
+          >
+            {product.store?.name}
+          </Text>
+
+          {/* IMAGEM */}
+
           <Image
             mt={2}
             w={100}
@@ -96,9 +112,12 @@ export function ProductCard({
             resizeMode="contain"
           />
 
+          {/* NOME */}
+
           <Text
             mt={1}
             px={2}
+            width="100%"
             minH={6}
             fontSize="sm"
             color="black"
@@ -108,6 +127,8 @@ export function ProductCard({
           >
             {product.name}
           </Text>
+
+          {/* PREÇO */}
 
           {discountPercent > 0 ? (
             <>
@@ -127,24 +148,32 @@ export function ProductCard({
         </Center>
       </TouchableOpacity>
 
-      {/* Informação de estoque */}
-      <Center mt={1}>
+      {/* ESTOQUE */}
+
+      <Center mt={1} px={2}>
         <Box
+          maxW="100%"
           bg={hasStock ? 'red.500' : 'gray.400'}
           rounded="md"
           px={2}
           py={0.5}
         >
-          <Text fontSize="xs" color="white" numberOfLines={1}>
+          <Text
+            fontSize="xs"
+            color="white"
+            numberOfLines={1}
+            textAlign="center"
+          >
             {hasStock ? `${stockQuantity} unidades` : 'Produto esgotado'}
           </Text>
         </Box>
       </Center>
 
-      {/* Controles do carrinho */}
-      <Center flex={1} mt={2} mb={2}>
+      {/* CONTROLES DO CARRINHO */}
+
+      <Box flex={1} width="100%" px={2} mt={2} mb={2} justifyContent="center">
         {isUpdating ? (
-          <Center h={10}>
+          <Center h={8}>
             <Spinner
               size="sm"
               color="blue.600"
@@ -152,42 +181,60 @@ export function ProductCard({
             />
           </Center>
         ) : cartQuantity === 0 ? (
-          <TouchableOpacity
-            onPress={handleIncrement}
-            disabled={!hasStock}
-            activeOpacity={hasStock ? 0.7 : 1}
-            accessibilityLabel={`Adicionar ${product.name}`}
-          >
-            <Center
-              w={12}
-              h={10}
-              rounded="lg"
-              bg={hasStock ? 'blue.600' : 'gray.300'}
+          /* BOTÃO INICIAL + */
+
+          <Center width="100%">
+            <TouchableOpacity
+              onPress={handleIncrement}
+              disabled={!hasStock}
+              activeOpacity={hasStock ? 0.7 : 1}
+              accessibilityLabel={`Adicionar ${product.name}`}
             >
-              <Icon as={Feather} name="plus" color="white" size="md" />
-            </Center>
-          </TouchableOpacity>
+              <Center
+                w={12}
+                h={8}
+                rounded="lg"
+                bg={hasStock ? 'blue.600' : 'gray.300'}
+              >
+                <Icon as={Feather} name="plus" color="white" size="md" />
+              </Center>
+            </TouchableOpacity>
+          </Center>
         ) : (
-          <HStack alignItems="center" justifyContent="center" space={2}>
+          /* - QUANTIDADE + */
+
+          <HStack
+            width="100%"
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            {/* MENOS */}
+
             <TouchableOpacity
               onPress={handleDecrement}
               activeOpacity={0.7}
               accessibilityLabel={`Remover uma unidade de ${product.name}`}
             >
-              <Center w={9} h={9} rounded="full" bg="gray.200">
+              <Center w={8} h={8} rounded="full" bg="gray.200">
                 <Icon as={Feather} name="minus" color="gray.700" size="sm" />
               </Center>
             </TouchableOpacity>
 
-            <Text
-              minW={6}
-              textAlign="center"
-              fontSize="md"
-              fontWeight="bold"
-              color="gray.800"
-            >
-              {cartQuantity}
-            </Text>
+            {/* QUANTIDADE */}
+
+            <Center w={6} h={8}>
+              <Text
+                textAlign="center"
+                fontSize="md"
+                fontWeight="bold"
+                color="gray.800"
+                numberOfLines={1}
+              >
+                {cartQuantity}
+              </Text>
+            </Center>
+
+            {/* MAIS */}
 
             <TouchableOpacity
               onPress={handleIncrement}
@@ -196,8 +243,8 @@ export function ProductCard({
               accessibilityLabel={`Adicionar mais uma unidade de ${product.name}`}
             >
               <Center
-                w={9}
-                h={9}
+                w={8}
+                h={8}
                 rounded="full"
                 bg={reachedStockLimit ? 'gray.300' : 'blue.600'}
               >
@@ -207,12 +254,21 @@ export function ProductCard({
           </HStack>
         )}
 
+        {/* LIMITE DE ESTOQUE */}
+
         {reachedStockLimit && cartQuantity > 0 && hasStock && (
-          <Text mt={1} fontSize="2xs" color="red.500" textAlign="center">
+          <Text
+            mt={1}
+            px={1}
+            fontSize="2xs"
+            color="red.500"
+            textAlign="center"
+            numberOfLines={1}
+          >
             Limite de estoque
           </Text>
         )}
-      </Center>
+      </Box>
     </VStack>
   )
 }

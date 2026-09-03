@@ -46,7 +46,7 @@ export function Promotion({ banners: bannersFromProps }: Props) {
         (firstBanner, secondBanner) =>
           firstBanner.position - secondBanner.position,
       )
-      .slice(0, 4)
+      .slice(0, 8)
   }, [bannersFromProps])
 
   useEffect(() => {

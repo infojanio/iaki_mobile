@@ -7,8 +7,8 @@ export function BenefitsBar() {
   return (
     <Box
       mx={4}
-      mt={4}
-      mb={4}
+      mt={1}
+      mb={1}
       bg="white"
       borderRadius={24}
       shadow={1}

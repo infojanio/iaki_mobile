@@ -5,7 +5,6 @@ import {
   HStack,
   VStack,
   Text,
-  Center,
   Image,
   Icon,
   useTheme,
@@ -15,8 +14,6 @@ import {
 import { MaterialIcons } from '@expo/vector-icons'
 import MarketPng from '@assets/novoLogo.png'
 import { useAuth } from '@hooks/useAuth'
-
-import { useCart } from '@hooks/useCart'
 
 import { LocationSelector } from '@components/LocationSelector'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'

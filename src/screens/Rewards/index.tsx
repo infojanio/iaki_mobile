@@ -1,16 +1,8 @@
 import { useCallback, useContext, useMemo, useState } from 'react'
 
-import { FlatList, RefreshControl } from 'react-native'
+import { FlatList, RefreshControl, TextInput } from 'react-native'
 
-import {
-  Box,
-  Center,
-  Input,
-  Spinner,
-  Text,
-  VStack,
-  useToast,
-} from 'native-base'
+import { Box, Center, Spinner, Text, VStack, useToast } from 'native-base'
 
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 
@@ -23,6 +15,7 @@ import { RewardDTO } from '@dtos/RewardDTO'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
 import { HomeScreen } from '@components/HomeScreen'
+
 import { RewardCard } from '@components/Reward/RewardCard'
 
 export function Rewards() {
@@ -39,6 +32,10 @@ export function Rewards() {
   const [isLoading, setIsLoading] = useState(true)
 
   const [refreshing, setRefreshing] = useState(false)
+
+  /* ======================================================
+     CARREGAR BRINDES
+  ====================================================== */
 
   const loadRewards = useCallback(async () => {
     if (!city?.id) {
@@ -69,8 +66,11 @@ export function Rewards() {
 
       toast.show({
         title: 'Não foi possível carregar os brindes.',
+
         description: error?.response?.data?.message,
+
         placement: 'top',
+
         bgColor: 'red.500',
       })
     } finally {
@@ -79,6 +79,10 @@ export function Rewards() {
     }
   }, [city?.id, toast])
 
+  /* ======================================================
+     ATUALIZAR AO ENTRAR NA TELA
+  ====================================================== */
+
   useFocusEffect(
     useCallback(() => {
       setIsLoading(true)
@@ -86,6 +90,10 @@ export function Rewards() {
       loadRewards()
     }, [loadRewards]),
   )
+
+  /* ======================================================
+     FILTRAR BRINDES
+  ====================================================== */
 
   const filteredRewards = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR')
@@ -101,7 +109,7 @@ export function Rewards() {
         return true
       }
 
-      const rewardName = reward.title.toLocaleLowerCase('pt-BR')
+      const rewardName = reward.title?.toLocaleLowerCase('pt-BR') ?? ''
 
       const storeName = reward.store?.name?.toLocaleLowerCase('pt-BR') ?? ''
 
@@ -112,11 +120,17 @@ export function Rewards() {
     })
   }, [rewards, search])
 
+  /* ======================================================
+     ABRIR LOJA DO BRINDE
+  ====================================================== */
+
   function handleOpenReward(reward: RewardDTO) {
     if (!reward.storeId) {
       toast.show({
         title: 'Loja do brinde não encontrada.',
+
         placement: 'top',
+
         bgColor: 'orange.500',
       })
 
@@ -125,9 +139,14 @@ export function Rewards() {
 
     navigation.navigate('storeRewardCatalog', {
       storeId: reward.storeId,
+
       storeName: reward.store?.name,
     })
   }
+
+  /* ======================================================
+     REFRESH
+  ====================================================== */
 
   async function handleRefresh() {
     setRefreshing(true)
@@ -135,9 +154,15 @@ export function Rewards() {
     await loadRewards()
   }
 
+  /* ======================================================
+     RENDER
+  ====================================================== */
+
   return (
     <VStack flex={1} bg="coolGray.50">
       <HomeScreen title="Brindes" />
+
+      {/* CABEÇALHO */}
 
       <Box px={4} pt={3} pb={2}>
         <Text fontSize="xl" fontWeight="bold" color="coolGray.800">
@@ -148,16 +173,38 @@ export function Rewards() {
           Brindes disponíveis nas lojas de {city?.name ?? 'sua cidade'}.
         </Text>
 
-        <Input
+        {/* BUSCA */}
+
+        <Box
           mt={4}
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Buscar brinde ou loja"
           bg="white"
+          borderWidth={1}
+          borderColor="coolGray.300"
           borderRadius="xl"
-          fontSize="sm"
-        />
+          height={46}
+          px={4}
+          justifyContent="center"
+        >
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Buscar brinde ou loja"
+            placeholderTextColor="#94A3B8"
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+            style={{
+              flex: 1,
+              fontSize: 14,
+              color: '#1F2937',
+              paddingVertical: 0,
+            }}
+          />
+        </Box>
       </Box>
+
+      {/* LOADING */}
 
       {isLoading ? (
         <Center flex={1}>
@@ -168,18 +215,25 @@ export function Rewards() {
           </Text>
         </Center>
       ) : (
+        /* LISTA */
+
         <FlatList
           data={filteredRewards}
           numColumns={2}
           keyExtractor={(reward) => reward.id}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
           contentContainerStyle={{
             paddingHorizontal: 12,
+
             paddingTop: 12,
+
             paddingBottom: 40,
+
+            flexGrow: filteredRewards.length === 0 ? 1 : undefined,
           }}
           columnWrapperStyle={{
             justifyContent: 'space-between',
@@ -195,7 +249,7 @@ export function Rewards() {
             </Box>
           )}
           ListEmptyComponent={
-            <Center mt={16} px={6}>
+            <Center flex={1} px={6} py={16}>
               <Text
                 fontSize="lg"
                 fontWeight="bold"
@@ -211,7 +265,11 @@ export function Rewards() {
                 color="coolGray.500"
                 textAlign="center"
               >
-                Ainda não há brindes disponíveis para esta cidade.
+                {search.trim()
+                  ? 'Nenhum brinde ou loja corresponde à sua busca.'
+                  : `Ainda não há brindes disponíveis para ${
+                      city?.name ?? 'esta cidade'
+                    }.`}
               </Text>
             </Center>
           }

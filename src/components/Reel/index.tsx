@@ -61,6 +61,7 @@ export function Reel({ reels: reelsFromProps = [], isLoading = false }: Props) {
         link: reel.link ?? null,
         storeId: reel.storeId ?? null,
       }))
+      .slice(0, 8)
   }, [reelsFromProps])
 
   /*
@@ -138,7 +139,7 @@ export function Reel({ reels: reelsFromProps = [], isLoading = false }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>🟡 Aproveite</Text>
+      <Text style={styles.title}>🟡 Vitrine</Text>
 
       <FlatList
         ref={listRef}

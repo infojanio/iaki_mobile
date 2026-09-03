@@ -309,7 +309,7 @@ export function Home() {
           />
         )}
         ListHeaderComponent={
-          <VStack bg="blue.50" mx={1}>
+          <VStack bg="blue.50" mx={1} mt={-4}>
             <Promotion banners={banners} />
 
             <BusinessCategory />

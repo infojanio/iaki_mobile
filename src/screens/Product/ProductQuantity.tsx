@@ -393,7 +393,7 @@ export function ProductQuantity({ onPressProduct }: Props) {
   const renderProduct: ListRenderItem<ProductDTO> = useCallback(
     ({ item }) => {
       return (
-        <Box>
+        <Box mx={1} px={1} alignItems="center" justifyContent="center">
           <ProductCard
             product={item}
             cartQuantity={getCartQuantity(item)}
@@ -427,7 +427,7 @@ export function ProductQuantity({ onPressProduct }: Props) {
   ===================================== */
 
   return (
-    <VStack bg="gray.100" height={240} mb={6}>
+    <VStack bg="gray.100" minH={285} mb={6}>
       <VStack>
         <VStack ml={1} mb={1}>
           <HStack justifyContent="space-between" mr={2}>
@@ -469,14 +469,23 @@ export function ProductQuantity({ onPressProduct }: Props) {
           renderItem={renderProduct}
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          removeClippedSubviews
+          /*
+           * Em listas horizontais com cards altos,
+           * removeClippedSubviews pode cortar
+           * conteúdo próximo da borda inferior.
+           */
+          removeClippedSubviews={false}
           initialNumToRender={5}
           maxToRenderPerBatch={5}
           updateCellsBatchingPeriod={50}
           windowSize={5}
+          style={{
+            minHeight: 245,
+          }}
           contentContainerStyle={{
-            marginLeft: 12,
-            paddingBottom: 32,
+            paddingHorizontal: 12,
+            paddingBottom: 8,
+            alignItems: 'flex-start',
           }}
         />
       </VStack>
