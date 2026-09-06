@@ -436,7 +436,7 @@ export function ProductCategory() {
 
   return (
     <VStack flex={1}>
-      <BackHome title="" />
+      <BackHome title="voltar" />
 
       <Box flex={1} ml={-6} mt={-6}>
         {isLoading ? (

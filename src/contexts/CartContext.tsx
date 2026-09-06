@@ -68,6 +68,7 @@ type CartContextData = {
   cartBadgeCount: number
 
   syncCartBadge: () => Promise<void>
+  clearCartBadge: () => void
   ensureStoreContext: (storeId: string) => Promise<boolean>
 
   addProductCart: (data: AddToCartInput) => Promise<void>
@@ -248,6 +249,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     },
     [normalizeImage],
   )
+
+  //limpar o carrinho ao mudar de cidade
+  const clearCartBadge = useCallback(() => {
+    setCartBadgeCount(0)
+  }, [])
 
   /* ==============================
      SINCRONIZAÇÃO DO BADGE
@@ -756,6 +762,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         cartBadgeCount,
 
         syncCartBadge,
+        clearCartBadge,
         ensureStoreContext,
 
         addProductCart,

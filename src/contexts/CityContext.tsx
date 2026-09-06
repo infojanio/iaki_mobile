@@ -111,7 +111,7 @@ export function CityProvider({ children }: CityProviderProps) {
           `[CityContext] Cidade sincronizada em ${Date.now() - startedAt}ms`,
         )
       } catch (error: any) {
-        console.error('[CityContext] Erro ao sincronizar cidade:', {
+        console.log('[CityContext] Erro ao sincronizar cidade:', {
           message: error?.message,
           status: error?.response?.status,
           data: error?.response?.data,

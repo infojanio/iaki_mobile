@@ -17,7 +17,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons'
 
 import MapBackground from '@assets/selectCity.png'
-
+import { CartContext } from '@contexts/CartContext'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 
@@ -42,6 +42,7 @@ export function SelectCity() {
   const [states, setStates] = useState<State[]>([])
   const [cities, setCities] = useState<City[]>([])
   const [selectedState, setSelectedState] = useState<State | null>(null)
+  const { clearCartBadge } = useContext(CartContext)
 
   const [loadingStates, setLoadingStates] = useState(true)
   const [loadingCities, setLoadingCities] = useState(false)
@@ -87,31 +88,56 @@ export function SelectCity() {
   )
 
   const handleSelectCity = useCallback(
-    (city: City) => {
+    async (city: City) => {
       if (selectingCityId) {
         return
       }
 
-      setSelectingCityId(city.id)
+      try {
+        setSelectingCityId(city.id)
 
-      const selectedCity = {
-        id: city.id,
-        name: city.name,
-        uf: city.uf ?? selectedState?.uf ?? '',
+        const selectedCity = {
+          id: city.id,
+          name: city.name,
+          uf: city.uf ?? selectedState?.uf ?? '',
+        }
+
+        /*
+         * Primeiro confirma a troca da cidade.
+         */
+        await setUserCity(selectedCity)
+
+        /*
+         * Depois limpa somente o badge local
+         * do carrinho.
+         */
+        clearCartBadge()
+
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: 'appRoutes',
+            },
+          ],
+        })
+      } catch (error) {
+        console.error('[SelectCity] Erro ao selecionar cidade:', error)
+
+        /*
+         * Permite tentar novamente caso
+         * a atualização da cidade falhe.
+         */
+        setSelectingCityId(null)
       }
-
-      /*
-       * Atualiza a cidade localmente e sincroniza com o backend
-       * em segundo plano. A navegação não aguarda a API.
-       */
-      void setUserCity(selectedCity)
-
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'appRoutes' }],
-      })
     },
-    [navigation, selectedState?.uf, selectingCityId, setUserCity],
+    [
+      clearCartBadge,
+      navigation,
+      selectedState?.uf,
+      selectingCityId,
+      setUserCity,
+    ],
   )
 
   const handleBackToLogin = useCallback(async () => {
