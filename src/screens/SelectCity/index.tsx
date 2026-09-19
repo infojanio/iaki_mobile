@@ -1,30 +1,42 @@
-import React, { useCallback, useContext, useEffect, useState } from 'react'
-
-import { FlatList, ImageBackground, ListRenderItemInfo } from 'react-native'
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 
 import {
-  Box,
-  Text,
+  ActivityIndicator,
+  FlatList,
+  ImageBackground,
+  ListRenderItemInfo,
   Pressable,
-  Spinner,
-  VStack,
-  IconButton,
-  useTheme,
-  HStack,
-  Icon,
-} from 'native-base'
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native'
+
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { MaterialIcons } from '@expo/vector-icons'
 
 import MapBackground from '@assets/selectCity.png'
+
 import { CartContext } from '@contexts/CartContext'
+
+import { CityContext } from '@contexts/CityContext'
+
 import { useNavigation } from '@react-navigation/native'
+
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 
 import { RootStackParamList } from '@routes/types'
-import { CityContext } from '@contexts/CityContext'
+
 import { stateService, State } from '@services/stateService'
+
 import { cityService, City } from '@services/cityService'
+
 import { useAuth } from '@hooks/useAuth'
 
 type NavigationProps = NativeStackNavigationProp<
@@ -36,85 +48,214 @@ export function SelectCity() {
   const navigation = useNavigation<NavigationProps>()
 
   const { setUserCity } = useContext(CityContext)
-  const { signOut } = useAuth()
-  const { colors, sizes } = useTheme()
 
-  const [states, setStates] = useState<State[]>([])
-  const [cities, setCities] = useState<City[]>([])
-  const [selectedState, setSelectedState] = useState<State | null>(null)
   const { clearCartBadge } = useContext(CartContext)
 
+  const { signOut } = useAuth()
+
+  const [states, setStates] = useState<State[]>([])
+
+  const [cities, setCities] = useState<City[]>([])
+
+  const [selectedState, setSelectedState] = useState<State | null>(null)
+
   const [loadingStates, setLoadingStates] = useState(true)
+
   const [loadingCities, setLoadingCities] = useState(false)
+
   const [selectingCityId, setSelectingCityId] = useState<string | null>(null)
 
+  /*
+   * Impede atualizações de estado depois
+   * que a tela for desmontada.
+   */
+  const isMountedRef = useRef(true)
+
+  /*
+   * Bloqueia vários cliques rápidos
+   * enquanto uma lista de cidades carrega.
+   */
+  const loadingCitiesRef = useRef(false)
+
+  /*
+   * Evita selecionar duas cidades
+   * antes que o React atualize o estado.
+   */
+  const selectingCityRef = useRef(false)
+
+  /*
+   * Identifica a requisição mais recente.
+   *
+   * Se uma resposta antiga chegar depois,
+   * ela será ignorada.
+   */
+  const statesRequestIdRef = useRef(0)
+
+  const citiesRequestIdRef = useRef(0)
+
+  /* ==============================
+     CONTROLE DE MONTAGEM
+  ============================== */
+
+  useEffect(() => {
+    isMountedRef.current = true
+
+    return () => {
+      isMountedRef.current = false
+
+      /*
+       * Invalida qualquer resposta
+       * assíncrona pendente.
+       */
+      statesRequestIdRef.current += 1
+      citiesRequestIdRef.current += 1
+    }
+  }, [])
+
+  /* ==============================
+     CARREGAR ESTADOS
+  ============================== */
+
   const loadStates = useCallback(async () => {
+    const requestId = ++statesRequestIdRef.current
+
     try {
       setLoadingStates(true)
 
       const data = await stateService.listStates()
 
-      setStates(Array.isArray(data) ? data : [])
-    } catch (error) {
-      console.error('[SelectCity] Erro ao carregar estados:', error)
-      setStates([])
-    } finally {
-      setLoadingStates(false)
-    }
-  }, [])
-
-  const loadCities = useCallback(
-    async (state: State) => {
-      if (loadingCities || state.id === selectedState?.id) {
+      if (!isMountedRef.current || requestId !== statesRequestIdRef.current) {
         return
       }
 
+      setStates(
+        Array.isArray(data)
+          ? data.filter((state) => Boolean(state?.id && state?.name))
+          : [],
+      )
+    } catch (error) {
+      if (!isMountedRef.current || requestId !== statesRequestIdRef.current) {
+        return
+      }
+
+      console.error('[SelectCity] Erro ao carregar estados:', error)
+
+      setStates([])
+    } finally {
+      if (isMountedRef.current && requestId === statesRequestIdRef.current) {
+        setLoadingStates(false)
+      }
+    }
+  }, [])
+
+  /* ==============================
+     CARREGAR CIDADES
+  ============================== */
+
+  const loadCities = useCallback(
+    async (state: State) => {
+      if (!state?.id || loadingCitiesRef.current) {
+        return
+      }
+
+      /*
+       * Permite tocar novamente no mesmo
+       * estado se a primeira requisição
+       * tiver falhado.
+       */
+      if (state.id === selectedState?.id && cities.length > 0) {
+        return
+      }
+
+      loadingCitiesRef.current = true
+
+      const requestId = ++citiesRequestIdRef.current
+
       try {
         setSelectedState(state)
+
         setCities([])
+
         setLoadingCities(true)
 
         const data = await cityService.listCitiesByState(state.id)
 
-        setCities(Array.isArray(data) ? data : [])
+        if (!isMountedRef.current || requestId !== citiesRequestIdRef.current) {
+          return
+        }
+
+        setCities(
+          Array.isArray(data)
+            ? data.filter((city) => Boolean(city?.id && city?.name))
+            : [],
+        )
       } catch (error) {
+        if (!isMountedRef.current || requestId !== citiesRequestIdRef.current) {
+          return
+        }
+
         console.error('[SelectCity] Erro ao carregar cidades:', error)
+
         setCities([])
       } finally {
-        setLoadingCities(false)
+        if (requestId === citiesRequestIdRef.current) {
+          loadingCitiesRef.current = false
+
+          if (isMountedRef.current) {
+            setLoadingCities(false)
+          }
+        }
       }
     },
-    [loadingCities, selectedState?.id],
+    [cities.length, selectedState?.id],
   )
+
+  /* ==============================
+     SELECIONAR CIDADE
+  ============================== */
 
   const handleSelectCity = useCallback(
     async (city: City) => {
-      if (selectingCityId) {
+      if (!city?.id || selectingCityRef.current) {
         return
       }
 
-      try {
-        setSelectingCityId(city.id)
+      /*
+       * useRef bloqueia imediatamente.
+       * Não depende do próximo render.
+       */
+      selectingCityRef.current = true
 
+      setSelectingCityId(city.id)
+
+      try {
         const selectedCity = {
           id: city.id,
+
           name: city.name,
+
           uf: city.uf ?? selectedState?.uf ?? '',
         }
 
         /*
-         * Primeiro confirma a troca da cidade.
+         * Aguarda confirmação da cidade
+         * antes de navegar.
          */
         await setUserCity(selectedCity)
 
+        if (!isMountedRef.current) {
+          return
+        }
+
         /*
-         * Depois limpa somente o badge local
+         * Limpa somente o badge visual
          * do carrinho.
          */
         clearCartBadge()
 
         navigation.reset({
           index: 0,
+
           routes: [
             {
               name: 'appRoutes',
@@ -124,23 +265,25 @@ export function SelectCity() {
       } catch (error) {
         console.error('[SelectCity] Erro ao selecionar cidade:', error)
 
-        /*
-         * Permite tentar novamente caso
-         * a atualização da cidade falhe.
-         */
-        setSelectingCityId(null)
+        selectingCityRef.current = false
+
+        if (isMountedRef.current) {
+          setSelectingCityId(null)
+        }
       }
     },
-    [
-      clearCartBadge,
-      navigation,
-      selectedState?.uf,
-      selectingCityId,
-      setUserCity,
-    ],
+    [clearCartBadge, navigation, selectedState?.uf, setUserCity],
   )
 
+  /* ==============================
+     VOLTAR PARA LOGIN
+  ============================== */
+
   const handleBackToLogin = useCallback(async () => {
+    if (selectingCityRef.current) {
+      return
+    }
+
     try {
       await signOut()
     } catch (error) {
@@ -148,31 +291,37 @@ export function SelectCity() {
     }
   }, [signOut])
 
+  /* ==============================
+     RENDER ESTADO
+  ============================== */
+
   const renderState = useCallback(
     ({ item }: ListRenderItemInfo<State>) => {
       const isSelected = selectedState?.id === item.id
 
       return (
         <Pressable
-          onPress={() => loadCities(item)}
+          onPress={() => void loadCities(item)}
           disabled={loadingCities}
-          mr={2}
-          minW={24}
-          h={10}
-          px={4}
-          alignItems="center"
-          justifyContent="center"
-          borderRadius="full"
-          bg={isSelected ? 'green.600' : 'gray.200'}
-          borderWidth={1}
-          borderColor={isSelected ? 'green.600' : 'gray.300'}
-          opacity={loadingCities && !isSelected ? 0.6 : 1}
+          accessibilityRole="button"
+          accessibilityLabel={`Selecionar estado ${item.name}`}
+          style={({ pressed }) => [
+            styles.stateButton,
+
+            isSelected ? styles.stateButtonSelected : styles.stateButtonDefault,
+
+            loadingCities && !isSelected ? styles.disabled : null,
+
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text
-            fontSize="sm"
-            color={isSelected ? 'white' : 'gray.800'}
-            fontWeight="bold"
             numberOfLines={1}
+            style={[
+              styles.stateText,
+
+              isSelected ? styles.stateTextSelected : styles.stateTextDefault,
+            ]}
           >
             {item.name}
           </Text>
@@ -182,123 +331,137 @@ export function SelectCity() {
     [loadCities, loadingCities, selectedState?.id],
   )
 
+  /* ==============================
+     RENDER CIDADE
+  ============================== */
+
   const renderCity = useCallback(
     ({ item }: ListRenderItemInfo<City>) => {
       const isSelecting = selectingCityId === item.id
 
+      const isDisabled = selectingCityId !== null && !isSelecting
+
       return (
         <Pressable
-          onPress={() => handleSelectCity(item)}
+          onPress={() => void handleSelectCity(item)}
           disabled={selectingCityId !== null}
-          bg="gray.100"
-          borderRadius="md"
-          p={3}
-          mb={2}
-          borderWidth={1}
-          borderColor={isSelecting ? 'green.500' : 'gray.300'}
-          opacity={selectingCityId !== null && !isSelecting ? 0.6 : 1}
+          accessibilityRole="button"
+          accessibilityLabel={`Selecionar cidade ${item.name}`}
+          style={({ pressed }) => [
+            styles.cityButton,
+
+            isSelecting ? styles.cityButtonSelecting : styles.cityButtonDefault,
+
+            isDisabled ? styles.disabled : null,
+
+            pressed ? styles.pressed : null,
+          ]}
         >
-          <HStack alignItems="center" justifyContent="space-between">
-            <Text
-              flex={1}
-              fontSize="md"
-              color="gray.700"
-              fontWeight="semibold"
-              numberOfLines={1}
-            >
+          <View style={styles.cityRow}>
+            <Text numberOfLines={1} style={styles.cityName}>
               {item.name}
             </Text>
 
             {isSelecting ? (
-              <Spinner size="sm" color="green.600" />
+              <ActivityIndicator size="small" color="#16A34A" />
             ) : (
-              <Text ml={3} fontSize="xs" color="gray.700">
+              <Text style={styles.cityUf}>
                 {item.uf ?? selectedState?.uf ?? ''}
               </Text>
             )}
-          </HStack>
+          </View>
         </Pressable>
       )
     },
     [handleSelectCity, selectedState?.uf, selectingCityId],
   )
 
+  /* ==============================
+     PRIMEIRA CARGA
+  ============================== */
+
   useEffect(() => {
     void loadStates()
   }, [loadStates])
 
+  /* ==============================
+     TELA
+  ============================== */
+
   return (
     <ImageBackground
       source={MapBackground}
-      style={{ flex: 1 }}
+      style={styles.background}
       resizeMode="stretch"
     >
-      <Box flex={1} bg="rgba(255,255,255,0.92)">
-        <Box flex={1} px={6} pt={10}>
-          <HStack alignItems="flex-start" ml={-4}>
-            <IconButton
-              accessibilityLabel="Voltar para o login"
-              icon={
-                <MaterialIcons
-                  name="arrow-back"
-                  size={sizes[6]}
-                  color={colors.gray[700]}
-                />
-              }
-              onPress={handleBackToLogin}
-            />
-          </HStack>
+      <View style={styles.overlay}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+          {/* VOLTAR */}
 
-          <VStack flex={1} space={4} mt={4} ml={2}>
-            <HStack alignItems="center" space={1}>
-              <Icon
-                as={MaterialIcons}
-                name="location-on"
-                size={sizes[6]}
-                color={colors.orange[600]}
-              />
+          <Pressable
+            onPress={() => void handleBackToLogin()}
+            disabled={selectingCityId !== null}
+            accessibilityRole="button"
+            accessibilityLabel="Voltar para o login"
+            hitSlop={12}
+            style={({ pressed }) => [
+              styles.backButton,
 
-              <Text fontSize="2xl" fontWeight="bold">
-                Onde você está?
-              </Text>
-            </HStack>
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <MaterialIcons name="arrow-back" size={26} color="#374151" />
+          </Pressable>
+
+          <View style={styles.content}>
+            {/* TÍTULO */}
+
+            <View style={styles.titleRow}>
+              <MaterialIcons name="location-on" size={27} color="#EA580C" />
+
+              <Text style={styles.title}>Onde você está?</Text>
+            </View>
+
+            {/* ESTADOS */}
 
             {loadingStates ? (
-              <Box h={14} justifyContent="center">
-                <Spinner size="sm" color="green.600" />
-              </Box>
+              <View style={styles.statesLoading}>
+                <ActivityIndicator size="small" color="#16A34A" />
+              </View>
             ) : (
-              <Box h={20}>
+              <View style={styles.statesContainer}>
                 <FlatList
                   data={states}
                   horizontal
                   renderItem={renderState}
                   keyExtractor={(item) => item.id}
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{
-                    alignItems: 'center',
-                    paddingRight: 16,
-                  }}
+                  keyboardShouldPersistTaps="handled"
                   initialNumToRender={6}
                   maxToRenderPerBatch={8}
                   windowSize={3}
+                  contentContainerStyle={styles.statesContent}
                   ListEmptyComponent={
-                    <Box h={14} justifyContent="center">
-                      <Text color="gray.700">Nenhum estado encontrado.</Text>
-                    </Box>
+                    <View style={styles.emptyStates}>
+                      <Text style={styles.emptyText}>
+                        Nenhum estado encontrado.
+                      </Text>
+                    </View>
                   }
                 />
-              </Box>
+              </View>
             )}
 
-            <Text fontSize="lg" fontWeight="bold">
-              Selecione sua cidade
-            </Text>
+            {/* CIDADES */}
+
+            <Text style={styles.sectionTitle}>Onde deseja comprar?</Text>
 
             {loadingCities ? (
-              <Box flex={1} alignItems="center" pt={6}>
-                <Spinner size="lg" color="green.600" />
-              </Box>
+              <View style={styles.citiesLoading}>
+                <ActivityIndicator size="large" color="#16A34A" />
+
+                <Text style={styles.loadingText}>Carregando cidades...</Text>
+              </View>
             ) : (
               <FlatList
                 data={cities}
@@ -309,22 +472,203 @@ export function SelectCity() {
                 initialNumToRender={12}
                 maxToRenderPerBatch={12}
                 windowSize={5}
-                contentContainerStyle={{
-                  paddingBottom: 32,
-                  flexGrow: 1,
-                }}
+                removeClippedSubviews={false}
+                contentContainerStyle={styles.citiesContent}
                 ListEmptyComponent={
-                  <Text mt={4} color="gray.700">
-                    {selectedState
-                      ? 'Nenhuma cidade encontrada.'
-                      : 'Selecione um estado acima.'}
-                  </Text>
+                  <View style={styles.emptyCities}>
+                    <Text style={styles.emptyText}>
+                      {selectedState
+                        ? 'Nenhuma cidade encontrada.'
+                        : 'Selecione o estado.'}
+                    </Text>
+                  </View>
                 }
               />
             )}
-          </VStack>
-        </Box>
-      </Box>
+          </View>
+        </SafeAreaView>
+      </View>
     </ImageBackground>
   )
 }
+
+const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+  },
+
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+
+  safeArea: {
+    flex: 1,
+  },
+
+  backButton: {
+    width: 44,
+    height: 44,
+    marginLeft: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+  },
+
+  content: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+  },
+
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+
+  title: {
+    marginLeft: 4,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '700',
+    color: '#111827',
+  },
+
+  statesContainer: {
+    height: 64,
+  },
+
+  statesLoading: {
+    height: 64,
+    justifyContent: 'center',
+  },
+
+  statesContent: {
+    alignItems: 'center',
+    paddingRight: 16,
+  },
+
+  stateButton: {
+    minWidth: 96,
+    height: 40,
+    marginRight: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+
+  stateButtonDefault: {
+    backgroundColor: '#E5E7EB',
+    borderColor: '#D1D5DB',
+  },
+
+  stateButtonSelected: {
+    backgroundColor: '#16A34A',
+    borderColor: '#16A34A',
+  },
+
+  stateText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  stateTextDefault: {
+    color: '#1F2937',
+  },
+
+  stateTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  sectionTitle: {
+    marginTop: 12,
+    marginBottom: 12,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '700',
+    color: '#111827',
+  },
+
+  cityButton: {
+    minHeight: 52,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+  },
+
+  cityButtonDefault: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#D1D5DB',
+  },
+
+  cityButtonSelecting: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#22C55E',
+  },
+
+  cityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  cityName: {
+    flex: 1,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '600',
+    color: '#374151',
+  },
+
+  cityUf: {
+    marginLeft: 12,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#4B5563',
+  },
+
+  citiesContent: {
+    flexGrow: 1,
+    paddingBottom: 32,
+  },
+
+  citiesLoading: {
+    flex: 1,
+    alignItems: 'center',
+    paddingTop: 24,
+  },
+
+  loadingText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#6B7280',
+  },
+
+  emptyStates: {
+    height: 56,
+    justifyContent: 'center',
+  },
+
+  emptyCities: {
+    paddingTop: 16,
+  },
+
+  emptyText: {
+    fontSize: 14,
+    color: '#4B5563',
+  },
+
+  disabled: {
+    opacity: 0.6,
+  },
+
+  pressed: {
+    opacity: 0.7,
+  },
+})

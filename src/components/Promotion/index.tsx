@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     marginTop: 2,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   dot: {
     width: 8,

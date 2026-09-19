@@ -116,7 +116,7 @@ export function HomeHeader() {
           </Box>
 
           <HStack>
-            <Box mb={2}>
+            <Box mb={4}>
               <Image
                 alt="Logo"
                 source={MarketPng}

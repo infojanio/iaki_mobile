@@ -1,15 +1,14 @@
-import { TouchableOpacity, TouchableOpacityProps } from 'react-native'
+import React, { memo, useMemo, useState } from 'react'
 
 import {
-  VStack,
   Image,
+  StyleSheet,
   Text,
-  Center,
-  Box,
-  HStack,
-  Icon,
-  Spinner,
-} from 'native-base'
+  TouchableOpacity,
+  TouchableOpacityProps,
+  View,
+  ActivityIndicator,
+} from 'react-native'
 
 import { Feather } from '@expo/vector-icons'
 
@@ -23,7 +22,9 @@ export type ProductCardProps = TouchableOpacityProps & {
   onDecrement: () => void
 }
 
-export function ProductCard({
+const DEFAULT_PRODUCT_IMAGE = 'https://via.placeholder.com/300'
+
+function ProductCardComponent({
   product,
   cartQuantity = 0,
   isUpdating = false,
@@ -31,18 +32,75 @@ export function ProductCard({
   onDecrement,
   ...rest
 }: ProductCardProps) {
-  const price = Number(product.price)
+  const [imageError, setImageError] = useState(false)
 
-  const discountPercent = Number(product.cashbackPercentage ?? 0)
+  /* ==============================
+     DADOS SEGUROS
+  ============================== */
 
-  const stockQuantity = Number(product.quantity ?? 0)
+  const price = useMemo(() => {
+    const value = Number(product?.price)
 
-  const originalPrice =
-    discountPercent > 0 ? price / (1 - discountPercent / 100) : price
+    return Number.isFinite(value) ? Math.max(0, value) : 0
+  }, [product?.price])
+
+  const discountPercent = useMemo(() => {
+    const value = Number(product?.cashbackPercentage ?? 0)
+
+    if (!Number.isFinite(value)) {
+      return 0
+    }
+
+    return Math.min(100, Math.max(0, value))
+  }, [product?.cashbackPercentage])
+
+  const stockQuantity = useMemo(() => {
+    const value = Number(product?.quantity ?? 0)
+
+    return Number.isFinite(value) ? Math.max(0, value) : 0
+  }, [product?.quantity])
+
+  const safeCartQuantity = useMemo(() => {
+    const value = Number(cartQuantity)
+
+    return Number.isFinite(value) ? Math.max(0, value) : 0
+  }, [cartQuantity])
+
+  const originalPrice = useMemo(() => {
+    if (discountPercent <= 0 || discountPercent >= 100) {
+      return price
+    }
+
+    return price / (1 - discountPercent / 100)
+  }, [discountPercent, price])
+
+  const imageUri = useMemo(() => {
+    if (imageError) {
+      return DEFAULT_PRODUCT_IMAGE
+    }
+
+    if (typeof product?.image !== 'string' || !product.image.trim()) {
+      return DEFAULT_PRODUCT_IMAGE
+    }
+
+    return product.image.trim()
+  }, [imageError, product?.image])
+
+  const productName =
+    typeof product?.name === 'string' && product.name.trim()
+      ? product.name.trim()
+      : 'Produto'
+
+  const storeName =
+    typeof product?.store?.name === 'string' ? product.store.name : ''
 
   const hasStock = stockQuantity > 0
 
-  const reachedStockLimit = cartQuantity >= stockQuantity
+  const reachedStockLimit = hasStock && safeCartQuantity >= stockQuantity
+
+  /* ==============================
+     AÇÕES
+  ============================== */
 
   function handleIncrement() {
     if (!hasStock || reachedStockLimit || isUpdating) {
@@ -53,186 +111,151 @@ export function ProductCard({
   }
 
   function handleDecrement() {
-    if (cartQuantity <= 0 || isUpdating) {
+    if (safeCartQuantity <= 0 || isUpdating) {
       return
     }
 
     onDecrement()
   }
 
+  /* ==============================
+     TELA
+  ============================== */
+
   return (
-    <VStack
-      mr={1}
-      mt={1}
-      mb={1}
-      w={120}
-      minH={230}
-      bg="white"
-      borderRadius="xl"
-      borderWidth={2}
-      borderColor="gray.100"
-      shadow={1}
-    >
-      {/* ÁREA QUE ABRE OS DETALHES */}
+    <View style={styles.card}>
+      {/* ÁREA DE DETALHES */}
 
       <TouchableOpacity
         {...rest}
         activeOpacity={0.8}
-        style={{
-          width: '100%',
-          alignItems: 'center',
-        }}
+        style={[styles.productArea, rest.style]}
       >
-        <Center width="100%">
-          {/* LOJA */}
+        {/* LOJA */}
 
-          <Text
-            maxW="100%"
-            px={2}
-            borderBottomWidth={2}
-            borderColor="green.500"
-            fontSize={10}
-            numberOfLines={1}
-            textAlign="center"
-          >
-            {product.store?.name}
-          </Text>
-
-          {/* IMAGEM */}
-
-          <Image
-            mt={2}
-            w={100}
-            h={70}
-            source={{
-              uri: product.image,
-            }}
-            alt={`Imagem do produto ${product.name}`}
-            rounded="lg"
-            resizeMode="contain"
-          />
-
-          {/* NOME */}
-
-          <Text
-            mt={1}
-            px={2}
-            width="100%"
-            minH={6}
-            fontSize="sm"
-            color="black"
-            fontFamily="heading"
-            numberOfLines={1}
-            textAlign="center"
-          >
-            {product.name}
-          </Text>
-
-          {/* PREÇO */}
-
-          {discountPercent > 0 ? (
-            <>
-              <Text fontSize="xs" color="gray.400" strikeThrough>
-                R$ {originalPrice.toFixed(2)}
-              </Text>
-
-              <Text fontSize="lg" fontWeight="bold" color="red.600">
-                R$ {price.toFixed(2)}
-              </Text>
-            </>
-          ) : (
-            <Text fontSize="lg" fontWeight="bold" color="gray.800">
-              R$ {price.toFixed(2)}
+        {!!storeName && (
+          <View style={styles.storeContainer}>
+            <Text style={styles.storeName} numberOfLines={1}>
+              {storeName}
             </Text>
-          )}
-        </Center>
+          </View>
+        )}
+
+        {/* IMAGEM */}
+
+        <Image
+          source={{
+            uri: imageUri,
+          }}
+          style={styles.productImage}
+          resizeMode="contain"
+          /*
+           * Importante no Android:
+           * reduz a imagem antes de
+           * mantê-la na memória.
+           */
+          resizeMethod="resize"
+          /*
+           * Evita animação de fade
+           * em dezenas de imagens.
+           */
+          fadeDuration={0}
+          onError={() => {
+            if (imageUri !== DEFAULT_PRODUCT_IMAGE) {
+              setImageError(true)
+            }
+          }}
+          accessibilityLabel={`Imagem do produto ${productName}`}
+        />
+
+        {/* NOME */}
+
+        <Text style={styles.productName} numberOfLines={1}>
+          {productName}
+        </Text>
+
+        {/* PREÇO */}
+
+        {discountPercent > 0 ? (
+          <View style={styles.priceContainer}>
+            <Text style={styles.originalPrice}>
+              R$ {originalPrice.toFixed(2)}
+            </Text>
+
+            <Text style={styles.discountPrice}>R$ {price.toFixed(2)}</Text>
+          </View>
+        ) : (
+          <Text style={styles.price}>R$ {price.toFixed(2)}</Text>
+        )}
       </TouchableOpacity>
 
       {/* ESTOQUE */}
 
-      <Center mt={1} px={2}>
-        <Box
-          maxW="100%"
-          bg={hasStock ? 'red.500' : 'gray.400'}
-          rounded="md"
-          px={2}
-          py={0.5}
+      <View style={styles.stockArea}>
+        <View
+          style={[
+            styles.stockBadge,
+
+            hasStock ? styles.stockAvailable : styles.stockUnavailable,
+          ]}
         >
-          <Text
-            fontSize="xs"
-            color="white"
-            numberOfLines={1}
-            textAlign="center"
-          >
+          <Text style={styles.stockText} numberOfLines={1}>
             {hasStock ? `${stockQuantity} unidades` : 'Produto esgotado'}
           </Text>
-        </Box>
-      </Center>
+        </View>
+      </View>
 
-      {/* CONTROLES DO CARRINHO */}
+      {/* CONTROLES */}
 
-      <Box flex={1} width="100%" px={2} mt={2} mb={2} justifyContent="center">
+      <View style={styles.controlsContainer}>
         {isUpdating ? (
-          <Center h={8}>
-            <Spinner
-              size="sm"
-              color="blue.600"
-              accessibilityLabel="Atualizando produto"
-            />
-          </Center>
-        ) : cartQuantity === 0 ? (
-          /* BOTÃO INICIAL + */
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color="#2563EB" />
+          </View>
+        ) : safeCartQuantity === 0 ? (
+          /* PRIMEIRO + */
 
-          <Center width="100%">
+          <View style={styles.center}>
             <TouchableOpacity
               onPress={handleIncrement}
               disabled={!hasStock}
               activeOpacity={hasStock ? 0.7 : 1}
-              accessibilityLabel={`Adicionar ${product.name}`}
+              accessibilityLabel={`Adicionar ${productName}`}
             >
-              <Center
-                w={12}
-                h={8}
-                rounded="lg"
-                bg={hasStock ? 'blue.600' : 'gray.300'}
-              >
-                <Icon as={Feather} name="plus" color="white" size="md" />
-              </Center>
-            </TouchableOpacity>
-          </Center>
-        ) : (
-          /* - QUANTIDADE + */
+              <View
+                style={[
+                  styles.initialAddButton,
 
-          <HStack
-            width="100%"
-            alignItems="center"
-            justifyContent="space-between"
-          >
+                  hasStock ? styles.addButtonActive : styles.addButtonDisabled,
+                ]}
+              >
+                <Feather name="plus" size={20} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          /* - QTD + */
+
+          <View style={styles.quantityControls}>
             {/* MENOS */}
 
             <TouchableOpacity
               onPress={handleDecrement}
               activeOpacity={0.7}
-              accessibilityLabel={`Remover uma unidade de ${product.name}`}
+              accessibilityLabel={`Remover uma unidade de ${productName}`}
             >
-              <Center w={8} h={8} rounded="full" bg="gray.200">
-                <Icon as={Feather} name="minus" color="gray.700" size="sm" />
-              </Center>
+              <View style={styles.minusButton}>
+                <Feather name="minus" size={18} color="#374151" />
+              </View>
             </TouchableOpacity>
 
             {/* QUANTIDADE */}
 
-            <Center w={6} h={8}>
-              <Text
-                textAlign="center"
-                fontSize="md"
-                fontWeight="bold"
-                color="gray.800"
-                numberOfLines={1}
-              >
-                {cartQuantity}
+            <View style={styles.quantityContainer}>
+              <Text style={styles.quantityText} numberOfLines={1}>
+                {safeCartQuantity}
               </Text>
-            </Center>
+            </View>
 
             {/* MAIS */}
 
@@ -240,35 +263,280 @@ export function ProductCard({
               onPress={handleIncrement}
               disabled={reachedStockLimit}
               activeOpacity={reachedStockLimit ? 1 : 0.7}
-              accessibilityLabel={`Adicionar mais uma unidade de ${product.name}`}
+              accessibilityLabel={`Adicionar mais uma unidade de ${productName}`}
             >
-              <Center
-                w={8}
-                h={8}
-                rounded="full"
-                bg={reachedStockLimit ? 'gray.300' : 'blue.600'}
+              <View
+                style={[
+                  styles.plusButton,
+
+                  reachedStockLimit
+                    ? styles.addButtonDisabled
+                    : styles.addButtonActive,
+                ]}
               >
-                <Icon as={Feather} name="plus" color="white" size="sm" />
-              </Center>
+                <Feather name="plus" size={18} color="#FFFFFF" />
+              </View>
             </TouchableOpacity>
-          </HStack>
+          </View>
         )}
 
-        {/* LIMITE DE ESTOQUE */}
+        {/* LIMITE */}
 
-        {reachedStockLimit && cartQuantity > 0 && hasStock && (
-          <Text
-            mt={1}
-            px={1}
-            fontSize="2xs"
-            color="red.500"
-            textAlign="center"
-            numberOfLines={1}
-          >
+        {reachedStockLimit && safeCartQuantity > 0 && hasStock && (
+          <Text style={styles.stockLimitText} numberOfLines={1}>
             Limite de estoque
           </Text>
         )}
-      </Box>
-    </VStack>
+      </View>
+    </View>
   )
 }
+
+export const ProductCard = memo(ProductCardComponent)
+
+const styles = StyleSheet.create({
+  card: {
+    width: 120,
+    minHeight: 230,
+
+    marginRight: 4,
+    marginTop: 4,
+    marginBottom: 4,
+
+    backgroundColor: '#FFFFFF',
+
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#F3F4F6',
+
+    overflow: 'hidden',
+  },
+
+  productArea: {
+    width: '100%',
+    alignItems: 'center',
+  },
+
+  storeContainer: {
+    maxWidth: '100%',
+    paddingHorizontal: 8,
+
+    borderBottomWidth: 2,
+    borderBottomColor: '#22C55E',
+  },
+
+  storeName: {
+    maxWidth: 105,
+
+    fontSize: 10,
+    lineHeight: 14,
+
+    textAlign: 'center',
+
+    color: '#111827',
+  },
+
+  productImage: {
+    width: 100,
+    height: 70,
+
+    marginTop: 8,
+
+    borderRadius: 8,
+
+    backgroundColor: '#FFFFFF',
+  },
+
+  productName: {
+    width: '100%',
+
+    minHeight: 24,
+
+    marginTop: 4,
+
+    paddingHorizontal: 8,
+
+    fontSize: 14,
+    lineHeight: 20,
+
+    fontWeight: '600',
+
+    textAlign: 'center',
+
+    color: '#000000',
+  },
+
+  priceContainer: {
+    alignItems: 'center',
+  },
+
+  originalPrice: {
+    fontSize: 12,
+
+    color: '#9CA3AF',
+
+    textDecorationLine: 'line-through',
+  },
+
+  discountPrice: {
+    fontSize: 18,
+
+    fontWeight: '700',
+
+    color: '#DC2626',
+  },
+
+  price: {
+    fontSize: 18,
+
+    fontWeight: '700',
+
+    color: '#1F2937',
+  },
+
+  stockArea: {
+    marginTop: 4,
+
+    paddingHorizontal: 8,
+
+    alignItems: 'center',
+  },
+
+  stockBadge: {
+    maxWidth: '100%',
+
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+
+    borderRadius: 6,
+  },
+
+  stockAvailable: {
+    backgroundColor: '#EF4444',
+  },
+
+  stockUnavailable: {
+    backgroundColor: '#9CA3AF',
+  },
+
+  stockText: {
+    fontSize: 12,
+
+    color: '#FFFFFF',
+
+    textAlign: 'center',
+  },
+
+  controlsContainer: {
+    flex: 1,
+
+    width: '100%',
+
+    paddingHorizontal: 8,
+
+    marginTop: 8,
+    marginBottom: 8,
+
+    justifyContent: 'center',
+  },
+
+  center: {
+    width: '100%',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  loadingContainer: {
+    height: 32,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  initialAddButton: {
+    width: 48,
+    height: 32,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    borderRadius: 8,
+  },
+
+  addButtonActive: {
+    backgroundColor: '#2563EB',
+  },
+
+  addButtonDisabled: {
+    backgroundColor: '#D1D5DB',
+  },
+
+  quantityControls: {
+    width: '100%',
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent: 'space-between',
+  },
+
+  minusButton: {
+    width: 32,
+    height: 32,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    borderRadius: 16,
+
+    backgroundColor: '#E5E7EB',
+  },
+
+  plusButton: {
+    width: 32,
+    height: 32,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    borderRadius: 16,
+  },
+
+  quantityContainer: {
+    width: 24,
+    height: 32,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  quantityText: {
+    fontSize: 16,
+
+    fontWeight: '700',
+
+    textAlign: 'center',
+
+    color: '#1F2937',
+  },
+
+  stockLimitText: {
+    marginTop: 4,
+
+    paddingHorizontal: 4,
+
+    fontSize: 10,
+
+    textAlign: 'center',
+
+    color: '#EF4444',
+  },
+})

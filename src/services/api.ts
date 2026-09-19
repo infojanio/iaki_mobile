@@ -13,7 +13,7 @@ const baseURL =
 //'http://192.168.0.239:3333'
 export const api = axios.create({
   baseURL,
-  timeout: 10000,
+  timeout: 30000,
 })
 
 let isRefreshing = false

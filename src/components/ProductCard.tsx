@@ -1,17 +1,14 @@
-import {
-  Box,
-  Image,
-  Text,
-  VStack,
-  Pressable,
-  Badge,
-  HStack,
-  Center,
-  Icon,
-  Spinner,
-} from 'native-base'
+import React, { memo, useMemo, useState } from 'react'
 
-import { Dimensions, TouchableOpacity } from 'react-native'
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native'
 
 import { Feather } from '@expo/vector-icons'
 
@@ -21,16 +18,17 @@ type Props = {
   data: ProductDTO
 
   cartQuantity?: number
+
   isUpdating?: boolean
 
   onPress: () => void
+
   onIncrement: () => void
+
   onDecrement: () => void
 }
 
-const CARD_WIDTH = Dimensions.get('window').width * 0.35
-
-export function ProductCard({
+function DiscountProductCardComponent({
   data,
   cartQuantity = 0,
   isUpdating = false,
@@ -38,22 +36,104 @@ export function ProductCard({
   onIncrement,
   onDecrement,
 }: Props) {
-  const price = Number(data.price)
+  const [imageError, setImageError] = useState(false)
+
+  /* ==============================
+     DADOS SEGUROS
+  ============================== */
+
+  const price = useMemo(() => {
+    const value = Number(data?.price)
+
+    if (!Number.isFinite(value)) {
+      return 0
+    }
+
+    return Math.max(0, value)
+  }, [data?.price])
 
   /*
-   * Apesar do campo ainda se chamar cashbackPercentage,
-   * no aplicativo ele representa o percentual de desconto.
+   * Apesar do campo ainda se chamar
+   * cashbackPercentage, nesta tela
+   * ele representa percentual de desconto.
    */
-  const discountPercent = Number(data.cashbackPercentage ?? 0)
+  const discountPercent = useMemo(() => {
+    const value = Number(data?.cashbackPercentage ?? 0)
 
-  const stockQuantity = Number(data.quantity ?? 0)
+    if (!Number.isFinite(value)) {
+      return 0
+    }
 
-  const originalPrice =
-    discountPercent > 0 ? price / (1 - discountPercent / 100) : price
+    return Math.min(100, Math.max(0, value))
+  }, [data?.cashbackPercentage])
+
+  const stockQuantity = useMemo(() => {
+    const value = Number(data?.quantity ?? 0)
+
+    if (!Number.isFinite(value)) {
+      return 0
+    }
+
+    return Math.max(0, value)
+  }, [data?.quantity])
+
+  const safeCartQuantity = useMemo(() => {
+    const value = Number(cartQuantity)
+
+    if (!Number.isFinite(value)) {
+      return 0
+    }
+
+    return Math.max(0, value)
+  }, [cartQuantity])
+
+  /*
+   * Evita divisão por zero
+   * quando desconto chegar a 100%.
+   */
+  const originalPrice = useMemo(() => {
+    if (discountPercent <= 0 || discountPercent >= 100) {
+      return price
+    }
+
+    return price / (1 - discountPercent / 100)
+  }, [discountPercent, price])
+
+  const productName = useMemo(() => {
+    if (typeof data?.name === 'string' && data.name.trim()) {
+      return data.name.trim()
+    }
+
+    return 'Produto'
+  }, [data?.name])
+
+  const storeName = useMemo(() => {
+    if (typeof data?.store?.name === 'string' && data.store.name.trim()) {
+      return data.store.name.trim()
+    }
+
+    return ''
+  }, [data?.store?.name])
+
+  const imageUri = useMemo(() => {
+    if (imageError) {
+      return null
+    }
+
+    if (typeof data?.image !== 'string' || !data.image.trim()) {
+      return null
+    }
+
+    return data.image.trim()
+  }, [data?.image, imageError])
 
   const hasStock = stockQuantity > 0
 
-  const reachedStockLimit = hasStock && cartQuantity >= stockQuantity
+  const reachedStockLimit = hasStock && safeCartQuantity >= stockQuantity
+
+  /* ==============================
+     AÇÕES
+  ============================== */
 
   function handleIncrement() {
     if (!hasStock || reachedStockLimit || isUpdating) {
@@ -62,8 +142,9 @@ export function ProductCard({
 
     if (typeof onIncrement !== 'function') {
       console.error('[DiscountProductCard] onIncrement não informado', {
-        productId: data.id,
-        productName: data.name,
+        productId: data?.id,
+
+        productName,
       })
 
       return
@@ -73,14 +154,15 @@ export function ProductCard({
   }
 
   function handleDecrement() {
-    if (cartQuantity <= 0 || isUpdating) {
+    if (safeCartQuantity <= 0 || isUpdating) {
       return
     }
 
     if (typeof onDecrement !== 'function') {
       console.error('[DiscountProductCard] onDecrement não informado', {
-        productId: data.id,
-        productName: data.name,
+        productId: data?.id,
+
+        productName,
       })
 
       return
@@ -89,167 +171,543 @@ export function ProductCard({
     onDecrement()
   }
 
+  /* ==============================
+     TELA
+  ============================== */
+
   return (
-    <VStack
-      mr={1}
-      ml={-0.5}
-      mt={1}
-      mb={1}
-      w={120}
-      borderRadius="xl"
-      shadow={1}
-      minH={230}
-      bg="white"
-      rounded="lg"
-      borderWidth={2}
-      borderColor="gray.100"
-    >
+    <View style={styles.card}>
+      {/* DESCONTO */}
+
       {discountPercent > 0 && (
-        <Badge
-          position="absolute"
-          top={2}
-          right={2}
-          bg="blue.600"
-          rounded="full"
-          px={2}
-          zIndex={20}
-        >
-          <Text color="white" fontSize="xs" fontWeight="bold">
-            -{discountPercent}%
-          </Text>
-        </Badge>
+        <View style={styles.discountBadge}>
+          <Text style={styles.discountBadgeText}>-{discountPercent}%</Text>
+        </View>
       )}
 
-      {/* Área que abre os detalhes */}
+      {/* ÁREA DO PRODUTO */}
+
       <Pressable
         onPress={onPress}
-        _pressed={{
-          opacity: 0.8,
-        }}
-      >
-        <Center pt={3}>
-          <Image
-            source={{
-              uri: data.image,
-            }}
-            alt={data.name}
-            width="80%"
-            height={16}
-            resizeMode="contain"
-          />
-        </Center>
+        disabled={isUpdating}
+        accessibilityRole="button"
+        accessibilityLabel={`Abrir detalhes de ${productName}`}
+        style={({ pressed }) => [
+          styles.productArea,
 
-        <VStack px={3} pt={2}>
-          <Text bold fontSize="sm" numberOfLines={1} textAlign="center">
-            {data.name}
+          pressed ? styles.pressed : null,
+        ]}
+      >
+        {/* IMAGEM */}
+
+        <View style={styles.imageContainer}>
+          {imageUri ? (
+            <Image
+              source={{
+                uri: imageUri,
+              }}
+              style={styles.productImage}
+              resizeMode="contain"
+              /*
+               * Importante para imagens
+               * grandes no Android.
+               */
+              resizeMethod="resize"
+              /*
+               * Evita animação de fade
+               * em vários cards simultâneos.
+               */
+              fadeDuration={0}
+              onError={() => {
+                setImageError(true)
+              }}
+              accessibilityLabel={`Imagem de ${productName}`}
+            />
+          ) : (
+            /*
+             * Placeholder local, sem outra
+             * requisição HTTP.
+             */
+            <View style={styles.imagePlaceholder}>
+              <Feather name="image" size={28} color="#9CA3AF" />
+            </View>
+          )}
+        </View>
+
+        {/* NOME */}
+
+        <View style={styles.infoContainer}>
+          <Text style={styles.productName} numberOfLines={1}>
+            {productName}
           </Text>
 
+          {/* PREÇO COM DESCONTO */}
+
           {discountPercent > 0 ? (
-            <Center>
-              <Text
-                color={'red.500'}
-                fontSize={10}
-                numberOfLines={1}
-                textAlign="center"
-              >
-                {data.store?.name}
-              </Text>
-              <Text fontSize="xs" color="gray.400" strikeThrough>
+            <View style={styles.priceContainer}>
+              {!!storeName && (
+                <Text style={styles.storeName} numberOfLines={1}>
+                  {storeName}
+                </Text>
+              )}
+
+              <Text style={styles.originalPrice} numberOfLines={1}>
                 R$ {originalPrice.toFixed(2)}
               </Text>
 
-              <Text fontSize="lg" fontWeight="bold" color="blue.600">
+              <Text style={styles.discountPrice} numberOfLines={1}>
                 R$ {price.toFixed(2)}
               </Text>
-            </Center>
+            </View>
           ) : (
-            <Text textAlign="center" fontSize="lg" fontWeight="bold">
+            <Text style={styles.normalPrice} numberOfLines={1}>
               R$ {price.toFixed(2)}
             </Text>
           )}
-        </VStack>
+        </View>
       </Pressable>
 
-      {/* Estoque */}
-      <Center mt={1}>
-        <Box
-          px={2}
-          py={0.5}
-          rounded="md"
-          bg={hasStock ? 'blue.500' : 'gray.400'}
+      {/* ESTOQUE */}
+
+      <View style={styles.stockContainer}>
+        <View
+          style={[
+            styles.stockBadge,
+
+            hasStock ? styles.stockAvailable : styles.stockUnavailable,
+          ]}
         >
-          <Text color="white" fontSize="xs" numberOfLines={1}>
+          <Text style={styles.stockText} numberOfLines={1}>
             {hasStock ? `${stockQuantity} unidades` : 'Produto esgotado'}
           </Text>
-        </Box>
-      </Center>
+        </View>
+      </View>
 
-      {/* Botões do carrinho */}
-      <Center flex={1} mt={2} mb={3}>
+      {/* CONTROLES */}
+
+      <View style={styles.controlsContainer}>
         {isUpdating ? (
-          <Center h={10}>
-            <Spinner
-              size="sm"
-              color="blue.600"
-              accessibilityLabel="Atualizando produto"
-            />
-          </Center>
-        ) : cartQuantity === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color="#2563EB" />
+          </View>
+        ) : safeCartQuantity === 0 ? (
+          /* PRIMEIRO + */
+
           <TouchableOpacity
             onPress={handleIncrement}
             disabled={!hasStock}
             activeOpacity={hasStock ? 0.7 : 1}
+            accessibilityLabel={`Adicionar ${productName}`}
           >
-            <Center
-              w={12}
-              h={10}
-              rounded="lg"
-              bg={hasStock ? 'blue.600' : 'gray.300'}
+            <View
+              style={[
+                styles.initialAddButton,
+
+                hasStock ? styles.addButtonActive : styles.addButtonDisabled,
+              ]}
             >
-              <Icon as={Feather} name="plus" color="white" size="md" />
-            </Center>
+              <Feather name="plus" size={20} color="#FFFFFF" />
+            </View>
           </TouchableOpacity>
         ) : (
-          <HStack alignItems="center" justifyContent="center" space={2}>
-            <TouchableOpacity onPress={handleDecrement} activeOpacity={0.7}>
-              <Center w={9} h={9} rounded="full" bg="gray.200">
-                <Icon as={Feather} name="minus" color="gray.700" size="sm" />
-              </Center>
+          /* - QUANTIDADE + */
+
+          <View style={styles.quantityRow}>
+            {/* MENOS */}
+
+            <TouchableOpacity
+              onPress={handleDecrement}
+              activeOpacity={0.7}
+              accessibilityLabel={`Remover uma unidade de ${productName}`}
+            >
+              <View style={styles.minusButton}>
+                <Feather name="minus" size={18} color="#374151" />
+              </View>
             </TouchableOpacity>
 
-            <Text
-              minW={5}
-              textAlign="center"
-              fontSize="md"
-              fontWeight="bold"
-              color="gray.800"
-            >
-              {cartQuantity}
-            </Text>
+            {/* QUANTIDADE */}
+
+            <View style={styles.quantityContainer}>
+              <Text style={styles.quantityText} numberOfLines={1}>
+                {safeCartQuantity}
+              </Text>
+            </View>
+
+            {/* MAIS */}
 
             <TouchableOpacity
               onPress={handleIncrement}
               disabled={reachedStockLimit}
               activeOpacity={reachedStockLimit ? 1 : 0.7}
+              accessibilityLabel={`Adicionar mais uma unidade de ${productName}`}
             >
-              <Center
-                w={9}
-                h={9}
-                rounded="full"
-                bg={reachedStockLimit ? 'gray.300' : 'blue.600'}
+              <View
+                style={[
+                  styles.plusButton,
+
+                  reachedStockLimit
+                    ? styles.addButtonDisabled
+                    : styles.addButtonActive,
+                ]}
               >
-                <Icon as={Feather} name="plus" color="white" size="sm" />
-              </Center>
+                <Feather name="plus" size={18} color="#FFFFFF" />
+              </View>
             </TouchableOpacity>
-          </HStack>
+          </View>
         )}
 
-        {reachedStockLimit && cartQuantity > 0 && (
-          <Text mt={1} px={1} fontSize="2xs" color="red.500" textAlign="center">
+        {/* LIMITE */}
+
+        {reachedStockLimit && safeCartQuantity > 0 && hasStock && (
+          <Text style={styles.stockLimit} numberOfLines={1}>
             Limite de estoque atingido
           </Text>
         )}
-      </Center>
-    </VStack>
+      </View>
+    </View>
   )
 }
+
+/* ==============================
+   MEMO
+============================== */
+
+export const ProductCard = memo(
+  DiscountProductCardComponent,
+  (previous, next) => {
+    return (
+      previous.data.id === next.data.id &&
+      previous.data.price === next.data.price &&
+      previous.data.quantity === next.data.quantity &&
+      previous.data.image === next.data.image &&
+      previous.data.name === next.data.name &&
+      previous.data.cashbackPercentage === next.data.cashbackPercentage &&
+      previous.data.store?.name === next.data.store?.name &&
+      previous.cartQuantity === next.cartQuantity &&
+      previous.isUpdating === next.isUpdating &&
+      previous.onPress === next.onPress &&
+      previous.onIncrement === next.onIncrement &&
+      previous.onDecrement === next.onDecrement
+    )
+  },
+)
+
+/* ==============================
+   ESTILOS
+============================== */
+
+const styles = StyleSheet.create({
+  card: {
+    width: 120,
+    minHeight: 230,
+
+    marginRight: 4,
+    marginLeft: -2,
+    marginTop: 4,
+    marginBottom: 4,
+
+    backgroundColor: '#FFFFFF',
+
+    borderRadius: 12,
+
+    borderWidth: 2,
+
+    borderColor: '#F3F4F6',
+
+    /*
+     * Evitei shadow aqui.
+     * Em listas grandes é mais
+     * leve em aparelhos modestos.
+     */
+  },
+
+  discountBadge: {
+    position: 'absolute',
+
+    top: 8,
+    right: 8,
+
+    zIndex: 10,
+
+    paddingHorizontal: 8,
+
+    paddingVertical: 3,
+
+    borderRadius: 999,
+
+    backgroundColor: '#2563EB',
+  },
+
+  discountBadgeText: {
+    color: '#FFFFFF',
+
+    fontSize: 11,
+
+    fontWeight: '700',
+  },
+
+  productArea: {
+    width: '100%',
+  },
+
+  pressed: {
+    opacity: 0.8,
+  },
+
+  imageContainer: {
+    width: '100%',
+    height: 76,
+
+    marginTop: 8,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  productImage: {
+    width: 96,
+    height: 64,
+
+    borderRadius: 6,
+  },
+
+  imagePlaceholder: {
+    width: 96,
+    height: 64,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    borderRadius: 6,
+
+    backgroundColor: '#F3F4F6',
+  },
+
+  infoContainer: {
+    paddingHorizontal: 12,
+
+    paddingTop: 6,
+
+    alignItems: 'center',
+  },
+
+  productName: {
+    width: '100%',
+
+    fontSize: 14,
+
+    lineHeight: 19,
+
+    fontWeight: '700',
+
+    textAlign: 'center',
+
+    color: '#111827',
+  },
+
+  priceContainer: {
+    width: '100%',
+
+    alignItems: 'center',
+  },
+
+  storeName: {
+    maxWidth: '100%',
+
+    marginTop: 2,
+
+    fontSize: 10,
+
+    lineHeight: 14,
+
+    textAlign: 'center',
+
+    color: '#EF4444',
+  },
+
+  originalPrice: {
+    fontSize: 12,
+
+    lineHeight: 16,
+
+    color: '#9CA3AF',
+
+    textDecorationLine: 'line-through',
+  },
+
+  discountPrice: {
+    fontSize: 18,
+
+    lineHeight: 23,
+
+    fontWeight: '700',
+
+    color: '#2563EB',
+  },
+
+  normalPrice: {
+    marginTop: 2,
+
+    fontSize: 18,
+
+    lineHeight: 23,
+
+    fontWeight: '700',
+
+    color: '#1F2937',
+
+    textAlign: 'center',
+  },
+
+  stockContainer: {
+    marginTop: 4,
+
+    alignItems: 'center',
+
+    paddingHorizontal: 6,
+  },
+
+  stockBadge: {
+    maxWidth: '100%',
+
+    paddingHorizontal: 8,
+
+    paddingVertical: 2,
+
+    borderRadius: 6,
+  },
+
+  stockAvailable: {
+    backgroundColor: '#3B82F6',
+  },
+
+  stockUnavailable: {
+    backgroundColor: '#9CA3AF',
+  },
+
+  stockText: {
+    fontSize: 12,
+
+    lineHeight: 16,
+
+    color: '#FFFFFF',
+
+    textAlign: 'center',
+  },
+
+  controlsContainer: {
+    flex: 1,
+
+    minHeight: 55,
+
+    marginTop: 8,
+
+    marginBottom: 8,
+
+    paddingHorizontal: 8,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  loadingContainer: {
+    height: 40,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  initialAddButton: {
+    width: 48,
+    height: 40,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    borderRadius: 8,
+  },
+
+  addButtonActive: {
+    backgroundColor: '#2563EB',
+  },
+
+  addButtonDisabled: {
+    backgroundColor: '#D1D5DB',
+  },
+
+  quantityRow: {
+    width: '100%',
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent: 'space-between',
+  },
+
+  minusButton: {
+    width: 36,
+    height: 36,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    borderRadius: 18,
+
+    backgroundColor: '#E5E7EB',
+  },
+
+  plusButton: {
+    width: 36,
+    height: 36,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    borderRadius: 18,
+  },
+
+  quantityContainer: {
+    width: 22,
+    height: 36,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  quantityText: {
+    fontSize: 16,
+
+    lineHeight: 20,
+
+    fontWeight: '700',
+
+    color: '#1F2937',
+
+    textAlign: 'center',
+  },
+
+  stockLimit: {
+    marginTop: 4,
+
+    maxWidth: '100%',
+
+    paddingHorizontal: 2,
+
+    fontSize: 10,
+
+    lineHeight: 13,
+
+    textAlign: 'center',
+
+    color: '#EF4444',
+  },
+})
