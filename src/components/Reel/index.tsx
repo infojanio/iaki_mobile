@@ -231,8 +231,8 @@ export function Reel({ reels: reelsFromProps = [], isLoading = false }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 2,
-    marginBottom: 4,
+    marginTop: -10,
+    marginBottom: 2,
   },
 
   title: {

@@ -1,7 +1,13 @@
-import React from 'react'
-import { HStack, VStack, Text, IconButton, useTheme, Box } from 'native-base'
+import React, { useCallback } from 'react'
+
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+
 import { MaterialIcons } from '@expo/vector-icons'
+
 import { useNavigation } from '@react-navigation/native'
+
+import { SafeAreaView } from 'react-native-safe-area-context'
+
 import { useNavigationHistory } from '@contexts/NavigationHistoryContext'
 
 type Props = {
@@ -9,57 +15,173 @@ type Props = {
 }
 
 export function BackHome({ title }: Props) {
-  const { colors, sizes } = useTheme()
   const navigation = useNavigation<any>()
+
   const { getPreviousRoute } = useNavigationHistory()
 
-  const handleBack = () => {
-    // Se existir stack de verdade em algum fluxo, usa
+  const handleBack = useCallback(() => {
+    /*
+     * Se existir uma tela anterior
+     * na stack atual, volta normalmente.
+     */
     if (navigation.canGoBack()) {
       navigation.goBack()
+
       return
     }
 
-    // Caso Tab/sem stack: volta para a tela anterior registrada
-    const prev = getPreviousRoute()
-    if (prev?.name) {
-      navigation.navigate(prev.name, prev.params)
+    /*
+     * Quando estiver em Tab ou em
+     * fluxo sem stack anterior,
+     * utiliza o histórico próprio.
+     */
+    const previousRoute = getPreviousRoute()
+
+    if (previousRoute?.name) {
+      navigation.navigate(previousRoute.name, previousRoute.params)
+
       return
     }
 
-    // fallback
+    /*
+     * Último fallback.
+     */
     navigation.navigate('home')
-  }
+  }, [getPreviousRoute, navigation])
 
   return (
-    <VStack safeArea>
-      <Box bg="white" shadow={2} mb={2} ml={1}>
-        <HStack
-          px={2}
-          alignItems="center"
-          justifyContent="space-between"
-          bg="white"
+    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+      <View style={styles.header}>
+        {/* VOLTAR */}
+
+        <Pressable
+          onPress={handleBack}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Voltar"
+          style={({ pressed }) => [
+            styles.backButton,
+
+            pressed && styles.backButtonPressed,
+          ]}
         >
-          <IconButton
-            icon={
-              <MaterialIcons
-                name="arrow-back"
-                size={sizes[6]}
-                color={colors.gray[700]}
-              />
-            }
-            onPress={handleBack}
-          />
+          <MaterialIcons name="arrow-back-ios-new" size={21} color="#374151" />
+        </Pressable>
 
-          <VStack flex={1} alignItems="center" ml={-8}>
-            <Text fontSize="16" fontWeight="normal" color="gray.500">
-              {title || 'Categoria'}
-            </Text>
-          </VStack>
+        {/* TÍTULO */}
 
-          <Box w={sizes[6]} />
-        </HStack>
-      </Box>
-    </VStack>
+        <View style={styles.titleContainer} pointerEvents="none">
+          <Text numberOfLines={1} ellipsizeMode="tail" style={styles.title}>
+            {title || 'Categoria'}
+          </Text>
+        </View>
+
+        {/*
+         * Espaço equivalente ao botão
+         * esquerdo para manter o título
+         * realmente centralizado.
+         */}
+        <View style={styles.rightSpace} />
+      </View>
+    </SafeAreaView>
   )
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    backgroundColor: '#FFFFFF',
+  },
+
+  header: {
+    height: 58,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    backgroundColor: '#FFFFFF',
+
+    paddingHorizontal: 12,
+
+    borderBottomWidth: StyleSheet.hairlineWidth,
+
+    borderBottomColor: '#E5E7EB',
+
+    ...Platform.select({
+      android: {
+        elevation: 2,
+      },
+
+      ios: {
+        shadowColor: '#000000',
+
+        shadowOffset: {
+          width: 0,
+          height: 1,
+        },
+
+        shadowOpacity: 0.06,
+
+        shadowRadius: 3,
+      },
+    }),
+  },
+
+  backButton: {
+    width: 44,
+
+    height: 44,
+
+    borderRadius: 22,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    backgroundColor: '#F3F4F6',
+
+    zIndex: 2,
+  },
+
+  backButtonPressed: {
+    opacity: 0.65,
+
+    transform: [
+      {
+        scale: 0.96,
+      },
+    ],
+  },
+
+  titleContainer: {
+    flex: 1,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    paddingHorizontal: 12,
+  },
+
+  title: {
+    maxWidth: '100%',
+
+    fontSize: 17,
+
+    lineHeight: 22,
+
+    fontWeight: '600',
+
+    letterSpacing: 0.15,
+
+    color: '#1F2937',
+
+    textAlign: 'center',
+  },
+
+  rightSpace: {
+    width: 44,
+
+    height: 44,
+  },
+})

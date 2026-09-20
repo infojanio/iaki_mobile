@@ -160,13 +160,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     marginTop: 2,
-    marginBottom: 8,
+    marginBottom: -12,
   },
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginHorizontal: 3,
+    marginHorizontal: 2,
     backgroundColor: 'blue',
   },
 })

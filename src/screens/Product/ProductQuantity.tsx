@@ -427,7 +427,7 @@ export function ProductQuantity({ onPressProduct }: Props) {
   ===================================== */
 
   return (
-    <VStack bg="gray.100" minH={285} mb={6}>
+    <VStack bg="blue.50" minH={285} mb={6}>
       <VStack>
         <VStack ml={1} mb={1}>
           <HStack justifyContent="space-between" mr={2}>

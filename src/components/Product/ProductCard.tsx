@@ -299,7 +299,8 @@ const styles = StyleSheet.create({
     width: 120,
     minHeight: 230,
 
-    marginRight: 4,
+    marginRight: -4,
+    marginLeft: -4,
     marginTop: 4,
     marginBottom: 4,
 

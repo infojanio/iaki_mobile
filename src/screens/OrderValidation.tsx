@@ -1,20 +1,20 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 
-import { Alert, FlatList, ScrollView } from 'react-native'
-
 import {
-  Badge,
-  Box,
-  Button,
-  Divider,
-  HStack,
+  ActivityIndicator,
+  Alert,
+  FlatList,
   Image,
+  ListRenderItemInfo,
   Pressable,
-  Spinner,
+  ScrollView,
+  StyleSheet,
   Text,
-  VStack,
-  useToast,
-} from 'native-base'
+  TextInput,
+  View,
+} from 'react-native'
+
+import { MaterialIcons } from '@expo/vector-icons'
 
 import { useFocusEffect } from '@react-navigation/native'
 
@@ -23,8 +23,6 @@ import { api } from '@services/api'
 import { formatCurrency } from '@utils/format'
 
 import { HomeScreen } from '@components/HomeScreen'
-
-import { Input } from '@components/Input/index'
 
 interface Product {
   id: string
@@ -50,7 +48,7 @@ interface Order {
   items: OrderItem[]
 }
 
-const DEFAULT_PRODUCT_IMAGE = 'https://via.placeholder.com/80'
+const PAGE_SIZE = 8
 
 const STATUS_OPTIONS = [
   {
@@ -67,11 +65,138 @@ const STATUS_OPTIONS = [
   },
 ]
 
-const PAGE_SIZE = 8
+function safeNumber(value: unknown, fallback = 0) {
+  const number = Number(value)
+
+  return Number.isFinite(number) ? number : fallback
+}
+
+function getStatusLabel(status: string) {
+  switch (status) {
+    case 'PENDING':
+      return 'Pendente'
+
+    case 'VALIDATED':
+      return 'Aprovado'
+
+    case 'EXPIRED':
+      return 'Cancelado'
+
+    default:
+      return status
+  }
+}
+
+function getStatusStyle(status: string) {
+  switch (status) {
+    case 'PENDING':
+      return {
+        backgroundColor: '#FEF3C7',
+
+        color: '#92400E',
+      }
+
+    case 'VALIDATED':
+      return {
+        backgroundColor: '#DCFCE7',
+
+        color: '#166534',
+      }
+
+    case 'EXPIRED':
+      return {
+        backgroundColor: '#FEE2E2',
+
+        color: '#991B1B',
+      }
+
+    default:
+      return {
+        backgroundColor: '#E5E7EB',
+
+        color: '#374151',
+      }
+  }
+}
+
+function formatOrderDate(date: string) {
+  if (!date) {
+    return '-'
+  }
+
+  const parsedDate = new Date(date)
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return '-'
+  }
+
+  return parsedDate.toLocaleDateString('pt-BR')
+}
+
+function getImageUri(image?: string | null) {
+  if (!image) {
+    return null
+  }
+
+  const value = image.trim()
+
+  if (!value) {
+    return null
+  }
+
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return value
+  }
+
+  const baseURL = api.defaults.baseURL?.replace(/\/+$/, '')
+
+  if (!baseURL) {
+    return null
+  }
+
+  const normalizedImage = value.replace(/^\/+/, '')
+
+  if (normalizedImage.startsWith('uploads/')) {
+    return `${baseURL}/${normalizedImage}`
+  }
+
+  return `${baseURL}/uploads/${normalizedImage}`
+}
+
+type ProductImageProps = {
+  image?: string | null
+}
+
+function ProductImage({ image }: ProductImageProps) {
+  const [hasError, setHasError] = useState(false)
+
+  const uri = useMemo(() => getImageUri(image), [image])
+
+  if (!uri || hasError) {
+    return (
+      <View style={styles.productImageFallback}>
+        <MaterialIcons name="image-not-supported" size={28} color="#9CA3AF" />
+      </View>
+    )
+  }
+
+  return (
+    <Image
+      source={{
+        uri,
+      }}
+      style={styles.productImage}
+      resizeMode="contain"
+      resizeMethod="resize"
+      fadeDuration={0}
+      onError={() => {
+        setHasError(true)
+      }}
+    />
+  )
+}
 
 export function OrderValidation() {
-  const toast = useToast()
-
   const [orders, setOrders] = useState<Order[]>([])
 
   const [loading, setLoading] = useState(true)
@@ -92,94 +217,28 @@ export function OrderValidation() {
     null,
   )
 
-  /*
-   * Evita disparar várias páginas ao mesmo
-   * tempo através do onEndReached.
-   */
   const loadingMoreRef = useRef(false)
 
-  /*
-   * Permite cancelar requisições antigas
-   * quando status/tela mudar.
-   */
   const requestControllerRef = useRef<AbortController | null>(null)
 
-  /*
-   * Mesmo que uma requisição antiga consiga
-   * terminar, ela não sobrescreve a mais nova.
-   */
   const requestSequenceRef = useRef(0)
-
-  /* ==============================
-     STATUS
-  ============================== */
-
-  function getStatusLabel(status: string) {
-    switch (status) {
-      case 'PENDING':
-        return 'Pendente'
-
-      case 'VALIDATED':
-        return 'Aprovado'
-
-      case 'EXPIRED':
-        return 'Cancelado'
-
-      default:
-        return status
-    }
-  }
-
-  function getStatusColor(status: string) {
-    switch (status) {
-      case 'PENDING':
-        return 'warning'
-
-      case 'VALIDATED':
-        return 'success'
-
-      case 'EXPIRED':
-        return 'error'
-
-      default:
-        return 'coolGray'
-    }
-  }
-
-  /* ==============================
-     DATA
-  ============================== */
-
-  function formatOrderDate(date: string) {
-    if (!date) {
-      return '-'
-    }
-
-    const parsedDate = new Date(date)
-
-    if (Number.isNaN(parsedDate.getTime())) {
-      return '-'
-    }
-
-    return parsedDate.toLocaleDateString('pt-BR')
-  }
 
   /* ==============================
      PONTOS
   ============================== */
 
-  function calculateOrderPoints(order: Order) {
-    const total = Number(order.totalAmount ?? 0)
+  const calculateOrderPoints = useCallback((order: Order) => {
+    const total = safeNumber(order.totalAmount)
 
-    const discount = Number(order.discountApplied ?? 0)
+    const discount = safeNumber(order.discountApplied)
 
     const paidValue = Math.max(0, total - discount)
 
     return Math.floor(paidValue / 10)
-  }
+  }, [])
 
   /* ==============================
-     NORMALIZAR PEDIDOS
+     NORMALIZAÇÃO
   ============================== */
 
   const normalizeOrders = useCallback((rawOrders: any[]): Order[] => {
@@ -199,9 +258,9 @@ export function OrderValidation() {
 
           createdAt: String(order.createdAt ?? ''),
 
-          totalAmount: Number(order.totalAmount ?? 0),
+          totalAmount: safeNumber(order.totalAmount),
 
-          discountApplied: Number(order.discountApplied ?? 0),
+          discountApplied: safeNumber(order.discountApplied),
 
           status: String(order.status ?? 'PENDING'),
 
@@ -210,16 +269,16 @@ export function OrderValidation() {
                 (item: any, index: number): OrderItem => ({
                   id: String(item?.id ?? `${order.id}-${index}`),
 
-                  quantity: Number(item?.quantity ?? 0),
+                  quantity: safeNumber(item?.quantity),
 
                   product: {
                     id: String(item?.product?.id ?? ''),
 
                     name: String(item?.product?.name ?? 'Produto'),
 
-                    price: Number(item?.product?.price ?? 0),
+                    price: safeNumber(item?.product?.price),
 
-                    image: item?.product?.image || DEFAULT_PRODUCT_IMAGE,
+                    image: item?.product?.image ?? null,
                   },
                 }),
               )
@@ -229,22 +288,15 @@ export function OrderValidation() {
   }, [])
 
   /* ==============================
-     CARREGAR PEDIDOS
+     BUSCAR PEDIDOS
   ============================== */
 
   const fetchOrders = useCallback(
     async (pageNumber = 1, reset = false) => {
-      /*
-       * Evita paginação paralela.
-       */
       if (pageNumber > 1 && loadingMoreRef.current) {
         return
       }
 
-      /*
-       * Nova carga principal:
-       * cancela a anterior.
-       */
       if (reset) {
         requestControllerRef.current?.abort()
       }
@@ -266,6 +318,12 @@ export function OrderValidation() {
           setLoadingMore(true)
         }
 
+        console.log('[OrderValidation] Buscando pedidos:', {
+          page: pageNumber,
+
+          status: selectedStatus,
+        })
+
         const response = await api.get('/orders', {
           signal: controller.signal,
 
@@ -278,10 +336,6 @@ export function OrderValidation() {
           },
         })
 
-        /*
-         * Uma requisição mais recente
-         * já começou.
-         */
         if (requestSequence !== requestSequenceRef.current) {
           return
         }
@@ -294,11 +348,6 @@ export function OrderValidation() {
         if (reset) {
           setOrders(newOrders)
         } else {
-          /*
-           * Evita pedidos duplicados
-           * caso onEndReached dispare
-           * novamente para a mesma página.
-           */
           setOrders((currentOrders) => {
             const knownIds = new Set(currentOrders.map((order) => order.id))
 
@@ -310,13 +359,9 @@ export function OrderValidation() {
           })
         }
 
-        /*
-         * Compatível tanto com backend
-         * paginado quanto com retorno simples.
-         */
         const pagination = response.data?.pagination ?? response.data?.meta
 
-        const totalPages = Number(pagination?.totalPages ?? 0)
+        const totalPages = safeNumber(pagination?.totalPages)
 
         if (totalPages > 0) {
           setHasMore(pageNumber < totalPages)
@@ -326,32 +371,23 @@ export function OrderValidation() {
 
         setPage(pageNumber)
       } catch (error: any) {
-        /*
-         * Requisição cancelada não é erro.
-         */
         if (
           error?.code === 'ERR_CANCELED' ||
           error?.name === 'CanceledError' ||
-          error?.name === 'AbortError'
+          error?.name === 'AbortError' ||
+          error?.message === 'canceled'
         ) {
           return
         }
 
         console.error('[OrderValidation] Erro ao carregar pedidos:', {
+          message: error?.message,
+
+          code: error?.code,
+
           status: error?.response?.status,
 
           data: error?.response?.data,
-
-          message: error?.message,
-        })
-
-        toast.show({
-          description:
-            error?.response?.data?.message ?? 'Erro ao carregar pedidos',
-
-          bgColor: 'red.500',
-
-          placement: 'top',
         })
 
         if (reset) {
@@ -359,27 +395,28 @@ export function OrderValidation() {
         }
 
         setHasMore(false)
+
+        Alert.alert(
+          'Erro',
+          error?.response?.data?.message ?? 'Erro ao carregar pedidos.',
+        )
       } finally {
-        /*
-         * Uma requisição antiga não deve
-         * mexer no loading da nova.
-         */
         if (requestSequence === requestSequenceRef.current) {
           setLoading(false)
 
           setLoadingMore(false)
 
           setRefreshing(false)
-        }
 
-        loadingMoreRef.current = false
+          loadingMoreRef.current = false
+        }
       }
     },
-    [normalizeOrders, selectedStatus, toast],
+    [normalizeOrders, selectedStatus],
   )
 
   /* ==============================
-     FOCO DA TELA
+     FOCO
   ============================== */
 
   useFocusEffect(
@@ -390,31 +427,28 @@ export function OrderValidation() {
 
       void fetchOrders(1, true)
 
-      /*
-       * Ao sair da tela ou mudar
-       * selectedStatus, cancela
-       * requisição pendente.
-       */
       return () => {
         requestControllerRef.current?.abort()
+
+        requestSequenceRef.current += 1
+
+        loadingMoreRef.current = false
       }
     }, [fetchOrders]),
   )
 
   /* ==============================
-     FILTRO LOCAL POR ID
+     FILTRO POR ID
   ============================== */
 
   const filteredOrders = useMemo(() => {
-    const normalizedSearch = searchId.trim().toLowerCase()
+    const search = searchId.trim().toLowerCase()
 
-    if (!normalizedSearch) {
+    if (!search) {
       return orders
     }
 
-    return orders.filter((order) =>
-      order.id.toLowerCase().includes(normalizedSearch),
-    )
+    return orders.filter((order) => order.id.toLowerCase().includes(search))
   }, [orders, searchId])
 
   /* ==============================
@@ -432,7 +466,7 @@ export function OrderValidation() {
   }, [fetchOrders])
 
   /* ==============================
-     CARREGAR MAIS
+     PAGINAÇÃO
   ============================== */
 
   const loadMoreOrders = useCallback(() => {
@@ -440,13 +474,11 @@ export function OrderValidation() {
       return
     }
 
-    const nextPage = page + 1
-
-    void fetchOrders(nextPage, false)
+    void fetchOrders(page + 1, false)
   }, [fetchOrders, hasMore, loading, loadingMore, page])
 
   /* ==============================
-     VALIDAR PEDIDO
+     VALIDAR
   ============================== */
 
   const validateOrder = useCallback(
@@ -460,46 +492,38 @@ export function OrderValidation() {
 
         const response = await api.patch(`/orders/${orderId}/validate`)
 
-        toast.show({
-          description:
-            response.data?.message ?? 'Pedido validado e pontos gerados!',
-
-          bgColor: 'green.500',
-
-          placement: 'top',
-        })
-
-        setPage(1)
-
         await fetchOrders(1, true)
+
+        Alert.alert(
+          'Pedido validado',
+          response.data?.message ?? 'Pedido validado e pontos gerados!',
+        )
       } catch (error: any) {
         console.error('[OrderValidation] Erro ao validar pedido:', {
           orderId,
 
+          message: error?.message,
+
+          code: error?.code,
+
           status: error?.response?.status,
 
           data: error?.response?.data,
-
-          message: error?.message,
         })
 
-        toast.show({
-          description:
-            error?.response?.data?.message ?? 'Erro ao validar pedido',
-
-          bgColor: 'red.500',
-
-          placement: 'top',
-        })
+        Alert.alert(
+          'Erro',
+          error?.response?.data?.message ?? 'Erro ao validar pedido.',
+        )
       } finally {
         setProcessingOrderId(null)
       }
     },
-    [fetchOrders, processingOrderId, toast],
+    [fetchOrders, processingOrderId],
   )
 
   /* ==============================
-     CANCELAR PEDIDO
+     CANCELAR
   ============================== */
 
   const cancelOrder = useCallback(
@@ -513,45 +537,35 @@ export function OrderValidation() {
 
         await api.patch(`/orders/${orderId}/cancel`)
 
-        toast.show({
-          description: 'Pedido cancelado com sucesso!',
-
-          bgColor: 'green.500',
-
-          placement: 'top',
-        })
-
-        setPage(1)
-
         await fetchOrders(1, true)
+
+        Alert.alert('Pedido cancelado', 'Pedido cancelado com sucesso!')
       } catch (error: any) {
         console.error('[OrderValidation] Erro ao cancelar pedido:', {
           orderId,
 
+          message: error?.message,
+
+          code: error?.code,
+
           status: error?.response?.status,
 
           data: error?.response?.data,
-
-          message: error?.message,
         })
 
-        toast.show({
-          description:
-            error?.response?.data?.message ?? 'Erro ao cancelar pedido',
-
-          bgColor: 'red.500',
-
-          placement: 'top',
-        })
+        Alert.alert(
+          'Erro',
+          error?.response?.data?.message ?? 'Erro ao cancelar pedido.',
+        )
       } finally {
         setProcessingOrderId(null)
       }
     },
-    [fetchOrders, processingOrderId, toast],
+    [fetchOrders, processingOrderId],
   )
 
   /* ==============================
-     CONFIRMAÇÃO NATIVA
+     CONFIRMAÇÃO
   ============================== */
 
   const handleConfirmAction = useCallback(
@@ -572,6 +586,7 @@ export function OrderValidation() {
         [
           {
             text: 'Voltar',
+
             style: 'cancel',
           },
 
@@ -600,18 +615,160 @@ export function OrderValidation() {
   )
 
   /* ==============================
-     LOADING INICIAL
+     ITEM
+  ============================== */
+
+  const renderOrder = useCallback(
+    ({ item }: ListRenderItemInfo<Order>) => {
+      const isPending = item.status === 'PENDING'
+
+      const isProcessing = processingOrderId === item.id
+
+      const statusStyle = getStatusStyle(item.status)
+
+      return (
+        <View style={styles.orderCard}>
+          <Text numberOfLines={1} style={styles.orderTitle}>
+            Pedido #{item.id.slice(0, 8)}
+          </Text>
+
+          <View
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor: statusStyle.backgroundColor,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.statusText,
+                {
+                  color: statusStyle.color,
+                },
+              ]}
+            >
+              {getStatusLabel(item.status)}
+            </Text>
+          </View>
+
+          <Text numberOfLines={1} style={styles.secondaryText}>
+            Cliente: {item.user_name}
+          </Text>
+
+          <Text style={styles.secondaryText}>
+            {formatOrderDate(item.createdAt)}
+          </Text>
+
+          <View style={styles.divider} />
+
+          {item.items.length > 0 ? (
+            item.items.map((orderItem) => (
+              <View
+                key={`item-${item.id}-${orderItem.id}`}
+                style={styles.productRow}
+              >
+                <ProductImage image={orderItem.product.image} />
+
+                <View style={styles.productInfo}>
+                  <Text numberOfLines={2} style={styles.productName}>
+                    {orderItem.quantity}x {orderItem.product.name}
+                  </Text>
+
+                  <Text style={styles.productPrice}>
+                    {formatCurrency(orderItem.product.price)}
+                  </Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.secondaryText}>
+              Nenhum produto encontrado neste pedido.
+            </Text>
+          )}
+
+          <View style={styles.divider} />
+
+          <View style={styles.valueRow}>
+            <Text style={styles.valueLabel}>Total:</Text>
+
+            <Text style={styles.valueLabel}>
+              {formatCurrency(item.totalAmount)}
+            </Text>
+          </View>
+
+          {item.discountApplied > 0 ? (
+            <View style={styles.valueRow}>
+              <Text style={styles.discountValue}>Desconto aplicado:</Text>
+
+              <Text style={styles.discountValue}>
+                -{formatCurrency(item.discountApplied)}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={[styles.valueRow, styles.pointsRow]}>
+            <Text style={styles.pointsText}>Pontos a gerar:</Text>
+
+            <Text style={styles.pointsText}>
+              {calculateOrderPoints(item)} pontos
+            </Text>
+          </View>
+
+          {isPending ? (
+            <View style={styles.actions}>
+              <Pressable
+                disabled={processingOrderId !== null}
+                onPress={() => handleConfirmAction(item.id, 'validate')}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  styles.validateButton,
+
+                  processingOrderId !== null && styles.disabledButton,
+
+                  pressed && styles.pressed,
+                ]}
+              >
+                {isProcessing ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.actionButtonText}>Validar Pedido</Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                disabled={processingOrderId !== null}
+                onPress={() => handleConfirmAction(item.id, 'cancel')}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  styles.cancelButton,
+
+                  processingOrderId !== null && styles.disabledButton,
+
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.actionButtonText}>Cancelar</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      )
+    },
+    [calculateOrderPoints, handleConfirmAction, processingOrderId],
+  )
+
+  /* ==============================
+     LOADING
   ============================== */
 
   if (loading && orders.length === 0) {
     return (
-      <Box flex={1} bg="gray.50" justifyContent="center" alignItems="center">
-        <Spinner size="lg" color="green.600" />
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color="#00875F" />
 
-        <Text mt={3} color="gray.500">
-          Carregando pedidos...
-        </Text>
-      </Box>
+        <Text style={styles.loadingText}>Carregando pedidos...</Text>
+      </View>
     )
   }
 
@@ -620,278 +777,421 @@ export function OrderValidation() {
   ============================== */
 
   return (
-    <Box flex={1} bg="gray.50">
+    <View style={styles.container}>
       <HomeScreen title="Validação de Pedidos" />
 
-      {/* ==========================
-          BUSCA E FILTRO
-      ========================== */}
+      {/* BUSCA */}
 
-      <Box px={4} py={2}>
-        <HStack alignItems="center">
-          <Box flex={1} mt={2}>
-            <Input
-              placeholder="Buscar por ID"
-              value={searchId}
-              onChangeText={setSearchId}
-            />
-          </Box>
+      <View style={styles.searchArea}>
+        <View style={styles.searchRow}>
+          <TextInput
+            value={searchId}
+            onChangeText={setSearchId}
+            placeholder="Buscar por ID"
+            placeholderTextColor="#9CA3AF"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.searchInput}
+          />
 
-          <Button ml={2} mt={2} onPress={() => setSearchId('')}>
-            Limpar
-          </Button>
-        </HStack>
+          <Pressable
+            onPress={() => setSearchId('')}
+            style={({ pressed }) => [
+              styles.clearButton,
+
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.clearButtonText}>Limpar</Text>
+          </Pressable>
+        </View>
+
+        {/* STATUS */}
 
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingRight: 16,
-          }}
+          contentContainerStyle={styles.statusFilters}
         >
-          <HStack space={2} mt={3}>
-            {STATUS_OPTIONS.map((option) => {
-              const isSelected = selectedStatus === option.value
+          {STATUS_OPTIONS.map((option) => {
+            const selected = selectedStatus === option.value
 
-              return (
-                <Pressable
-                  key={option.value}
-                  onPress={() => {
-                    if (selectedStatus === option.value) {
-                      return
-                    }
+            return (
+              <Pressable
+                key={option.value}
+                onPress={() => {
+                  if (selected) {
+                    return
+                  }
 
-                    setSearchId('')
+                  setSearchId('')
 
-                    setPage(1)
+                  setPage(1)
 
-                    setHasMore(true)
+                  setHasMore(true)
 
-                    setSelectedStatus(option.value)
-                  }}
+                  setSelectedStatus(option.value)
+                }}
+                style={({ pressed }) => [
+                  styles.filterButton,
+
+                  selected
+                    ? styles.filterButtonSelected
+                    : styles.filterButtonDefault,
+
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+
+                    selected
+                      ? styles.filterTextSelected
+                      : styles.filterTextDefault,
+                  ]}
                 >
-                  <Box
-                    px={4}
-                    py={2}
-                    borderRadius="full"
-                    bg={isSelected ? 'primary.500' : 'gray.200'}
-                  >
-                    <Text
-                      color={isSelected ? 'white' : 'gray.700'}
-                      fontWeight={isSelected ? 'bold' : 'normal'}
-                    >
-                      {option.label}
-                    </Text>
-                  </Box>
-                </Pressable>
-              )
-            })}
-          </HStack>
+                  {option.label}
+                </Text>
+              </Pressable>
+            )
+          })}
         </ScrollView>
-      </Box>
+      </View>
 
-      {/* ==========================
-          LISTA
-      ========================== */}
+      {/* LISTA */}
 
       <FlatList
         data={filteredOrders}
         keyExtractor={(item) => `order-${item.id}`}
+        renderItem={renderOrder}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        /*
-         * Como cada página possui poucos
-         * pedidos, desativamos clipping.
-         * Isso evita componentes sumindo
-         * em determinados builds Android.
-         */
         removeClippedSubviews={false}
         initialNumToRender={PAGE_SIZE}
         maxToRenderPerBatch={PAGE_SIZE}
-        windowSize={5}
+        windowSize={4}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         onEndReached={loadMoreOrders}
         onEndReachedThreshold={0.2}
-        contentContainerStyle={{
-          paddingBottom: 40,
+        contentContainerStyle={[
+          styles.listContent,
 
-          flexGrow: filteredOrders.length === 0 ? 1 : undefined,
-        }}
-        renderItem={({ item }) => {
-          const isPending = item.status === 'PENDING'
-
-          const isProcessing = processingOrderId === item.id
-
-          return (
-            <Box bg="white" p={4} mx={4} mt={4} borderRadius="md" shadow={1}>
-              {/* PEDIDO */}
-
-              <Text fontWeight="bold" numberOfLines={1}>
-                Pedido #{item.id.slice(0, 8)}
-              </Text>
-
-              {/* STATUS */}
-
-              <Box alignSelf="flex-start" mt={2}>
-                <Badge colorScheme={getStatusColor(item.status)}>
-                  {getStatusLabel(item.status)}
-                </Badge>
-              </Box>
-
-              {/* CLIENTE */}
-
-              <Text color="gray.500" mt={2} numberOfLines={1}>
-                Cliente: {item.user_name}
-              </Text>
-
-              {/* DATA */}
-
-              <Text color="gray.500">{formatOrderDate(item.createdAt)}</Text>
-
-              <Divider my={3} />
-
-              {/* PRODUTOS */}
-
-              {item.items.length > 0 ? (
-                <VStack space={2}>
-                  {item.items.map((orderItem) => (
-                    <HStack
-                      key={`item-${item.id}-${orderItem.id}`}
-                      space={3}
-                      alignItems="center"
-                    >
-                      <Image
-                        source={{
-                          uri: orderItem.product.image || DEFAULT_PRODUCT_IMAGE,
-                        }}
-                        alt={`Imagem de ${orderItem.product.name}`}
-                        size="sm"
-                        borderRadius="md"
-                        resizeMode="contain"
-                      />
-
-                      <VStack flex={1}>
-                        <Text numberOfLines={2}>
-                          {orderItem.quantity}x {orderItem.product.name}
-                        </Text>
-
-                        <Text color="gray.500">
-                          {formatCurrency(orderItem.product.price)}
-                        </Text>
-                      </VStack>
-                    </HStack>
-                  ))}
-                </VStack>
-              ) : (
-                <Text color="gray.500" fontSize="sm">
-                  Nenhum produto encontrado neste pedido.
-                </Text>
-              )}
-
-              <Divider my={3} />
-
-              {/* TOTAL */}
-
-              <HStack justifyContent="space-between">
-                <Text fontWeight="bold">Total:</Text>
-
-                <Text fontWeight="bold">
-                  {formatCurrency(item.totalAmount)}
-                </Text>
-              </HStack>
-
-              {/* DESCONTO */}
-
-              {item.discountApplied > 0 ? (
-                <HStack justifyContent="space-between" mt={1}>
-                  <Text color="orange.600">Desconto aplicado:</Text>
-
-                  <Text color="orange.600">
-                    -{formatCurrency(item.discountApplied)}
-                  </Text>
-                </HStack>
-              ) : null}
-
-              {/* PONTOS */}
-
-              <HStack justifyContent="space-between" mt={2}>
-                <Text fontWeight="bold" color="purple.700">
-                  Pontos a gerar:
-                </Text>
-
-                <Text fontWeight="bold" color="purple.700">
-                  {calculateOrderPoints(item)} pontos
-                </Text>
-              </HStack>
-
-              {/* AÇÕES */}
-
-              {isPending && (
-                <HStack mt={4} space={3}>
-                  <Button
-                    flex={1}
-                    colorScheme="green"
-                    isDisabled={processingOrderId !== null}
-                    isLoading={isProcessing}
-                    onPress={() => handleConfirmAction(item.id, 'validate')}
-                  >
-                    Validar Pedido
-                  </Button>
-
-                  <Button
-                    flex={1}
-                    colorScheme="red"
-                    isDisabled={processingOrderId !== null}
-                    onPress={() => handleConfirmAction(item.id, 'cancel')}
-                  >
-                    Cancelar
-                  </Button>
-                </HStack>
-              )}
-            </Box>
-          )
-        }}
-        /* ==========================
-           LISTA VAZIA
-        ========================== */
-
+          filteredOrders.length === 0 && styles.emptyListContent,
+        ]}
         ListEmptyComponent={
-          <Box flex={1} px={6} pt={20} alignItems="center">
-            <Text
-              fontSize="lg"
-              fontWeight="bold"
-              color="gray.700"
-              textAlign="center"
-            >
-              Nenhum pedido encontrado
-            </Text>
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="receipt-long" size={52} color="#9CA3AF" />
 
-            <Text mt={2} fontSize="sm" color="gray.500" textAlign="center">
+            <Text style={styles.emptyTitle}>Nenhum pedido encontrado</Text>
+
+            <Text style={styles.emptyText}>
               {searchId.trim()
                 ? 'Nenhum pedido corresponde ao ID informado.'
                 : 'Não existem pedidos com este status.'}
             </Text>
-          </Box>
+          </View>
         }
-        /* ==========================
-           FOOTER
-        ========================== */
-
         ListFooterComponent={
           loadingMore ? (
-            <Box py={6} alignItems="center">
-              <Spinner size="sm" color="green.600" />
+            <View style={styles.footerLoading}>
+              <ActivityIndicator size="small" color="#00875F" />
 
-              <Text mt={2} fontSize="xs" color="gray.500">
+              <Text style={styles.footerLoadingText}>
                 Carregando mais pedidos...
               </Text>
-            </Box>
+            </View>
           ) : (
-            <Box h={4} />
+            <View style={styles.footerSpace} />
           )
         }
       />
-    </Box>
+    </View>
   )
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+
+  loadingScreen: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+
+  loadingText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#6B7280',
+  },
+
+  searchArea: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  searchInput: {
+    flex: 1,
+    minHeight: 48,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    fontSize: 15,
+    color: '#111827',
+  },
+
+  clearButton: {
+    minHeight: 48,
+    marginLeft: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#00875F',
+  },
+
+  clearButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  statusFilters: {
+    gap: 8,
+    paddingTop: 12,
+    paddingRight: 16,
+  },
+
+  filterButton: {
+    minHeight: 38,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+
+  filterButtonDefault: {
+    backgroundColor: '#E5E7EB',
+    borderColor: '#E5E7EB',
+  },
+
+  filterButtonSelected: {
+    backgroundColor: '#00875F',
+    borderColor: '#00875F',
+  },
+
+  filterText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  filterTextDefault: {
+    color: '#374151',
+  },
+
+  filterTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  listContent: {
+    paddingBottom: 40,
+  },
+
+  emptyListContent: {
+    flexGrow: 1,
+  },
+
+  orderCard: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    elevation: 2,
+  },
+
+  orderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+
+  statusBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  secondaryText: {
+    marginTop: 7,
+    fontSize: 13,
+    color: '#6B7280',
+  },
+
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 14,
+    backgroundColor: '#E5E7EB',
+  },
+
+  productRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+
+  productImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+  },
+
+  productImageFallback: {
+    width: 56,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+  },
+
+  productInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+
+  productName: {
+    fontSize: 14,
+    color: '#1F2937',
+  },
+
+  productPrice: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#6B7280',
+  },
+
+  valueRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+
+  valueLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+
+  discountValue: {
+    fontSize: 13,
+    color: '#C2410C',
+  },
+
+  pointsRow: {
+    marginTop: 10,
+  },
+
+  pointsText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#7E22CE',
+  },
+
+  actions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+
+  actionButton: {
+    flex: 1,
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+  },
+
+  validateButton: {
+    backgroundColor: '#16A34A',
+  },
+
+  cancelButton: {
+    backgroundColor: '#DC2626',
+  },
+
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  disabledButton: {
+    opacity: 0.55,
+  },
+
+  pressed: {
+    opacity: 0.7,
+  },
+
+  emptyContainer: {
+    flex: 1,
+    paddingHorizontal: 30,
+    paddingTop: 70,
+    alignItems: 'center',
+  },
+
+  emptyTitle: {
+    marginTop: 14,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#374151',
+    textAlign: 'center',
+  },
+
+  emptyText: {
+    marginTop: 7,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+
+  footerLoading: {
+    paddingVertical: 22,
+    alignItems: 'center',
+  },
+
+  footerLoadingText: {
+    marginTop: 7,
+    fontSize: 12,
+    color: '#6B7280',
+  },
+
+  footerSpace: {
+    height: 16,
+  },
+})

@@ -426,7 +426,7 @@ export function ProductDiscount({ onPressProduct }: Props) {
   }
 
   return (
-    <VStack bg="gray.100" mt={2}>
+    <VStack bg="blue.50" mt={6}>
       <VStack px={4} mb={2}>
         <HStack justifyContent="space-between" alignItems="center">
           <Text fontSize="md" fontWeight="semibold">

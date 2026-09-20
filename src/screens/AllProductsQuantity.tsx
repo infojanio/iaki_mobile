@@ -1,16 +1,23 @@
-import React, { useContext, useEffect, useState } from 'react'
-import { FlatList } from 'react-native'
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+
 import {
-  VStack,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  ListRenderItemInfo,
+  Pressable,
+  StyleSheet,
   Text,
-  useToast,
-  Box,
-  HStack,
-  Select,
-  CheckIcon,
-  Spinner,
-} from 'native-base'
-import { StyleSheet } from 'react-native'
+  useWindowDimensions,
+  View,
+} from 'react-native'
 
 import { useNavigation } from '@react-navigation/native'
 
@@ -22,18 +29,47 @@ import { ProductDTO } from '@dtos/ProductDTO'
 
 import { api } from '@services/api'
 
-import { AppError } from '@utils/AppError'
-
 import { ProductCard } from '@components/Product/ProductCard'
 
 import { HomeScreen } from '@components/HomeScreen'
 
 import { CartContext } from '@contexts/CartContext'
 
+const FILTER_OPTIONS = [
+  {
+    value: 'all',
+    label: 'Todos',
+  },
+  {
+    value: '5',
+    label: '< 5',
+  },
+  {
+    value: '10',
+    label: '< 10',
+  },
+  {
+    value: '15',
+    label: '< 15',
+  },
+]
+
+function safeNumber(value: unknown, fallback = 0) {
+  const number = Number(value)
+
+  return Number.isFinite(number) ? number : fallback
+}
+
 export function AllProductsQuantity() {
   const navigation = useNavigation<AppNavigatorRoutesProps>()
 
-  const toast = useToast()
+  const { width } = useWindowDimensions()
+
+  /*
+   * Três cards de 120px podem ficar
+   * apertados em aparelhos menores.
+   */
+  const numColumns = width >= 380 ? 3 : 2
 
   const {
     cartItems,
@@ -45,356 +81,681 @@ export function AllProductsQuantity() {
 
   const [products, setProducts] = useState<ProductDTO[]>([])
 
-  const [filteredProducts, setFilteredProducts] = useState<ProductDTO[]>([])
-
   const [updatingProductIds, setUpdatingProductIds] = useState<string[]>([])
 
   const [isLoading, setIsLoading] = useState(true)
 
   const [quantityFilter, setQuantityFilter] = useState('all')
 
-  function handleOpenProductDetails(productId: string) {
-    navigation.navigate('productDetails', {
-      productId,
-    })
-  }
+  /*
+   * Cancela a busca se a tela
+   * for desmontada.
+   */
+  const requestControllerRef = useRef<AbortController | null>(null)
 
-  function applyQuantityFilter(productsList: ProductDTO[], filter: string) {
-    let filtered = [...productsList]
+  const requestIdRef = useRef(0)
 
-    switch (filter) {
-      case '5':
-        filtered = productsList.filter(
-          (product) => Number(product.quantity ?? 0) < 5,
-        )
-        break
+  /* ==============================
+     DETALHES
+  ============================== */
 
-      case '10':
-        filtered = productsList.filter(
-          (product) => Number(product.quantity ?? 0) < 10,
-        )
-        break
+  const handleOpenProductDetails = useCallback(
+    (productId: string) => {
+      if (!productId) {
+        return
+      }
 
-      case '15':
-        filtered = productsList.filter(
-          (product) => Number(product.quantity ?? 0) < 15,
-        )
-        break
+      navigation.navigate('productDetails', {
+        productId,
+      })
+    },
+    [navigation],
+  )
 
-      default:
-        filtered = productsList
-    }
+  /* ==============================
+     BUSCAR PRODUTOS
+  ============================== */
 
-    setFilteredProducts(filtered)
-  }
+  const fetchProductByQuantity = useCallback(async () => {
+    requestControllerRef.current?.abort()
 
-  function handleQuantityFilterChange(value: string) {
-    setQuantityFilter(value)
-    applyQuantityFilter(products, value)
-  }
+    const controller = new AbortController()
 
-  async function fetchProductByQuantity() {
+    requestControllerRef.current = controller
+
+    const requestId = ++requestIdRef.current
+
     try {
       setIsLoading(true)
 
-      const response = await api.get('/products/quantity')
+      const response = await api.get('/products/quantity', {
+        signal: controller.signal,
+      })
 
-      const fetchedProducts: ProductDTO[] =
-        response.data?.products ?? response.data ?? []
+      if (requestId !== requestIdRef.current) {
+        return
+      }
+
+      const responseProducts =
+        response.data?.products ?? response.data?.data ?? response.data ?? []
+
+      const fetchedProducts: ProductDTO[] = Array.isArray(responseProducts)
+        ? responseProducts.filter((product) => Boolean(product?.id))
+        : []
 
       setProducts(fetchedProducts)
+    } catch (error: any) {
+      /*
+       * Cancelamento normal da
+       * requisição não é erro.
+       */
+      if (
+        error?.code === 'ERR_CANCELED' ||
+        error?.name === 'CanceledError' ||
+        error?.message === 'canceled'
+      ) {
+        return
+      }
 
-      applyQuantityFilter(fetchedProducts, quantityFilter)
-    } catch (error) {
-      const title =
-        error instanceof AppError
-          ? error.message
-          : 'Não foi possível carregar os produtos que estão esgotando!'
+      console.error('[AllProductsQuantity] Erro ao carregar produtos:', {
+        message: error?.message,
 
-      toast.show({
-        title,
-        placement: 'top',
-        bgColor: 'red.500',
+        code: error?.code,
+
+        status: error?.response?.status,
+
+        data: error?.response?.data,
       })
 
       setProducts([])
-      setFilteredProducts([])
+
+      Alert.alert(
+        'Erro',
+        error?.response?.data?.message ??
+          'Não foi possível carregar os produtos que estão esgotando.',
+      )
     } finally {
-      setIsLoading(false)
-    }
-  }
-
-  /*
-   * Retorna a loja responsável pelo produto.
-   *
-   * A rota /products/quantity precisa retornar
-   * storeId ou store.id em cada produto.
-   */
-  function getProductStoreId(currentProduct: ProductDTO) {
-    return currentProduct.storeId ?? currentProduct.store?.id ?? null
-  }
-
-  function getCartQuantity(currentProduct: ProductDTO) {
-    const productStoreId = getProductStoreId(currentProduct)
-
-    if (!productStoreId || activeStoreId !== productStoreId) {
-      return 0
-    }
-
-    return (
-      cartItems.find((cartItem) => cartItem.productId === currentProduct.id)
-        ?.quantity ?? 0
-    )
-  }
-
-  function isProductUpdating(productId: string) {
-    return updatingProductIds.includes(productId)
-  }
-
-  function setProductUpdating(productId: string, updating: boolean) {
-    setUpdatingProductIds((current) => {
-      if (updating) {
-        if (current.includes(productId)) {
-          return current
-        }
-
-        return [...current, productId]
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false)
       }
-
-      return current.filter((id) => id !== productId)
-    })
-  }
-
-  async function handleIncrementProduct(currentProduct: ProductDTO) {
-    if (isProductUpdating(currentProduct.id)) {
-      return
     }
-
-    const productStoreId = getProductStoreId(currentProduct)
-
-    if (!productStoreId) {
-      console.error(
-        '[AllProductsQuantity] Produto sem storeId:',
-        currentProduct,
-      )
-
-      toast.show({
-        title: 'Não foi possível identificar a loja',
-        description: 'Atualize a tela e tente novamente.',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-
-      return
-    }
-
-    const stockQuantity = Number(currentProduct.quantity ?? 0)
-
-    const cartQuantity = getCartQuantity(currentProduct)
-
-    if (stockQuantity <= 0) {
-      toast.show({
-        title: 'Produto esgotado',
-        description: 'Este produto não possui unidades disponíveis.',
-        placement: 'top',
-        bgColor: 'orange.500',
-      })
-
-      return
-    }
-
-    if (cartQuantity >= stockQuantity) {
-      toast.show({
-        title: 'Estoque insuficiente',
-        description: 'Quantidade máxima disponível atingida.',
-        placement: 'top',
-        bgColor: 'orange.500',
-      })
-
-      return
-    }
-
-    try {
-      setProductUpdating(currentProduct.id, true)
-
-      if (cartQuantity === 0) {
-        await addProductCart({
-          productId: currentProduct.id,
-          storeId: productStoreId,
-          quantity: 1,
-        })
-      } else {
-        await incrementProduct(currentProduct.id)
-      }
-    } catch (error: any) {
-      console.error(
-        '[AllProductsQuantity] Erro ao adicionar:',
-        error?.response?.status,
-        error?.response?.data,
-        error?.message,
-      )
-
-      toast.show({
-        title: 'Erro ao adicionar produto',
-        description:
-          error?.response?.data?.message ??
-          error?.message ??
-          'Não foi possível adicionar o produto.',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setProductUpdating(currentProduct.id, false)
-    }
-  }
-
-  async function handleDecrementProduct(currentProduct: ProductDTO) {
-    if (isProductUpdating(currentProduct.id)) {
-      return
-    }
-
-    const cartQuantity = getCartQuantity(currentProduct)
-
-    if (cartQuantity <= 0) {
-      return
-    }
-
-    try {
-      setProductUpdating(currentProduct.id, true)
-
-      await decrementProduct(currentProduct.id)
-    } catch (error: any) {
-      console.error(
-        '[AllProductsQuantity] Erro ao diminuir:',
-        error?.response?.status,
-        error?.response?.data,
-        error?.message,
-      )
-
-      toast.show({
-        title: 'Erro ao atualizar produto',
-        description:
-          error?.response?.data?.message ??
-          error?.message ??
-          'Não foi possível diminuir a quantidade.',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setProductUpdating(currentProduct.id, false)
-    }
-  }
-
-  useEffect(() => {
-    fetchProductByQuantity()
   }, [])
 
+  useEffect(() => {
+    void fetchProductByQuantity()
+
+    return () => {
+      requestControllerRef.current?.abort()
+
+      requestIdRef.current += 1
+    }
+  }, [fetchProductByQuantity])
+
+  /* ==============================
+     FILTRO
+  ============================== */
+
+  const filteredProducts = useMemo(() => {
+    if (quantityFilter === 'all') {
+      return products
+    }
+
+    const limit = safeNumber(quantityFilter)
+
+    return products.filter((product) => {
+      const quantity = safeNumber(product?.quantity)
+
+      return quantity < limit
+    })
+  }, [products, quantityFilter])
+
+  /* ==============================
+     LOJA DO PRODUTO
+  ============================== */
+
+  const getProductStoreId = useCallback((currentProduct: ProductDTO) => {
+    return currentProduct?.storeId ?? currentProduct?.store?.id ?? null
+  }, [])
+
+  /* ==============================
+     QUANTIDADE NO CARRINHO
+  ============================== */
+
+  const getCartQuantity = useCallback(
+    (currentProduct: ProductDTO) => {
+      const productStoreId = getProductStoreId(currentProduct)
+
+      if (!productStoreId || activeStoreId !== productStoreId) {
+        return 0
+      }
+
+      const cartItem = cartItems.find(
+        (item) => item.productId === currentProduct.id,
+      )
+
+      return safeNumber(cartItem?.quantity)
+    },
+    [activeStoreId, cartItems, getProductStoreId],
+  )
+
+  /* ==============================
+     PRODUTO ATUALIZANDO
+  ============================== */
+
+  const isProductUpdating = useCallback(
+    (productId: string) => {
+      return updatingProductIds.includes(productId)
+    },
+    [updatingProductIds],
+  )
+
+  const setProductUpdating = useCallback(
+    (productId: string, updating: boolean) => {
+      setUpdatingProductIds((current) => {
+        if (updating) {
+          if (current.includes(productId)) {
+            return current
+          }
+
+          return [...current, productId]
+        }
+
+        return current.filter((id) => id !== productId)
+      })
+    },
+    [],
+  )
+
+  /* ==============================
+     INCREMENTAR
+  ============================== */
+
+  const handleIncrementProduct = useCallback(
+    async (currentProduct: ProductDTO) => {
+      if (!currentProduct?.id || isProductUpdating(currentProduct.id)) {
+        return
+      }
+
+      const productStoreId = getProductStoreId(currentProduct)
+
+      if (!productStoreId) {
+        console.error(
+          '[AllProductsQuantity] Produto sem storeId:',
+          currentProduct.id,
+        )
+
+        Alert.alert(
+          'Erro',
+          'Não foi possível identificar a loja deste produto.',
+        )
+
+        return
+      }
+
+      const stockQuantity = safeNumber(currentProduct.quantity)
+
+      const cartQuantity = getCartQuantity(currentProduct)
+
+      if (stockQuantity <= 0) {
+        Alert.alert(
+          'Produto esgotado',
+          'Este produto não possui unidades disponíveis.',
+        )
+
+        return
+      }
+
+      if (cartQuantity >= stockQuantity) {
+        Alert.alert(
+          'Estoque insuficiente',
+          'Quantidade máxima disponível atingida.',
+        )
+
+        return
+      }
+
+      try {
+        setProductUpdating(currentProduct.id, true)
+
+        if (cartQuantity === 0) {
+          /*
+           * Envia o produto completo
+           * para atualização local
+           * imediata do carrinho.
+           */
+          await addProductCart({
+            productId: currentProduct.id,
+
+            storeId: productStoreId,
+
+            quantity: 1,
+
+            product: {
+              id: currentProduct.id,
+
+              name: currentProduct.name ?? 'Produto',
+
+              image: currentProduct.image,
+
+              price: safeNumber(currentProduct.price),
+
+              cashbackPercentage: safeNumber(currentProduct.cashbackPercentage),
+
+              quantity: stockQuantity,
+            },
+          })
+        } else {
+          await incrementProduct(currentProduct.id)
+        }
+      } catch (error: any) {
+        console.error('[AllProductsQuantity] Erro ao adicionar:', {
+          productId: currentProduct.id,
+
+          message: error?.message,
+
+          code: error?.code,
+
+          status: error?.response?.status,
+
+          data: error?.response?.data,
+        })
+
+        Alert.alert(
+          'Erro ao adicionar produto',
+          error?.response?.data?.message ??
+            error?.message ??
+            'Não foi possível adicionar o produto.',
+        )
+      } finally {
+        setProductUpdating(currentProduct.id, false)
+      }
+    },
+    [
+      addProductCart,
+      getCartQuantity,
+      getProductStoreId,
+      incrementProduct,
+      isProductUpdating,
+      setProductUpdating,
+    ],
+  )
+
+  /* ==============================
+     DECREMENTAR
+  ============================== */
+
+  const handleDecrementProduct = useCallback(
+    async (currentProduct: ProductDTO) => {
+      if (!currentProduct?.id || isProductUpdating(currentProduct.id)) {
+        return
+      }
+
+      const cartQuantity = getCartQuantity(currentProduct)
+
+      if (cartQuantity <= 0) {
+        return
+      }
+
+      try {
+        setProductUpdating(currentProduct.id, true)
+
+        await decrementProduct(currentProduct.id)
+      } catch (error: any) {
+        console.error('[AllProductsQuantity] Erro ao diminuir:', {
+          productId: currentProduct.id,
+
+          message: error?.message,
+
+          code: error?.code,
+
+          status: error?.response?.status,
+
+          data: error?.response?.data,
+        })
+
+        Alert.alert(
+          'Erro ao atualizar produto',
+          error?.response?.data?.message ??
+            error?.message ??
+            'Não foi possível diminuir a quantidade.',
+        )
+      } finally {
+        setProductUpdating(currentProduct.id, false)
+      }
+    },
+    [decrementProduct, getCartQuantity, isProductUpdating, setProductUpdating],
+  )
+
+  /* ==============================
+     EXTRA DATA
+  ============================== */
+
+  const listExtraData = useMemo(
+    () => ({
+      cartItems,
+      activeStoreId,
+      updatingProductIds,
+    }),
+    [activeStoreId, cartItems, updatingProductIds],
+  )
+
+  /* ==============================
+     RENDER ITEM
+  ============================== */
+
+  const renderProduct = useCallback(
+    ({ item }: ListRenderItemInfo<ProductDTO>) => {
+      return (
+        <ProductCard
+          product={item}
+          cartQuantity={getCartQuantity(item)}
+          isUpdating={isProductUpdating(item.id)}
+          onIncrement={() => void handleIncrementProduct(item)}
+          onDecrement={() => void handleDecrementProduct(item)}
+          onPress={() => handleOpenProductDetails(item.id)}
+        />
+      )
+    },
+    [
+      getCartQuantity,
+      handleDecrementProduct,
+      handleIncrementProduct,
+      handleOpenProductDetails,
+      isProductUpdating,
+    ],
+  )
+
+  /* ==============================
+     TELA
+  ============================== */
+
   return (
-    <VStack flex={1} bg="gray.100">
+    <View style={styles.container}>
       <HomeScreen title="Esgotando" />
 
-      <Box px={4} py={2} bg="primary.100" mx={4} my={2} borderRadius="md">
-        <HStack alignItems="center" space={1}>
-          <MaterialIcons name="local-offer" size={18} color="#00875F" />
+      {/* AVISO */}
 
-          <Text color="#00875F" fontWeight="bold">
-            Compre e acumule pontos!
-          </Text>
-        </HStack>
-      </Box>
+      <View style={styles.infoBox}>
+        <MaterialIcons name="local-offer" size={18} color="#00875F" />
 
-      <VStack flex={1}>
-        <VStack justifyContent="space-between" ml={1} mb={1}>
-          <HStack justifyContent="space-between" alignItems="center" mr={2}>
-            <Text fontSize="md" color="gray.800" fontWeight="semibold" ml={2}>
-              Tá acabando
-            </Text>
+        <Text style={styles.infoText}>Compre e acumule pontos!</Text>
+      </View>
 
-            <Text mr={4} fontSize="xs" color="gray.500">
-              {filteredProducts.length}{' '}
-              {filteredProducts.length === 1 ? 'produto' : 'produtos'}
-            </Text>
-          </HStack>
+      {/* TÍTULO */}
 
-          <Box ml={2} width={20} height={1} bg="yellow.300" />
-        </VStack>
+      <View style={styles.titleRow}>
+        <View>
+          <Text style={styles.sectionTitle}>Tá acabando</Text>
 
-        <Box px={4} mb={3}>
-          <Select
-            selectedValue={quantityFilter}
-            minWidth="200"
-            accessibilityLabel="Filtrar por quantidade"
-            placeholder="Filtrar por quantidade"
-            _selectedItem={{
-              bg: 'yellow.100',
-              endIcon: <CheckIcon size="5" />,
-            }}
-            mt={1}
-            onValueChange={handleQuantityFilterChange}
-          >
-            <Select.Item label="Todos os produtos" value="all" />
+          <View style={styles.titleAccent} />
+        </View>
 
-            <Select.Item label="Quantidade menor que 5" value="5" />
+        <Text style={styles.productCount}>
+          {filteredProducts.length}{' '}
+          {filteredProducts.length === 1 ? 'produto' : 'produtos'}
+        </Text>
+      </View>
 
-            <Select.Item label="Quantidade menor que 10" value="10" />
+      {/* FILTROS */}
 
-            <Select.Item label="Quantidade menor que 15" value="15" />
-          </Select>
-        </Box>
+      <View style={styles.filters}>
+        {FILTER_OPTIONS.map((option) => {
+          const selected = quantityFilter === option.value
 
-        {isLoading ? (
-          <VStack flex={1} alignItems="center" justifyContent="center">
-            <Spinner color="yellow.500" size="lg" />
+          return (
+            <Pressable
+              key={option.value}
+              onPress={() => setQuantityFilter(option.value)}
+              style={({ pressed }) => [
+                styles.filterButton,
 
-            <Text mt={2} color="gray.500">
-              Carregando produtos...
-            </Text>
-          </VStack>
-        ) : (
-          <FlatList
-            data={filteredProducts}
-            extraData={{
-              cartItems,
-              activeStoreId,
-              updatingProductIds,
-            }}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <ProductCard
-                product={item}
-                cartQuantity={getCartQuantity(item)}
-                isUpdating={isProductUpdating(item.id)}
-                onIncrement={() => handleIncrementProduct(item)}
-                onDecrement={() => handleDecrementProduct(item)}
-                onPress={() => handleOpenProductDetails(item.id)}
-              />
-            )}
-            numColumns={3}
-            columnWrapperStyle={styles.columnWrapper}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingHorizontal: 4,
-              paddingBottom: 32,
-            }}
-            ListEmptyComponent={
-              <VStack width="full" alignItems="center" mt={8} px={8}>
-                <MaterialIcons name="inventory-2" size={48} color="#9CA3AF" />
+                selected
+                  ? styles.filterButtonSelected
+                  : styles.filterButtonDefault,
 
-                <Text textAlign="center" mt={4} color="gray.500">
-                  Nenhum produto encontrado com esse filtro.
-                </Text>
-              </VStack>
-            }
-          />
-        )}
-      </VStack>
-    </VStack>
+                pressed ? styles.pressed : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterButtonText,
+
+                  selected
+                    ? styles.filterButtonTextSelected
+                    : styles.filterButtonTextDefault,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+
+      {/* LISTA */}
+
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color="#EAB308" size="large" />
+
+          <Text style={styles.loadingText}>Carregando produtos...</Text>
+        </View>
+      ) : (
+        <FlatList
+          key={`quantity-grid-${numColumns}`}
+          data={filteredProducts}
+          extraData={listExtraData}
+          keyExtractor={(item) => item.id}
+          renderItem={renderProduct}
+          numColumns={numColumns}
+          columnWrapperStyle={styles.columnWrapper}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          /*
+           * Quantidade reduzida de cards
+           * mantidos na memória.
+           */
+          initialNumToRender={numColumns * 2}
+          maxToRenderPerBatch={numColumns * 2}
+          windowSize={3}
+          /*
+           * Mais conservador devido aos
+           * problemas anteriores de
+           * renderização no Android.
+           */
+          removeClippedSubviews={false}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <MaterialIcons name="inventory-2" size={48} color="#9CA3AF" />
+
+              <Text style={styles.emptyText}>
+                Nenhum produto encontrado com esse filtro.
+              </Text>
+            </View>
+          }
+        />
+      )}
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  columnWrapper: {
+  container: {
+    flex: 1,
+
+    backgroundColor: '#F3F4F6',
+  },
+
+  infoBox: {
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    marginHorizontal: 16,
+
+    marginVertical: 8,
+
+    paddingHorizontal: 16,
+
+    paddingVertical: 10,
+
+    borderRadius: 8,
+
+    backgroundColor: '#DCFCE7',
+  },
+
+  infoText: {
+    flex: 1,
+
+    marginLeft: 6,
+
+    fontSize: 14,
+
+    fontWeight: '700',
+
+    color: '#00875F',
+  },
+
+  titleRow: {
+    flexDirection: 'row',
+
     justifyContent: 'space-between',
-    marginBottom: 16,
+
+    alignItems: 'center',
+
+    marginHorizontal: 12,
+
+    marginTop: 2,
+  },
+
+  sectionTitle: {
+    fontSize: 16,
+
+    fontWeight: '600',
+
+    color: '#1F2937',
+  },
+
+  titleAccent: {
+    width: 80,
+
+    height: 4,
+
+    marginTop: 4,
+
+    borderRadius: 4,
+
+    backgroundColor: '#FDE047',
+  },
+
+  productCount: {
+    marginRight: 8,
+
+    fontSize: 12,
+
+    color: '#6B7280',
+  },
+
+  filters: {
+    flexDirection: 'row',
+
+    flexWrap: 'wrap',
+
+    gap: 8,
+
+    paddingHorizontal: 12,
+
+    paddingVertical: 12,
+  },
+
+  filterButton: {
+    minHeight: 36,
+
+    paddingHorizontal: 14,
+
+    borderRadius: 18,
+
+    borderWidth: 1,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  filterButtonDefault: {
+    backgroundColor: '#FFFFFF',
+
+    borderColor: '#D1D5DB',
+  },
+
+  filterButtonSelected: {
+    backgroundColor: '#EAB308',
+
+    borderColor: '#EAB308',
+  },
+
+  filterButtonText: {
+    fontSize: 13,
+
+    fontWeight: '600',
+  },
+
+  filterButtonTextDefault: {
+    color: '#374151',
+  },
+
+  filterButtonTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  pressed: {
+    opacity: 0.7,
+  },
+
+  loadingContainer: {
+    flex: 1,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  loadingText: {
+    marginTop: 10,
+
+    fontSize: 13,
+
+    color: '#6B7280',
+  },
+
+  listContent: {
+    paddingHorizontal: 4,
+
+    paddingBottom: 32,
+  },
+
+  columnWrapper: {
+    justifyContent: 'space-around',
+
+    marginBottom: 12,
+  },
+
+  emptyContainer: {
+    paddingTop: 50,
+
+    paddingHorizontal: 24,
+
+    alignItems: 'center',
+  },
+
+  emptyText: {
+    marginTop: 14,
+
+    fontSize: 14,
+
+    textAlign: 'center',
+
+    color: '#6B7280',
   },
 })

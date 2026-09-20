@@ -1,8 +1,9 @@
-import { VStack } from 'native-base'
+import React from 'react'
+
+import { StyleSheet, View } from 'react-native'
 
 import { StoreHeader } from '@components/Store/StoreHeader'
 import { Promotion } from '@components/Promotion'
-import { SeparatorItem } from '@components/SeparatorItem'
 
 import { StoreDTO } from '@dtos/StoreDTO'
 import { BannerDTO } from '@dtos/BannerDTO'
@@ -14,18 +15,36 @@ type Props = {
 
 export function StorePromotionHeader({ store, banners }: Props) {
   return (
-    <VStack>
-      {/* Header da loja */}
-      <StoreHeader store={store} />
+    <View style={styles.container}>
+      <View style={styles.storeHeaderContainer}>
+        <StoreHeader store={store} />
+      </View>
 
-      {/* Banners da loja (somente se existir) */}
-      {banners.length > 0 && (
-        <>
-          <SeparatorItem />
+      {banners.length > 0 ? (
+        <View style={styles.bannerContainer}>
           <Promotion banners={banners} />
-          <SeparatorItem />
-        </>
-      )}
-    </VStack>
+        </View>
+      ) : null}
+    </View>
   )
 }
+
+const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+    paddingTop: 0,
+    marginTop: 0,
+    backgroundColor: '#FFFFFF',
+  },
+
+  storeHeaderContainer: {
+    marginBottom: 0,
+    paddingBottom: 0,
+  },
+
+  bannerContainer: {
+    marginTop: -24,
+    paddingTop: 0,
+    marginBottom: 0,
+  },
+})

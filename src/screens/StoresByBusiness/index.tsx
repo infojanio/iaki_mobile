@@ -82,12 +82,12 @@ export function StoresByBusiness() {
         <FlatList
           data={stores}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={{ padding: 8 }}
           renderItem={({ item }) => (
             <StoreCard store={item} onPress={() => handleOpenStore(item.id)} />
           )}
           ListEmptyComponent={
-            <Box mt={10}>
+            <Box mt={2}>
               <Text textAlign="center">
                 Nenhuma loja encontrada para essa categoria.
               </Text>
