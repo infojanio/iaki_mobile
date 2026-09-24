@@ -1146,7 +1146,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingTop: 0,
 
-    paddingBottom: 16,
+    paddingBottom: 4,
   },
 
   /* ==================================

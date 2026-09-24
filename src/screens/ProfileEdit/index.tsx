@@ -19,6 +19,8 @@ import { yupResolver } from '@hookform/resolvers/yup'
 
 import * as ImagePicker from 'expo-image-picker'
 
+import * as ImageManipulator from 'expo-image-manipulator'
+
 import {
   VStack,
   Center,
@@ -112,8 +114,38 @@ function inferFileMeta(asset: ImagePicker.ImagePickerAsset) {
   }
 }
 
-async function uploadAvatar(asset: ImagePicker.ImagePickerAsset) {
-  const { filename, mime } = inferFileMeta(asset)
+type AvatarFile = {
+  uri: string
+  fileName?: string | null
+  mimeType?: string | null
+}
+
+function inferAvatarFileMeta(asset: AvatarFile) {
+  const filename =
+    asset.fileName || asset.uri.split('/').pop() || `avatar-${Date.now()}.jpg`
+
+  let mime = asset.mimeType
+
+  if (!mime) {
+    const extension = (filename.split('.').pop() || '').toLowerCase()
+
+    if (extension === 'png') {
+      mime = 'image/png'
+    } else if (extension === 'webp') {
+      mime = 'image/webp'
+    } else {
+      mime = 'image/jpeg'
+    }
+  }
+
+  return {
+    filename,
+    mime,
+  }
+}
+
+async function uploadAvatar(asset: AvatarFile) {
+  const { filename, mime } = inferAvatarFileMeta(asset)
 
   const form = new FormData()
 
@@ -124,14 +156,12 @@ async function uploadAvatar(asset: ImagePicker.ImagePickerAsset) {
   }
 
   if (Platform.OS === 'web') {
-    const response = await fetch(asset.uri)
+    const fileResponse = await fetch(asset.uri)
 
-    const blob = await response.blob()
+    const blob = await fileResponse.blob()
 
-    const MAX_SIZE = 5 * 1024 * 1024
-
-    if (blob.size > MAX_SIZE) {
-      throw new Error('Imagem acima de 5MB.')
+    if (blob.size > 5 * 1024 * 1024) {
+      throw new Error('Imagem acima de 5 MB.')
     }
 
     const file = new File([blob], filename, {
@@ -140,31 +170,49 @@ async function uploadAvatar(asset: ImagePicker.ImagePickerAsset) {
 
     form.append('file', file)
   } else {
-    // @ts-ignore React Native file shape
     form.append('file', {
       uri: asset.uri,
+
       name: filename,
+
       type: mime,
-    })
+    } as any)
   }
 
-  const response = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-    {
-      method: 'POST',
-      body: form,
-    },
-  )
+  const controller = new AbortController()
 
-  if (!response.ok) {
-    const text = await response.text()
+  const timeout = setTimeout(() => {
+    controller.abort()
+  }, 30000)
 
-    throw new Error(`Falha no upload do avatar. ${response.status} - ${text}`)
+  try {
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+      {
+        method: 'POST',
+
+        body: form,
+
+        signal: controller.signal,
+      },
+    )
+
+    if (!response.ok) {
+      const text = await response.text()
+
+      throw new Error(`Falha no upload do avatar. ${response.status} - ${text}`)
+    }
+
+    const data = await response.json()
+
+    if (!data?.secure_url) {
+      throw new Error('O servidor não retornou a imagem do avatar.')
+    }
+
+    return String(data.secure_url)
+  } finally {
+    clearTimeout(timeout)
   }
-
-  const data = await response.json()
-
-  return data.secure_url as string
 }
 
 // ======================================================
@@ -286,69 +334,135 @@ export function ProfileEdit() {
   // ====================================================
 
   async function pickAvatar() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
-
-    if (status !== 'granted') {
-      toast.show({
-        title: 'Permissão necessária para acessar fotos.',
-
-        placement: 'top',
-
-        bgColor: 'red.500',
-      })
-
-      return
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-
-      allowsEditing: true,
-
-      aspect: [1, 1],
-
-      quality: 0.9,
-    })
-
-    if (result.canceled) {
-      return
-    }
-
-    const asset = result.assets?.[0]
-
-    if (!asset?.uri) {
+    /*
+     * Impede abrir novamente enquanto
+     * já existe upload em andamento.
+     */
+    if (avatarUploading || deletingAccount) {
       return
     }
 
     try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+
+      if (permission.status !== 'granted') {
+        Alert.alert(
+          'Permissão necessária',
+          'Permita o acesso às fotos para alterar seu avatar.',
+        )
+
+        return
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+
+        allowsEditing: true,
+
+        aspect: [1, 1],
+
+        /*
+         * Já diminui um pouco
+         * o arquivo produzido
+         * pelo picker.
+         */
+        quality: 0.8,
+      })
+
+      if (result.canceled) {
+        return
+      }
+
+      const asset = result.assets?.[0]
+
+      if (!asset?.uri) {
+        throw new Error('Não foi possível acessar a imagem selecionada.')
+      }
+
       setAvatarUploading(true)
 
-      const url = await uploadAvatar(asset)
+      /*
+       * IMPORTANTE:
+       *
+       * Nunca envia a foto enorme
+       * diretamente para o avatar.
+       *
+       * Como o picker já cortou
+       * em proporção 1:1,
+       * podemos gerar 512x512.
+       */
+      const manipulated = await ImageManipulator.manipulateAsync(
+        asset.uri,
+
+        [
+          {
+            resize: {
+              width: 512,
+
+              height: 512,
+            },
+          },
+        ],
+
+        {
+          compress: 0.72,
+
+          format: ImageManipulator.SaveFormat.JPEG,
+        },
+      )
+
+      console.log('[ProfileEdit] Avatar preparado:', {
+        original: asset.uri,
+
+        resized: manipulated.uri,
+
+        width: manipulated.width,
+
+        height: manipulated.height,
+      })
+
+      const url = await uploadAvatar({
+        uri: manipulated.uri,
+
+        fileName: `avatar-${Date.now()}.jpg`,
+
+        mimeType: 'image/jpeg',
+      })
+
+      console.log('[ProfileEdit] Avatar enviado:', url)
 
       setAvatarUrl(url)
 
-      toast.show({
-        title: 'Foto atualizada!',
-
-        placement: 'top',
-
-        bgColor: 'emerald.600',
-      })
+      Alert.alert(
+        'Foto atualizada',
+        'A nova foto foi carregada. Toque em "Salvar alterações" para confirmar.',
+      )
     } catch (error: any) {
-      console.log('[ProfileEdit] Erro no avatar:', error)
+      console.error('[ProfileEdit] Erro no avatar:', {
+        name: error?.name,
 
-      toast.show({
-        title: error?.message || 'Falha no upload do avatar.',
+        message: error?.message,
 
-        placement: 'top',
-
-        bgColor: 'red.500',
+        code: error?.code,
       })
+
+      if (error?.name === 'AbortError') {
+        Alert.alert(
+          'Upload interrompido',
+          'O envio da foto demorou demais. Verifique sua conexão e tente novamente.',
+        )
+
+        return
+      }
+
+      Alert.alert(
+        'Erro ao alterar foto',
+        error?.message ?? 'Não foi possível alterar sua foto.',
+      )
     } finally {
       setAvatarUploading(false)
     }
   }
-
   // ====================================================
   // UPDATE PROFILE
   // ====================================================
@@ -644,7 +758,7 @@ export function ProfileEdit() {
             <TouchableOpacity
               onPress={pickAvatar}
               activeOpacity={0.8}
-              disabled={deletingAccount}
+              disabled={deletingAccount || avatarUploading}
             >
               <View
                 style={{
@@ -680,6 +794,8 @@ export function ProfileEdit() {
                       height: '100%',
                     }}
                     resizeMode="cover"
+                    resizeMethod="resize"
+                    fadeDuration={0}
                   />
                 ) : (
                   <Icon
