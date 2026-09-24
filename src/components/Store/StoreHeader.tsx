@@ -98,39 +98,20 @@ export function StoreHeader({ store }: Props) {
 
   return (
     <>
-      <VStack safeArea mb={2} bg="gray.100">
+      <VStack safeArea bg="gray.100" mb={-4}>
         {/* IMAGEM DA LOJA */}
-        <Box bg={'blue.200'} position="relative">
-          {/* BOTÃO VOLTAR */}
-          <IconButton
-            position="absolute"
-            top={2}
-            left={2}
-            borderRadius="md"
-            opacity={0.85}
-            shadow={3}
-            icon={
-              <MaterialIcons
-                name="arrow-back"
-                size={sizes[6]}
-                color={colors.gray[700]}
-              />
-            }
-            onPress={handleBack}
-          />
-        </Box>
 
         {/* CARD DE INFORMAÇÕES */}
         <Box
           bg="white"
           opacity={0.87}
           mx={4}
-          mt={16}
+          mt={2}
           p={2}
           borderRadius="xl"
           shadow={4}
         >
-          <VStack space={2}>
+          <VStack>
             <Box>
               <HStack alignItems={'center'}>
                 <Image
@@ -138,7 +119,10 @@ export function StoreHeader({ store }: Props) {
                   alt={store.name}
                   h={60}
                   w={60}
-                  resizeMode="stretch"
+                  borderRadius="full"
+                  resizeMode="cover"
+                  borderWidth={2}
+                  borderColor="white"
                 />
                 <Text fontSize="md" color="gray.800" fontWeight="bold">
                   {store.name}

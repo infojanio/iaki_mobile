@@ -32,6 +32,8 @@ import { SubcategoryCard } from '@components/Product/SubcategoryCard'
 
 import { ProductCard } from '@components/Product/ProductCard'
 
+import { BackHome } from '@components/BackHome'
+
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 
 import { CartContext } from '@contexts/CartContext'
@@ -41,6 +43,7 @@ import { StoreDTO } from '@dtos/StoreDTO'
 import { CategoryDTO } from '@dtos/CategoryDTO'
 import { SubCategoryDTO } from '@dtos/SubCategoryDTO'
 import { ProductDTO } from '@dtos/ProductDTO'
+import { HomeScreen } from '@components/HomeScreen'
 
 type RouteParams = {
   storeId: string
@@ -57,8 +60,17 @@ type CategoryImageProps = {
   image?: string | null
 }
 
+/* =====================================
+   PRODUTOS
+===================================== */
+
 const CARD_WIDTH = 150
-const CARD_SPACING = 8
+
+/*
+ * Espaçamento menor entre
+ * os cards horizontais.
+ */
+const CARD_SPACING = 4
 
 const SNAP_INTERVAL = CARD_WIDTH + CARD_SPACING
 
@@ -82,7 +94,7 @@ function isCanceledRequest(error: any) {
 }
 
 /* =====================================
-   MONTAR URL DA IMAGEM
+   URL DA IMAGEM
 ===================================== */
 
 function getImageUri(image?: string | null) {
@@ -112,17 +124,15 @@ function getImageUri(image?: string | null) {
   const normalizedImage = value.replace(/^\/+/, '')
 
   /*
-   * Já veio como:
-   *
-   * uploads/arquivo.jpg
+   * Caminho já contendo uploads/.
    */
   if (normalizedImage.startsWith('uploads/')) {
     return `${baseURL}/${normalizedImage}`
   }
 
   /*
-   * Somente nome do arquivo
-   * ou outro caminho relativo.
+   * Apenas nome do arquivo
+   * ou caminho relativo.
    */
   return `${baseURL}/uploads/${normalizedImage}`
 }
@@ -141,8 +151,8 @@ function CategoryImage({ image }: CategoryImageProps) {
   const uri = useMemo(() => getImageUri(image), [image])
 
   /*
-   * Se não houver imagem,
-   * simplesmente não exibe ícone.
+   * Sem imagem:
+   * não colocamos ícone padrão.
    */
   if (!uri || hasError) {
     return null
@@ -234,15 +244,15 @@ export function StoreProducts() {
   const productRequestIdRef = useRef(0)
 
   /* =====================================
-     ESPAÇAMENTO DA LISTA HORIZONTAL
+     PADDING DOS PRODUTOS
   ===================================== */
 
   const sidePadding = useMemo(() => {
-    return Math.max(16, (width - CARD_WIDTH) / 2)
+    return Math.max(12, (width - CARD_WIDTH) / 2)
   }, [width])
 
   /* =====================================
-     ABRIR DETALHES
+     ABRIR PRODUTO
   ===================================== */
 
   const handleOpenProductDetails = useCallback(
@@ -264,10 +274,6 @@ export function StoreProducts() {
 
   const getCartQuantity = useCallback(
     (productId: string) => {
-      /*
-       * Esta tela possui somente
-       * produtos da loja atual.
-       */
       if (activeStoreId !== storeId) {
         return 0
       }
@@ -308,7 +314,7 @@ export function StoreProducts() {
   )
 
   /* =====================================
-     ADICIONAR / INCREMENTAR
+     INCREMENTAR
   ===================================== */
 
   const handleIncrementProduct = useCallback(
@@ -451,7 +457,7 @@ export function StoreProducts() {
   )
 
   /* =====================================
-     CARREGAR LOJA / CATEGORIAS / BANNERS
+     DADOS INICIAIS
   ===================================== */
 
   const loadInitialData = useCallback(async () => {
@@ -470,11 +476,10 @@ export function StoreProducts() {
     try {
       setIsLoading(true)
 
-      /*
-       * Limpa dados da loja anterior.
-       */
       setStore(null)
+
       setCategories([])
+
       setBanners([])
 
       setCategorySelected(null)
@@ -486,10 +491,7 @@ export function StoreProducts() {
       setProducts([])
 
       /*
-       * Banner é opcional.
-       *
-       * Se der problema, a loja
-       * continua funcionando.
+       * Banner continua sendo opcional.
        */
       const bannersPromise = api
         .get(`/stores/${storeId}/banners`, {
@@ -585,7 +587,7 @@ export function StoreProducts() {
   }, [loadInitialData])
 
   /* =====================================
-     CARREGAR SUBCATEGORIAS
+     SUBCATEGORIAS
   ===================================== */
 
   useEffect(() => {
@@ -683,7 +685,7 @@ export function StoreProducts() {
   }, [categorySelected])
 
   /* =====================================
-     CARREGAR PRODUTOS
+     PRODUTOS
   ===================================== */
 
   useEffect(() => {
@@ -770,7 +772,7 @@ export function StoreProducts() {
   }, [storeId, subCategorySelected])
 
   /* =====================================
-     SELECIONAR CATEGORIA
+     CATEGORIA
   ===================================== */
 
   const handleCategoryPress = useCallback((categoryId: string) => {
@@ -780,7 +782,7 @@ export function StoreProducts() {
   }, [])
 
   /* =====================================
-     SELECIONAR SUBCATEGORIA
+     SUBCATEGORIA
   ===================================== */
 
   const handleSubCategoryPress = useCallback(
@@ -795,7 +797,7 @@ export function StoreProducts() {
   )
 
   /* =====================================
-     EXTRA DATA PRODUTOS
+     EXTRA DATA
   ===================================== */
 
   const productExtraData = useMemo(
@@ -808,7 +810,7 @@ export function StoreProducts() {
   )
 
   /* =====================================
-     CARD DE PRODUTO
+     CARD PRODUTO
   ===================================== */
 
   const renderProduct = useCallback(
@@ -836,48 +838,58 @@ export function StoreProducts() {
   )
 
   /* =====================================
-     LOADING INICIAL
+     LOADING
   ===================================== */
 
   if (isLoading) {
     return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator size="large" color="#00875F" />
+      <View style={styles.screen}>
+        <BackHome title="Loja" />
 
-        <Text style={styles.loadingTitle}>Carregando loja...</Text>
+        <View style={styles.loadingScreen}>
+          <ActivityIndicator size="large" color="#00875F" />
 
-        <Text style={styles.loadingDescription}>
-          Estamos preparando os produtos para você.
-        </Text>
+          <Text style={styles.loadingTitle}>Carregando loja...</Text>
+
+          <Text style={styles.loadingDescription}>
+            Estamos preparando os produtos para você.
+          </Text>
+        </View>
       </View>
     )
   }
 
   /* =====================================
-     ERRO DA LOJA
+     ERRO
   ===================================== */
 
   if (!store) {
     return (
-      <View style={styles.errorScreen}>
-        <MaterialIcons name="storefront" size={58} color="#9CA3AF" />
+      <View style={styles.screen}>
+        <BackHome title="Loja" />
 
-        <Text style={styles.errorTitle}>Não foi possível abrir esta loja</Text>
+        <View style={styles.errorScreen}>
+          <MaterialIcons name="storefront" size={52} color="#9CA3AF" />
 
-        <Text style={styles.errorDescription}>
-          Verifique sua conexão e tente novamente.
-        </Text>
+          <Text style={styles.errorTitle}>
+            Não foi possível abrir esta loja
+          </Text>
 
-        <Pressable
-          onPress={() => void loadInitialData()}
-          style={({ pressed }) => [
-            styles.retryButton,
+          <Text style={styles.errorDescription}>
+            Verifique sua conexão e tente novamente.
+          </Text>
 
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.retryButtonText}>Tentar novamente</Text>
-        </Pressable>
+          <Pressable
+            onPress={() => void loadInitialData()}
+            style={({ pressed }) => [
+              styles.retryButton,
+
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.retryButtonText}>Tentar novamente</Text>
+          </Pressable>
+        </View>
       </View>
     )
   }
@@ -893,12 +905,6 @@ export function StoreProducts() {
 
     const categoryData = category as CategoryWithImage
 
-    /*
-     * Tenta os nomes mais comuns.
-     *
-     * Se seu DTO usa "image",
-     * esse será o primeiro.
-     */
     const categoryImage =
       categoryData.image ??
       categoryData.imageUrl ??
@@ -908,9 +914,7 @@ export function StoreProducts() {
 
     return (
       <View style={styles.categoryContainer}>
-        {/* =========================
-              CATEGORIA
-          ========================= */}
+        {/* CATEGORIA */}
 
         <Pressable
           onPress={() => handleCategoryPress(category.id)}
@@ -920,11 +924,7 @@ export function StoreProducts() {
             pressed && styles.categoryPressed,
           ]}
         >
-          {/* IMAGEM REAL */}
-
           <CategoryImage image={categoryImage} />
-
-          {/* NOME */}
 
           <View style={styles.categoryTextContainer}>
             <Text numberOfLines={1} style={styles.categoryName}>
@@ -936,20 +936,16 @@ export function StoreProducts() {
             </Text>
           </View>
 
-          {/* SETA */}
-
           <View style={styles.categoryArrow}>
             <MaterialIcons
               name={selected ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-              size={27}
+              size={25}
               color={selected ? '#00875F' : '#6B7280'}
             />
           </View>
         </Pressable>
 
-        {/* =========================
-              CONTEÚDO ABERTO
-          ========================= */}
+        {/* CONTEÚDO ABERTO */}
 
         {selected ? (
           <View style={styles.expandedContent}>
@@ -1033,15 +1029,15 @@ export function StoreProducts() {
 
                     paddingRight: sidePadding,
 
-                    paddingTop: 5,
+                    paddingTop: 2,
 
-                    paddingBottom: 12,
+                    paddingBottom: 6,
                   }}
                 />
               </>
             ) : subCategorySelected ? (
               <View style={styles.emptyProducts}>
-                <MaterialIcons name="inventory-2" size={34} color="#9CA3AF" />
+                <MaterialIcons name="inventory-2" size={32} color="#9CA3AF" />
 
                 <Text style={styles.emptyProductsTitle}>
                   Nenhum produto encontrado
@@ -1063,52 +1059,64 @@ export function StoreProducts() {
   ===================================== */
 
   return (
-    <FlatList
-      data={categories}
-      keyExtractor={(category) => category.id}
-      renderItem={renderCategory}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-      removeClippedSubviews={false}
-      initialNumToRender={5}
-      maxToRenderPerBatch={5}
-      windowSize={5}
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      ListHeaderComponent={
-        <>
-          {/* BANNERS / LOJA */}
+    <View style={styles.screen}>
+      {/* =================================
+          CABEÇALHO FIXO
+      ================================= */}
 
-          <StorePromotionHeader store={store} banners={banners} />
+      <HomeScreen title={store.name || 'Loja'} />
 
-          {/* TÍTULO DAS CATEGORIAS */}
+      {/* =================================
+          SOMENTE ESTE CONTEÚDO ROLA
+      ================================= */}
 
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <Text style={styles.sectionTitle}>Categorias</Text>
+      <FlatList
+        data={categories}
+        keyExtractor={(category) => category.id}
+        renderItem={renderCategory}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews={false}
+        initialNumToRender={5}
+        maxToRenderPerBatch={5}
+        windowSize={5}
+        style={styles.list}
+        contentContainerStyle={styles.contentContainer}
+        ListHeaderComponent={
+          <>
+            {/* LOJA + BANNERS */}
 
-              <View style={styles.sectionAccent} />
+            <StorePromotionHeader store={store} banners={banners} />
+
+            {/* CATEGORIAS */}
+
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <Text style={styles.sectionTitle}>Categorias</Text>
+
+                <View style={styles.sectionAccent} />
+              </View>
+
+              <Text style={styles.sectionSubtitle}>Toque para explorar</Text>
             </View>
+          </>
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyCategories}>
+            <MaterialIcons name="category" size={44} color="#9CA3AF" />
 
-            <Text style={styles.sectionSubtitle}>Toque para explorar</Text>
+            <Text style={styles.emptyCategoriesTitle}>
+              Nenhuma categoria encontrada
+            </Text>
+
+            <Text style={styles.emptyCategoriesDescription}>
+              Esta loja ainda não possui categorias disponíveis.
+            </Text>
           </View>
-        </>
-      }
-      ListEmptyComponent={
-        <View style={styles.emptyCategories}>
-          <MaterialIcons name="category" size={50} color="#9CA3AF" />
-
-          <Text style={styles.emptyCategoriesTitle}>
-            Nenhuma categoria encontrada
-          </Text>
-
-          <Text style={styles.emptyCategoriesDescription}>
-            Esta loja ainda não possui categorias disponíveis.
-          </Text>
-        </View>
-      }
-      ListFooterComponent={<View style={styles.footerSpace} />}
-    />
+        }
+        ListFooterComponent={<View style={styles.footerSpace} />}
+      />
+    </View>
   )
 }
 
@@ -1117,14 +1125,28 @@ export function StoreProducts() {
 ===================================== */
 
 const styles = StyleSheet.create({
-  container: {
+  /* ==================================
+       ESTRUTURA
+    ================================== */
+
+  screen: {
     flex: 1,
 
-    backgroundColor: '#F7F8FA',
+    backgroundColor: '#F9FAFB',
+  },
+
+  list: {
+    flex: 1,
+
+    width: '100%',
+
+    backgroundColor: '#F9FAFB',
   },
 
   contentContainer: {
-    paddingBottom: 24,
+    paddingTop: 0,
+
+    paddingBottom: 16,
   },
 
   /* ==================================
@@ -1138,17 +1160,16 @@ const styles = StyleSheet.create({
 
     justifyContent: 'space-between',
 
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
 
     /*
-     * Espaço reduzido entre
-     * banner e categorias.
+     * Bem próximo dos banners.
      */
-    paddingTop: 5,
+    paddingTop: 2,
 
-    paddingBottom: 4,
+    paddingBottom: 2,
 
-    backgroundColor: '#F7F8FA',
+    backgroundColor: '#F9FAFB',
   },
 
   sectionTitleContainer: {
@@ -1156,7 +1177,7 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 19,
+    fontSize: 18,
 
     fontWeight: '700',
 
@@ -1164,11 +1185,11 @@ const styles = StyleSheet.create({
   },
 
   sectionAccent: {
-    width: 42,
+    width: 38,
 
     height: 3,
 
-    marginTop: 4,
+    marginTop: 2,
 
     borderRadius: 3,
 
@@ -1176,9 +1197,9 @@ const styles = StyleSheet.create({
   },
 
   sectionSubtitle: {
-    marginLeft: 12,
+    marginLeft: 8,
 
-    marginBottom: 1,
+    marginBottom: 0,
 
     fontSize: 11,
 
@@ -1190,30 +1211,28 @@ const styles = StyleSheet.create({
     ================================== */
 
   categoryContainer: {
-    /*
-     * Sem card externo.
-     *
-     * Sem fundo.
-     * Sem borderRadius.
-     * Sem elevation.
-     */
-    marginHorizontal: 10,
+    marginHorizontal: 8,
 
     marginBottom: 0,
+
+    paddingVertical: 0,
 
     backgroundColor: 'transparent',
   },
 
   categoryRow: {
-    minHeight: 68,
+    /*
+     * Mais compacto.
+     */
+    minHeight: 56,
 
     flexDirection: 'row',
 
     alignItems: 'center',
 
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
 
-    paddingVertical: 6,
+    paddingVertical: 2,
 
     backgroundColor: 'transparent',
   },
@@ -1227,13 +1246,13 @@ const styles = StyleSheet.create({
     ================================== */
 
   categoryImageContainer: {
-    width: 54,
+    width: 46,
 
-    height: 54,
+    height: 46,
 
-    marginRight: 12,
+    marginRight: 9,
 
-    borderRadius: 13,
+    borderRadius: 23,
 
     overflow: 'hidden',
 
@@ -1253,7 +1272,7 @@ const styles = StyleSheet.create({
   },
 
   categoryName: {
-    fontSize: 16,
+    fontSize: 15,
 
     fontWeight: '700',
 
@@ -1261,19 +1280,19 @@ const styles = StyleSheet.create({
   },
 
   categoryHint: {
-    marginTop: 2,
+    marginTop: 1,
 
-    fontSize: 11,
+    fontSize: 10,
 
     color: '#9CA3AF',
   },
 
   categoryArrow: {
-    width: 38,
+    width: 34,
 
-    height: 38,
+    height: 34,
 
-    marginLeft: 6,
+    marginLeft: 3,
 
     alignItems: 'center',
 
@@ -1287,11 +1306,8 @@ const styles = StyleSheet.create({
   expandedContent: {
     paddingTop: 0,
 
-    paddingBottom: 4,
+    paddingBottom: 2,
 
-    /*
-     * Sem caixa adicional.
-     */
     backgroundColor: 'transparent',
   },
 
@@ -1304,15 +1320,15 @@ const styles = StyleSheet.create({
 
     alignItems: 'center',
 
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
 
-    paddingTop: 2,
+    paddingTop: 0,
 
-    paddingBottom: 3,
+    paddingBottom: 2,
   },
 
   subCategoryTitle: {
-    fontSize: 12,
+    fontSize: 11,
 
     fontWeight: '600',
 
@@ -1320,13 +1336,13 @@ const styles = StyleSheet.create({
   },
 
   subCategoryList: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
 
-    paddingVertical: 3,
+    paddingVertical: 1,
   },
 
   inlineLoading: {
-    minHeight: 62,
+    minHeight: 54,
 
     flexDirection: 'row',
 
@@ -1336,25 +1352,25 @@ const styles = StyleSheet.create({
   },
 
   inlineLoadingText: {
-    marginLeft: 8,
+    marginLeft: 7,
 
-    fontSize: 12,
+    fontSize: 11,
 
     color: '#6B7280',
   },
 
   emptySubCategory: {
-    minHeight: 65,
+    minHeight: 56,
 
     alignItems: 'center',
 
     justifyContent: 'center',
 
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
 
   emptySubCategoryText: {
-    fontSize: 12,
+    fontSize: 11,
 
     color: '#6B7280',
 
@@ -1372,15 +1388,15 @@ const styles = StyleSheet.create({
 
     justifyContent: 'space-between',
 
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
 
-    paddingTop: 8,
+    paddingTop: 4,
 
-    paddingBottom: 2,
+    paddingBottom: 0,
   },
 
   productsTitle: {
-    fontSize: 15,
+    fontSize: 14,
 
     fontWeight: '700',
 
@@ -1388,7 +1404,7 @@ const styles = StyleSheet.create({
   },
 
   productsCount: {
-    fontSize: 11,
+    fontSize: 10,
 
     color: '#9CA3AF',
   },
@@ -1404,7 +1420,7 @@ const styles = StyleSheet.create({
   },
 
   productsLoading: {
-    minHeight: 170,
+    minHeight: 150,
 
     alignItems: 'center',
 
@@ -1412,29 +1428,29 @@ const styles = StyleSheet.create({
   },
 
   productsLoadingText: {
-    marginTop: 8,
+    marginTop: 6,
 
-    fontSize: 12,
+    fontSize: 11,
 
     color: '#6B7280',
   },
 
   emptyProducts: {
-    minHeight: 130,
+    minHeight: 110,
 
     alignItems: 'center',
 
     justifyContent: 'center',
 
-    paddingHorizontal: 30,
+    paddingHorizontal: 24,
 
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
 
   emptyProductsTitle: {
-    marginTop: 8,
+    marginTop: 6,
 
-    fontSize: 14,
+    fontSize: 13,
 
     fontWeight: '600',
 
@@ -1442,9 +1458,9 @@ const styles = StyleSheet.create({
   },
 
   emptyProductsDescription: {
-    marginTop: 3,
+    marginTop: 2,
 
-    fontSize: 12,
+    fontSize: 11,
 
     color: '#9CA3AF',
 
@@ -1464,11 +1480,11 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: 30,
 
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F9FAFB',
   },
 
   loadingTitle: {
-    marginTop: 14,
+    marginTop: 12,
 
     fontSize: 16,
 
@@ -1478,7 +1494,7 @@ const styles = StyleSheet.create({
   },
 
   loadingDescription: {
-    marginTop: 5,
+    marginTop: 4,
 
     fontSize: 13,
 
@@ -1500,11 +1516,11 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: 32,
 
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F9FAFB',
   },
 
   errorTitle: {
-    marginTop: 14,
+    marginTop: 12,
 
     fontSize: 18,
 
@@ -1516,7 +1532,7 @@ const styles = StyleSheet.create({
   },
 
   errorDescription: {
-    marginTop: 7,
+    marginTop: 6,
 
     fontSize: 14,
 
@@ -1528,11 +1544,11 @@ const styles = StyleSheet.create({
   },
 
   retryButton: {
-    minHeight: 46,
+    minHeight: 44,
 
-    marginTop: 22,
+    marginTop: 18,
 
-    paddingHorizontal: 24,
+    paddingHorizontal: 22,
 
     alignItems: 'center',
 
@@ -1552,21 +1568,21 @@ const styles = StyleSheet.create({
   },
 
   /* ==================================
-       CATEGORIAS VAZIAS
+       SEM CATEGORIAS
     ================================== */
 
   emptyCategories: {
     paddingHorizontal: 30,
 
-    paddingVertical: 50,
+    paddingVertical: 42,
 
     alignItems: 'center',
   },
 
   emptyCategoriesTitle: {
-    marginTop: 12,
+    marginTop: 10,
 
-    fontSize: 16,
+    fontSize: 15,
 
     fontWeight: '700',
 
@@ -1576,11 +1592,11 @@ const styles = StyleSheet.create({
   },
 
   emptyCategoriesDescription: {
-    marginTop: 6,
+    marginTop: 5,
 
-    fontSize: 13,
+    fontSize: 12,
 
-    lineHeight: 19,
+    lineHeight: 18,
 
     color: '#9CA3AF',
 
@@ -1588,7 +1604,7 @@ const styles = StyleSheet.create({
   },
 
   footerSpace: {
-    height: 20,
+    height: 12,
   },
 
   pressed: {

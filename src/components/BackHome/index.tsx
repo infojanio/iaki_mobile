@@ -4,7 +4,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 
 import { MaterialIcons } from '@expo/vector-icons'
 
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useRoute } from '@react-navigation/native'
 
 import { SafeAreaView } from 'react-native-safe-area-context'
 
@@ -17,12 +17,14 @@ type Props = {
 export function BackHome({ title }: Props) {
   const navigation = useNavigation<any>()
 
+  const route = useRoute()
+
   const { getPreviousRoute } = useNavigationHistory()
 
   const handleBack = useCallback(() => {
     /*
-     * Se existir uma tela anterior
-     * na stack atual, volta normalmente.
+     * 1. Primeiro tenta voltar pela
+     * stack da própria tela.
      */
     if (navigation.canGoBack()) {
       navigation.goBack()
@@ -31,23 +33,47 @@ export function BackHome({ title }: Props) {
     }
 
     /*
-     * Quando estiver em Tab ou em
-     * fluxo sem stack anterior,
-     * utiliza o histórico próprio.
+     * 2. A tela pode estar dentro de
+     * TabNavigator / Drawer / Stack
+     * aninhados.
+     *
+     * Nesse caso, o navigator atual
+     * pode dizer que não consegue voltar,
+     * enquanto o navigator pai consegue.
+     */
+    let parentNavigation = navigation.getParent?.()
+
+    while (parentNavigation) {
+      if (parentNavigation.canGoBack()) {
+        parentNavigation.goBack()
+
+        return
+      }
+
+      parentNavigation = parentNavigation.getParent?.()
+    }
+
+    /*
+     * 3. Somente se não houver histórico
+     * nativo usamos o histórico próprio.
      */
     const previousRoute = getPreviousRoute()
 
-    if (previousRoute?.name) {
+    if (previousRoute?.name && previousRoute.name !== route.name) {
       navigation.navigate(previousRoute.name, previousRoute.params)
 
       return
     }
 
     /*
-     * Último fallback.
+     * Não redirecionamos automaticamente
+     * para a Home.
+     *
+     * Se chegarmos aqui, não existe
+     * uma rota anterior válida.
      */
-    navigation.navigate('home')
-  }, [getPreviousRoute, navigation])
+    console.warn('[BackHome] Nenhuma rota anterior disponível.')
+  }, [getPreviousRoute, navigation, route.name])
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -76,11 +102,8 @@ export function BackHome({ title }: Props) {
           </Text>
         </View>
 
-        {/*
-         * Espaço equivalente ao botão
-         * esquerdo para manter o título
-         * realmente centralizado.
-         */}
+        {/* ESPAÇO PARA CENTRALIZAR */}
+
         <View style={styles.rightSpace} />
       </View>
     </SafeAreaView>

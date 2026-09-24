@@ -15,8 +15,8 @@ export function SearchBar() {
     <Pressable onPress={handleNavigate}>
       <Box
         mx={1}
-        mt={-10}
-        mb={2}
+        mt={1}
+        mb={1}
         bg="white"
         h={12}
         borderRadius={20}

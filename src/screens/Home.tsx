@@ -1,15 +1,17 @@
-import { useCallback, useContext, useState } from 'react'
+import React, { useCallback, useContext, useMemo, useState } from 'react'
 
-import { FlatList } from 'react-native'
-
-import { Center, Text, VStack, useToast } from 'native-base'
+import {
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native'
 
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 
 import { api } from '@services/api'
-import { AppError } from '@utils/AppError'
-
-import { useAuth } from '@hooks/useAuth'
 
 import { ProductDTO } from '@dtos/ProductDTO'
 import { StoreDTO } from '@dtos/StoreDTO'
@@ -26,10 +28,10 @@ import { FeaturedStores } from '@components/FeaturedStores'
 import { Loading } from '@components/Loading'
 import { BenefitsBar } from '@components/BenefitsBar'
 import { Reel } from '@components/Reel'
+
 import { HomeRewards } from '@components/Reward/HomeRewards'
 
 import { ProductDiscount } from './Product/ProductDiscount'
-
 import { ProductQuantity } from './Product/ProductQuantity'
 
 import { CashbackRegulationCard } from './CashbackRegulationCard'
@@ -37,20 +39,43 @@ import { CashbackRegulationCard } from './CashbackRegulationCard'
 import { BusinessCategory } from '@screens/BusinessCategory'
 
 import { CityContext } from '@contexts/CityContext'
-
 import { CartContext } from '@contexts/CartContext'
+
 import { StoreListContent } from '@components/StoreListContent'
 
-export function Home() {
-  const toast = useToast()
+type HomeItem = {
+  id: string
+}
 
+const HOME_DATA: HomeItem[] = [
+  {
+    id: 'home-content',
+  },
+]
+
+function isCanceledRequest(error: any) {
+  return (
+    error?.code === 'ERR_CANCELED' ||
+    error?.name === 'CanceledError' ||
+    error?.name === 'AbortError' ||
+    error?.message === 'canceled'
+  )
+}
+
+function extractArray<T>(data: any, property: string): T[] {
+  const value = data?.[property] ?? data?.data ?? data ?? []
+
+  return Array.isArray(value) ? value : []
+}
+
+export function Home() {
   const navigation = useNavigation<AppNavigatorRoutesProps>()
+
+  const { width } = useWindowDimensions()
 
   const { city } = useContext(CityContext)
 
   const { syncCartBadge } = useContext(CartContext)
-
-  useAuth()
 
   const [stores, setStores] = useState<StoreDTO[]>([])
 
@@ -66,280 +91,517 @@ export function Home() {
 
   const [isLoadingRewards, setIsLoadingRewards] = useState(false)
 
-  function handleOpenProductDetails(product: ProductDTO) {
-    if (!product.id) {
-      toast.show({
-        title: 'Erro',
-        description: 'Produto inválido.',
-        placement: 'top',
-        bgColor: 'red.500',
+  /* =====================================
+     RESPONSIVIDADE
+  ===================================== */
+
+  const responsive = useMemo(() => {
+    const isSmall = width < 360
+
+    const isLarge = width >= 420
+
+    return {
+      sectionGap: isSmall ? 6 : isLarge ? 12 : 8,
+
+      footerMargin: isSmall ? 12 : 18,
+
+      emptyPadding: isSmall ? 20 : 28,
+    }
+  }, [width])
+
+  /* =====================================
+     PRODUTO
+  ===================================== */
+
+  const handleOpenProductDetails = useCallback(
+    (product: ProductDTO) => {
+      if (!product?.id) {
+        Alert.alert('Produto inválido', 'Não foi possível abrir este produto.')
+
+        return
+      }
+
+      navigation.navigate('productDetails', {
+        productId: product.id,
       })
+    },
+    [navigation],
+  )
 
-      return
-    }
+  /* =====================================
+     BRINDE
+  ===================================== */
 
-    navigation.navigate('productDetails', {
-      productId: product.id,
-    })
-  }
+  const handleOpenReward = useCallback(
+    (reward: RewardDTO) => {
+      if (!reward?.storeId) {
+        Alert.alert(
+          'Brinde indisponível',
+          'Não foi possível identificar a loja deste brinde.',
+        )
 
-  function handleOpenReward(reward: RewardDTO) {
-    if (!reward.storeId) {
-      toast.show({
-        title: 'Loja do brinde não encontrada.',
-        placement: 'top',
-        bgColor: 'orange.500',
+        return
+      }
+
+      navigation.navigate('storeRewardCatalog', {
+        storeId: reward.storeId,
+
+        storeName: reward.store?.name,
       })
+    },
+    [navigation],
+  )
 
-      return
-    }
-
-    navigation.navigate('storeRewardCatalog', {
-      storeId: reward.storeId,
-      storeName: reward.store?.name,
-    })
-  }
-  async function loadPremiumBanners() {
-    if (!city?.id) {
-      setBanners([])
-      return
-    }
-
-    try {
-      const response = await api.get(`/banners/premium/city/${city.id}`)
-
-      const fetchedBanners =
-        response.data?.banners ?? response.data?.data ?? response.data ?? []
-
-      setBanners(Array.isArray(fetchedBanners) ? fetchedBanners : [])
-    } catch (error: any) {
-      console.error('[Home] Erro ao carregar banners PREMIUM:', {
-        status: error?.response?.status,
-        data: error?.response?.data,
-        message: error?.message,
-      })
-
-      setBanners([])
-    }
-  }
-
-  async function loadPremiumStores() {
-    if (!city?.id) {
-      setStores([])
-      setIsLoadingStores(false)
-      return
-    }
-
-    try {
-      setIsLoadingStores(true)
-
-      const response = await api.get(`/stores/premium/city/${city.id}`)
-
-      const fetchedStores =
-        response.data?.stores ?? response.data?.data ?? response.data ?? []
-
-      setStores(Array.isArray(fetchedStores) ? fetchedStores : [])
-    } catch (error) {
-      const title =
-        error instanceof AppError
-          ? error.message
-          : 'Não foi possível carregar as lojas.'
-
-      toast.show({
-        title,
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-
-      setStores([])
-    } finally {
-      setIsLoadingStores(false)
-    }
-  }
-
-  async function loadPremiumReels() {
-    if (!city?.id) {
-      setReels([])
-      return
-    }
-
-    try {
-      const response = await api.get(`/reels/premium/city/${city.id}`)
-
-      const fetchedReels =
-        response.data?.reels ?? response.data?.data ?? response.data ?? []
-
-      setReels(Array.isArray(fetchedReels) ? fetchedReels : [])
-    } catch (error: any) {
-      console.error('[Home] Erro ao carregar reels PREMIUM:', {
-        status: error?.response?.status,
-        data: error?.response?.data,
-        message: error?.message,
-      })
-
-      setReels([])
-    }
-  }
-
-  async function loadRewards() {
-    if (!city?.id) {
-      setRewards([])
-      setIsLoadingRewards(false)
-      return
-    }
-
-    try {
-      setIsLoadingRewards(true)
-
-      const response = await api.get(`/rewards/city/${city.id}`)
-
-      const fetchedRewards =
-        response.data?.rewards ?? response.data?.data ?? response.data ?? []
-
-      setRewards(Array.isArray(fetchedRewards) ? fetchedRewards : [])
-    } catch (error: any) {
-      console.error('[Home] Erro ao carregar brindes:', {
-        status: error?.response?.status,
-
-        data: error?.response?.data,
-
-        message: error?.message,
-      })
-
-      setRewards([])
-    } finally {
-      setIsLoadingRewards(false)
-    }
-  }
-
-  async function loadHomeData() {
-    if (!city?.id) {
-      setStores([])
-      setBanners([])
-      setReels([])
-      setRewards([])
-
-      setIsLoadingStores(false)
-      setIsLoadingRewards(false)
-      setIsLoading(false)
-
-      return
-    }
-
-    try {
-      setIsLoading(true)
-
-      await Promise.all([
-        loadPremiumStores(),
-        loadPremiumBanners(),
-        loadPremiumReels(),
-        loadRewards(),
-      ])
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  /* =====================================
+     CARREGAR HOME
+  ===================================== */
 
   useFocusEffect(
     useCallback(() => {
-      loadHomeData()
+      const controller = new AbortController()
+
+      let active = true
+
+      async function loadHomeData() {
+        if (!city?.id) {
+          setStores([])
+          setBanners([])
+          setReels([])
+          setRewards([])
+
+          setIsLoadingStores(false)
+
+          setIsLoadingRewards(false)
+
+          setIsLoading(false)
+
+          return
+        }
+
+        try {
+          setIsLoading(true)
+
+          setIsLoadingStores(true)
+
+          setIsLoadingRewards(true)
+
+          /*
+           * Cada bloco é independente.
+           *
+           * Se banner falhar,
+           * as lojas continuam aparecendo.
+           *
+           * Se reels falharem,
+           * os produtos continuam funcionando.
+           */
+          const results = await Promise.allSettled([
+            api.get(`/stores/premium/city/${city.id}`, {
+              signal: controller.signal,
+            }),
+
+            api.get(`/banners/premium/city/${city.id}`, {
+              signal: controller.signal,
+            }),
+
+            api.get(`/reels/premium/city/${city.id}`, {
+              signal: controller.signal,
+            }),
+
+            api.get(`/rewards/city/${city.id}`, {
+              signal: controller.signal,
+            }),
+          ])
+
+          if (!active || controller.signal.aborted) {
+            return
+          }
+
+          /* ==========================
+             LOJAS
+          ========================== */
+
+          const storesResult = results[0]
+
+          if (storesResult.status === 'fulfilled') {
+            setStores(extractArray<StoreDTO>(storesResult.value.data, 'stores'))
+          } else if (!isCanceledRequest(storesResult.reason)) {
+            console.error('[Home] Erro ao carregar lojas:', storesResult.reason)
+
+            setStores([])
+          }
+
+          /* ==========================
+             BANNERS
+          ========================== */
+
+          const bannersResult = results[1]
+
+          if (bannersResult.status === 'fulfilled') {
+            const data = extractArray<BannerDTO>(
+              bannersResult.value.data,
+              'banners',
+            )
+
+            /*
+             * Limite para evitar
+             * excesso de imagens na Home.
+             */
+            setBanners(data.slice(0, 8))
+          } else if (!isCanceledRequest(bannersResult.reason)) {
+            console.error(
+              '[Home] Erro ao carregar banners:',
+              bannersResult.reason,
+            )
+
+            setBanners([])
+          }
+
+          /* ==========================
+             REELS
+          ========================== */
+
+          const reelsResult = results[2]
+
+          if (reelsResult.status === 'fulfilled') {
+            setReels(extractArray<ReelDTO>(reelsResult.value.data, 'reels'))
+          } else if (!isCanceledRequest(reelsResult.reason)) {
+            console.error('[Home] Erro ao carregar reels:', reelsResult.reason)
+
+            setReels([])
+          }
+
+          /* ==========================
+             BRINDES
+          ========================== */
+
+          const rewardsResult = results[3]
+
+          if (rewardsResult.status === 'fulfilled') {
+            setRewards(
+              extractArray<RewardDTO>(rewardsResult.value.data, 'rewards'),
+            )
+          } else if (!isCanceledRequest(rewardsResult.reason)) {
+            console.error(
+              '[Home] Erro ao carregar brindes:',
+              rewardsResult.reason,
+            )
+
+            setRewards([])
+          }
+        } catch (error: any) {
+          if (isCanceledRequest(error)) {
+            return
+          }
+
+          console.error('[Home] Erro inesperado:', {
+            message: error?.message,
+
+            code: error?.code,
+
+            status: error?.response?.status,
+          })
+        } finally {
+          if (active && !controller.signal.aborted) {
+            setIsLoading(false)
+
+            setIsLoadingStores(false)
+
+            setIsLoadingRewards(false)
+          }
+        }
+      }
+
+      void loadHomeData()
+
+      return () => {
+        active = false
+
+        controller.abort()
+      }
     }, [city?.id]),
   )
 
+  /* =====================================
+     BADGE DO CARRINHO
+  ===================================== */
+
   useFocusEffect(
     useCallback(() => {
-      syncCartBadge()
+      void syncCartBadge()
     }, [syncCartBadge]),
   )
 
+  /* =====================================
+     SEM CIDADE
+  ===================================== */
+
   if (!city?.id) {
     return (
-      <VStack flex={1} bg="blue.50">
+      <View style={styles.screen}>
         <HomeHeader />
 
         <SearchBar />
 
-        <Center flex={1} px={6}>
-          <Text
-            fontSize="lg"
-            fontWeight="bold"
-            color="coolGray.700"
-            textAlign="center"
-          >
-            Selecione uma cidade
-          </Text>
+        <View
+          style={[
+            styles.emptyCity,
 
-          <Text mt={2} color="coolGray.500" textAlign="center">
+            {
+              paddingHorizontal: responsive.emptyPadding,
+            },
+          ]}
+        >
+          <Text style={styles.emptyTitle}>Selecione uma cidade</Text>
+
+          <Text style={styles.emptyDescription}>
             Escolha sua cidade para visualizar lojas, produtos e brindes
             disponíveis.
           </Text>
-        </Center>
-      </VStack>
+        </View>
+      </View>
     )
   }
 
+  /* =====================================
+     LOADING
+  ===================================== */
+
   if (isLoading) {
     return (
-      <VStack flex={1} bg="blue.100">
+      <View style={styles.screen}>
         <HomeHeader />
 
         <SearchBar />
 
-        <Loading />
-      </VStack>
+        <View style={styles.loadingContainer}>
+          <Loading />
+        </View>
+      </View>
     )
   }
 
+  /* =====================================
+     CONTEÚDO DA HOME
+  ===================================== */
+
+  const renderHomeContent = () => (
+    <View
+      style={{
+        marginTop: responsive.sectionGap,
+      }}
+    >
+      <StoreListContent
+        insideScrollView
+        stores={stores}
+        isLoading={isLoadingStores}
+      />
+    </View>
+  )
+
+  /* =====================================
+     TELA
+  ===================================== */
+
   return (
-    <VStack flex={1} bg="blue.50">
+    <View style={styles.screen}>
       <HomeHeader />
 
       <SearchBar />
 
       <FlatList
-        data={[{ id: 'home' }]}
+        data={HOME_DATA}
         keyExtractor={(item) => item.id}
+        renderItem={renderHomeContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        renderItem={() => (
-          <StoreListContent
-            insideScrollView
-            stores={stores}
-            isLoading={isLoadingStores}
-          />
-        )}
+        removeClippedSubviews={false}
+        initialNumToRender={1}
+        maxToRenderPerBatch={1}
+        windowSize={3}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          <VStack bg="blue.50" mx={1} mt={-4}>
-            <Promotion banners={banners} />
+          <View style={styles.homeContent}>
+            {/* BANNERS */}
 
-            <BusinessCategory />
+            <View style={styles.firstSection}>
+              <Promotion banners={banners} />
+            </View>
 
-            <FeaturedStores
-              stores={stores.slice(0, 10)}
-              isLoading={isLoadingStores}
-            />
+            {/* CATEGORIAS */}
 
-            <HomeRewards
-              rewards={rewards}
-              isLoading={isLoadingRewards}
-              onSeeAll={() => navigation.navigate('rewards')}
-              onPressReward={handleOpenReward}
-            />
+            <View
+              style={{
+                marginTop: responsive.sectionGap,
+              }}
+            >
+              <BusinessCategory />
+            </View>
 
-            <ProductDiscount onPressProduct={handleOpenProductDetails} />
+            {/* LOJAS EM DESTAQUE */}
 
-            <Reel reels={reels} />
+            <View
+              style={{
+                marginTop: responsive.sectionGap,
+              }}
+            >
+              <FeaturedStores
+                stores={stores.slice(0, 10)}
+                isLoading={isLoadingStores}
+              />
+            </View>
 
-            <ProductQuantity onPressProduct={handleOpenProductDetails} />
+            {/* BRINDES */}
 
-            <BenefitsBar />
-          </VStack>
+            <View
+              style={{
+                marginTop: responsive.sectionGap,
+              }}
+            >
+              <HomeRewards
+                rewards={rewards}
+                isLoading={isLoadingRewards}
+                onSeeAll={() => navigation.navigate('rewards')}
+                onPressReward={handleOpenReward}
+              />
+            </View>
+
+            {/* PRODUTOS COM DESCONTO */}
+
+            <View
+              style={{
+                marginTop: responsive.sectionGap,
+              }}
+            >
+              <ProductDiscount onPressProduct={handleOpenProductDetails} />
+            </View>
+
+            {/* REELS */}
+
+            {reels.length > 0 ? (
+              <View
+                style={{
+                  marginTop: responsive.sectionGap,
+                }}
+              >
+                <Reel reels={reels} />
+              </View>
+            ) : null}
+
+            {/* PRODUTOS POR QUANTIDADE */}
+
+            <View
+              style={{
+                marginTop: responsive.sectionGap,
+              }}
+            >
+              <ProductQuantity onPressProduct={handleOpenProductDetails} />
+            </View>
+
+            {/* BENEFÍCIOS */}
+
+            <View
+              style={{
+                marginTop: responsive.sectionGap,
+              }}
+            >
+              <BenefitsBar />
+            </View>
+          </View>
         }
-        ListFooterComponent={<CashbackRegulationCard />}
-        contentContainerStyle={{
-          paddingBottom: 40,
-        }}
+        ListFooterComponent={
+          <View
+            style={{
+              marginTop: responsive.footerMargin,
+            }}
+          >
+            <CashbackRegulationCard />
+          </View>
+        }
       />
-    </VStack>
+    </View>
   )
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+
+    backgroundColor: '#EFF6FF',
+  },
+
+  list: {
+    flex: 1,
+
+    width: '100%',
+  },
+
+  listContent: {
+    width: '100%',
+
+    paddingTop: 0,
+
+    paddingBottom: 40,
+  },
+
+  homeContent: {
+    width: '100%',
+
+    /*
+     * Nada de marginTop negativo.
+     */
+    marginTop: 0,
+
+    paddingTop: 0,
+  },
+
+  firstSection: {
+    width: '100%',
+
+    marginTop: 0,
+
+    paddingTop: 0,
+  },
+
+  emptyCity: {
+    flex: 1,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  emptyTitle: {
+    fontSize: 18,
+
+    fontWeight: '700',
+
+    color: '#374151',
+
+    textAlign: 'center',
+  },
+
+  emptyDescription: {
+    maxWidth: 340,
+
+    marginTop: 8,
+
+    fontSize: 14,
+
+    lineHeight: 20,
+
+    color: '#6B7280',
+
+    textAlign: 'center',
+  },
+
+  loadingContainer: {
+    flex: 1,
+
+    minHeight: 200,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+})

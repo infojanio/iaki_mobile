@@ -172,7 +172,7 @@ async function uploadAvatar(asset: ImagePicker.ImagePickerAsset) {
 // ======================================================
 
 export function ProfileEdit() {
-  const { user, signOut } = useAuth()
+  const { user, signOut, updateUser, refreshUser } = useAuth()
 
   const nav = useNavigation()
 
@@ -353,49 +353,111 @@ export function ProfileEdit() {
   // UPDATE PROFILE
   // ====================================================
 
-  async function onSubmit(data: FormDataProps) {
-    try {
-      const payload = {
-        ...data,
-
-        avatar: avatarUrl ?? undefined,
-      }
-
-      const userId = (user as any)?.id
-
-      if (!userId) {
-        throw new Error('ID do usuário não encontrado no contexto.')
-      }
-
-      await api.patch(`/users/${userId}`, payload)
-
-      toast.show({
-        title: 'Dados atualizados!',
-
-        placement: 'top',
-
-        bgColor: 'emerald.600',
-      })
-
-      nav.goBack()
-    } catch (error: any) {
-      console.log(
-        '[ProfileEdit] Erro ao atualizar:',
-        error?.response?.data ?? error,
-      )
-
-      toast.show({
-        title:
-          error?.response?.data?.message ??
-          'Não foi possível salvar suas alterações.',
-
-        placement: 'top',
-
-        bgColor: 'red.500',
-      })
-    }
+  function onlyNumbers(value?: string | null) {
+    return String(value ?? '').replace(/\D/g, '')
   }
 
+  async function onSubmit(data: FormDataProps) {
+    if (avatarUploading || deletingAccount) {
+      return
+    }
+
+    try {
+      const userId = user?.id
+
+      if (!userId) {
+        throw new Error('ID do usuário não encontrado.')
+      }
+
+      const onlyNumbers = (value?: string | null) => {
+        return String(value ?? '').replace(/\D/g, '')
+      }
+
+      const payload = {
+        name: data.name.trim(),
+
+        phone: onlyNumbers(data.phone),
+
+        cpf: onlyNumbers(data.cpf),
+
+        avatar: avatarUrl ?? undefined,
+
+        street: data.street?.trim() || undefined,
+
+        state: data.state?.trim() || undefined,
+
+        postalCode: onlyNumbers(data.postalCode) || undefined,
+      }
+
+      console.log('[ProfileEdit] Salvando perfil...')
+
+      const response = await api.patch(`/users/${userId}`, payload, {
+        timeout: 30000,
+      })
+
+      /*
+       * Se o PATCH já retorna
+       * o usuário atualizado,
+       * aproveitamos imediatamente.
+       */
+      const returnedUser = response.data?.user
+
+      if (returnedUser?.id) {
+        await updateUser(returnedUser)
+      } else {
+        /*
+         * Se o PATCH retorna somente
+         * uma mensagem, busca novamente
+         * no backend.
+         */
+        await refreshUser()
+      }
+
+      Alert.alert(
+        'Perfil atualizado',
+        'Suas alterações foram salvas com sucesso.',
+        [
+          {
+            text: 'OK',
+
+            onPress: () => {
+              if (nav.canGoBack()) {
+                nav.goBack()
+              }
+            },
+          },
+        ],
+        {
+          cancelable: false,
+        },
+      )
+    } catch (error: any) {
+      console.error('[ProfileEdit] Erro ao atualizar:', {
+        message: error?.message,
+
+        code: error?.code,
+
+        status: error?.response?.status,
+
+        data: error?.response?.data,
+      })
+
+      let message = 'Não foi possível salvar suas alterações.'
+
+      if (error?.response?.data?.message) {
+        message = error.response.data.message
+      } else if (
+        error?.code === 'ERR_NETWORK' ||
+        error?.message === 'Network Error'
+      ) {
+        message = 'Falha na conexão. Verifique sua internet e tente novamente.'
+      } else if (error?.code === 'ECONNABORTED') {
+        message = 'A conexão demorou demais. Tente novamente.'
+      }
+
+      Alert.alert('Erro ao salvar perfil', message)
+    }
+  }
   // ====================================================
   // DELETE ACCOUNT
   // ====================================================

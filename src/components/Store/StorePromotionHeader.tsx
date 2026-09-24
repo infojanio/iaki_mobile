@@ -32,19 +32,30 @@ export function StorePromotionHeader({ store, banners }: Props) {
 const styles = StyleSheet.create({
   container: {
     width: '100%',
+    paddingHorizontal: 0,
     paddingTop: 0,
+    marginHorizontal: 0,
     marginTop: 0,
-    backgroundColor: '#FFFFFF',
+    marginBottom: 8,
+    backgroundColor: '#F9FAFB',
   },
 
   storeHeaderContainer: {
-    marginBottom: 0,
-    paddingBottom: 0,
+    width: '100%',
+    marginBottom: 2,
+    paddingBottom: 2,
   },
 
   bannerContainer: {
-    marginTop: -24,
+    width: '100%',
+    alignSelf: 'stretch',
+
+    marginTop: 0,
+    marginHorizontal: 0,
+
     paddingTop: 0,
-    marginBottom: 0,
+    paddingHorizontal: 0,
+
+    overflow: 'hidden',
   },
 })

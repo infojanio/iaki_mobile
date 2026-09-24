@@ -7,12 +7,12 @@ import { AppError } from '@utils/AppError'
 
 import { StoreDTO } from '@dtos/StoreDTO'
 import { Loading } from '@components/Loading'
-import { HomeScreen } from '@components/HomeScreen'
 import { StoreCard } from '@components/Store/StoreCard'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CityContext } from '@contexts/CityContext'
 import { BackHome } from '@components/BackHome'
 import { FlatList } from 'react-native'
+import { HomeScreen } from '@components/HomeScreen'
 
 type RouteParams = {
   businessCategoryId: string
@@ -74,7 +74,7 @@ export function StoresByBusiness() {
 
   return (
     <VStack flex={1} bg="gray.100" safeArea>
-      <BackHome title="Estabelecimentos" />
+      <HomeScreen title="Estabelecimentos" />
 
       {isLoading ? (
         <Loading />

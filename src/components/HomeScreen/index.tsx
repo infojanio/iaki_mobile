@@ -46,7 +46,7 @@ export function HomeScreen({ title }: Props) {
 
   return (
     <VStack safeArea>
-      <Box bg="white" shadow={2} mb={2} ml={1}>
+      <Box bg="white" shadow={2}>
         <HStack
           px={2}
           alignItems="center"
