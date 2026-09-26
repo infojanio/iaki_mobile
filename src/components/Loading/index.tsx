@@ -4,7 +4,7 @@ import SplashImg from '@assets/icon01.png'
 
 export function Loading() {
   return (
-    <Center flex={1} bg="gray.100">
+    <Center flex={1} bg="blue.50">
       <Image
         size={50}
         source={SplashImg}

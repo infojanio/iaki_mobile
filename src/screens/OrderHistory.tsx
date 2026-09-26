@@ -67,10 +67,10 @@ const DEFAULT_PRODUCT_IMAGE = 'https://via.placeholder.com/80'
 const ORDER_EXPIRATION_DAYS = 30
 
 const STATUS_OPTIONS = [
-  {
+  /* {
     value: '',
     label: 'Todos',
-  },
+  }, */
   {
     value: 'PENDING',
     label: 'Pendente',
@@ -179,7 +179,7 @@ export function OrderHistory() {
 
   const [loading, setLoading] = useState(true)
 
-  const [selectedStatus, setSelectedStatus] = useState('')
+  const [selectedStatus, setSelectedStatus] = useState('PENDING')
 
   const [refreshing, setRefreshing] = useState(false)
 

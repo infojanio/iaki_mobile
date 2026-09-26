@@ -6,13 +6,15 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native'
+
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { Feather } from '@expo/vector-icons'
 
@@ -25,8 +27,6 @@ import * as yup from 'yup'
 import { useNavigation } from '@react-navigation/native'
 
 import { AuthNavigatorRoutesProps } from '@routes/auth.routes'
-
-import { Input } from '@components/Input'
 
 import { useAuth } from '@hooks/useAuth'
 
@@ -75,9 +75,9 @@ export function SignIn() {
     },
   })
 
-  /* ==============================
+  /* =====================================
      CADASTRO
-  ============================== */
+  ===================================== */
 
   function handleNewAccount() {
     if (isLoading) {
@@ -87,9 +87,9 @@ export function SignIn() {
     navigation.navigate('signup')
   }
 
-  /* ==============================
+  /* =====================================
      RECUPERAR SENHA
-  ============================== */
+  ===================================== */
 
   function handleForgotPassword() {
     if (isLoading) {
@@ -99,9 +99,9 @@ export function SignIn() {
     navigation.navigate('forgotPassword')
   }
 
-  /* ==============================
+  /* =====================================
      LOGIN
-  ============================== */
+  ===================================== */
 
   async function handleSignIn({ email, password }: FormDataProps) {
     if (isLoading) {
@@ -113,35 +113,14 @@ export function SignIn() {
 
       const normalizedEmail = email.trim().toLowerCase()
 
-      console.log('[SignIn] Iniciando login', {
-        email: normalizedEmail,
-      })
-
-      /*
-       * A SignIn deve apenas autenticar.
-       *
-       * Depois que o AuthContext atualizar
-       * o usuário, o Root Navigator decide
-       * automaticamente entre:
-       *
-       * redirect
-       * selectCity
-       * appRoutes
-       */
       await signIn(normalizedEmail, password)
 
-      console.log('[SignIn] Login concluído')
-
       /*
-       * NÃO navegar manualmente aqui.
+       * Não navegar manualmente.
        *
-       * NÃO fazer:
-       *
-       * navigation.navigate('home')
-       *
-       * nem consultar:
-       *
-       * /users/:id/location
+       * O AuthContext atualiza o usuário
+       * e o Root Navigator decide entre
+       * seleção de cidade e app.
        */
     } catch (error: any) {
       console.error('[SignIn] Erro no login:', {
@@ -170,323 +149,537 @@ export function SignIn() {
         message = 'Falha na conexão. Verifique sua internet e tente novamente.'
       }
 
-      /*
-       * Alerta nativo.
-       *
-       * Evita usar Toast/overlay do
-       * NativeBase durante o fluxo
-       * crítico de autenticação.
-       */
       Alert.alert('Não foi possível entrar', message)
     } finally {
       setIsLoading(false)
     }
   }
 
-  /* ==============================
+  /* =====================================
      TELA
-  ============================== */
+  ===================================== */
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={['top', 'left', 'right', 'bottom']}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollViewContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* IMAGEM SUPERIOR */}
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <View style={styles.content}>
+            {/* =================================
+                IMAGEM PRINCIPAL
+            ================================= */}
 
-        <View style={styles.topImageContainer}>
-          <Image
-            style={styles.topImage}
-            source={clubePng}
-            resizeMode="contain"
-            fadeDuration={0}
-          />
-        </View>
-
-        {/* FORMULÁRIO */}
-
-        <View style={styles.formContainer}>
-          <View style={styles.headerContainer}>
-            <Text style={styles.header}>Clube de vantagens</Text>
-          </View>
-
-          {/* E-MAIL */}
-
-          <Controller
-            control={control}
-            name="email"
-            render={({ field: { onChange, value } }) => (
-              <Input
-                placeholder="Email"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                onChangeText={onChange}
-                value={value}
-                editable={!isLoading}
-                errorMessage={errors.email?.message}
+            <View style={styles.heroContainer}>
+              <Image
+                source={clubePng}
+                style={styles.heroImage}
+                resizeMode="contain"
+                fadeDuration={0}
               />
-            )}
-          />
+            </View>
 
-          {/* SENHA */}
+            {/* =================================
+                FORMULÁRIO
+            ================================= */}
 
-          <View style={styles.passwordWrapper}>
-            <Controller
-              control={control}
-              name="password"
-              render={({ field: { onChange, value } }) => (
-                <TextInput
-                  placeholder="Senha"
-                  secureTextEntry={!showPassword}
-                  style={styles.passwordInput}
-                  placeholderTextColor="#999999"
-                  onChangeText={onChange}
-                  value={value}
-                  editable={!isLoading}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSubmit(handleSignIn)}
-                />
-              )}
-            />
+            <View style={styles.formCard}>
+              <View style={styles.header}>
+                <Text style={styles.title}>Bem-vindo ao Clube IAki</Text>
 
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={() => setShowPassword((previous) => !previous)}
-              disabled={isLoading}
-              activeOpacity={0.7}
-              accessibilityLabel={
-                showPassword ? 'Ocultar senha' : 'Mostrar senha'
-              }
-            >
-              <Feather
-                name={showPassword ? 'eye-off' : 'eye'}
-                size={24}
-                color="#999999"
-              />
-            </TouchableOpacity>
-          </View>
-
-          {errors.password?.message && (
-            <Text style={styles.errorText}>{errors.password.message}</Text>
-          )}
-
-          {/* ESQUECI SENHA */}
-
-          <TouchableOpacity
-            style={styles.forgotPasswordContainer}
-            onPress={handleForgotPassword}
-            disabled={isLoading}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.forgotPasswordText}>Esqueci minha senha</Text>
-          </TouchableOpacity>
-
-          {/* ENTRAR */}
-
-          <TouchableOpacity
-            style={[styles.button, isLoading && styles.buttonDisabled]}
-            onPress={handleSubmit(handleSignIn)}
-            disabled={isLoading}
-            activeOpacity={0.8}
-          >
-            {isLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color="#FFFFFF" />
-
-                <Text style={[styles.buttonText, styles.loadingText]}>
-                  Entrando...
+                <Text style={styles.subtitle}>
+                  Entre para acessar vantagens, pontos e ofertas das suas lojas
+                  favoritas.
                 </Text>
               </View>
-            ) : (
-              <Text style={styles.buttonText}>Entrar</Text>
-            )}
-          </TouchableOpacity>
 
-          {/* CADASTRO */}
+              {/* =================================
+                  E-MAIL
+              ================================= */}
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Não tem uma conta?</Text>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>E-mail</Text>
 
-            <TouchableOpacity
-              onPress={handleNewAccount}
-              disabled={isLoading}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.link}>Cadastre-se</Text>
-            </TouchableOpacity>
+                <Controller
+                  control={control}
+                  name="email"
+                  render={({ field: { onChange, value } }) => (
+                    <View
+                      style={[
+                        styles.inputContainer,
+
+                        errors.email?.message && styles.inputError,
+                      ]}
+                    >
+                      <Feather name="mail" size={19} color="#777777" />
+
+                      <TextInput
+                        value={value}
+                        onChangeText={onChange}
+                        editable={!isLoading}
+                        placeholder="seuemail@exemplo.com"
+                        placeholderTextColor="#999999"
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoComplete="email"
+                        returnKeyType="next"
+                        style={styles.input}
+                      />
+                    </View>
+                  )}
+                />
+
+                {errors.email?.message ? (
+                  <Text style={styles.errorText}>{errors.email.message}</Text>
+                ) : null}
+              </View>
+
+              {/* =================================
+                  SENHA
+              ================================= */}
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Senha</Text>
+
+                <Controller
+                  control={control}
+                  name="password"
+                  render={({ field: { onChange, value } }) => (
+                    <View
+                      style={[
+                        styles.inputContainer,
+
+                        errors.password?.message && styles.inputError,
+                      ]}
+                    >
+                      <Feather name="lock" size={19} color="#777777" />
+
+                      <TextInput
+                        value={value}
+                        onChangeText={onChange}
+                        editable={!isLoading}
+                        placeholder="Digite sua senha"
+                        placeholderTextColor="#999999"
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoComplete="password"
+                        returnKeyType="done"
+                        onSubmitEditing={handleSubmit(handleSignIn)}
+                        style={styles.input}
+                      />
+
+                      <Pressable
+                        disabled={isLoading}
+                        onPress={() => setShowPassword((previous) => !previous)}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          showPassword ? 'Ocultar senha' : 'Mostrar senha'
+                        }
+                        style={({ pressed }) => [
+                          styles.eyeButton,
+
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <Feather
+                          name={showPassword ? 'eye-off' : 'eye'}
+                          size={21}
+                          color="#777777"
+                        />
+                      </Pressable>
+                    </View>
+                  )}
+                />
+
+                {errors.password?.message ? (
+                  <Text style={styles.errorText}>
+                    {errors.password.message}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* =================================
+                  ESQUECI SENHA
+              ================================= */}
+
+              <Pressable
+                onPress={handleForgotPassword}
+                disabled={isLoading}
+                hitSlop={5}
+                style={({ pressed }) => [
+                  styles.forgotButton,
+
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.forgotText}>Esqueci minha senha</Text>
+              </Pressable>
+
+              {/* =================================
+                  ENTRAR
+              ================================= */}
+
+              <Pressable
+                onPress={handleSubmit(handleSignIn)}
+                disabled={isLoading}
+                style={({ pressed }) => [
+                  styles.loginButton,
+
+                  isLoading && styles.loginButtonDisabled,
+
+                  pressed && !isLoading && styles.loginButtonPressed,
+                ]}
+              >
+                {isLoading ? (
+                  <View style={styles.loadingRow}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+
+                    <Text style={styles.loginButtonText}>Entrando...</Text>
+                  </View>
+                ) : (
+                  <>
+                    <Text style={styles.loginButtonText}>Entrar</Text>
+
+                    <Feather name="arrow-right" size={20} color="#FFFFFF" />
+                  </>
+                )}
+              </Pressable>
+
+              {/* =================================
+                  CADASTRO
+              ================================= */}
+
+              <View style={styles.signupContainer}>
+                <Text style={styles.signupText}>Ainda não tem uma conta?</Text>
+
+                <Pressable
+                  onPress={handleNewAccount}
+                  disabled={isLoading}
+                  hitSlop={5}
+                  style={({ pressed }) => pressed && styles.pressed}
+                >
+                  <Text style={styles.signupLink}>Cadastre-se</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* =================================
+                LOGO
+            ================================= */}
+
+            <View style={styles.logoContainer}>
+              <Image
+                source={IakiPng}
+                style={styles.logo}
+                resizeMode="contain"
+                fadeDuration={0}
+              />
+            </View>
           </View>
-
-          {/* LOGO */}
-
-          <View style={styles.logoContainer}>
-            <Image
-              style={styles.logo}
-              source={IakiPng}
-              resizeMode="contain"
-              fadeDuration={0}
-            />
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
+  /* ==================================
+       BASE
+    ================================== */
+
+  safeArea: {
     flex: 1,
+
     backgroundColor: '#FFFFFF',
   },
 
-  scrollViewContent: {
-    flexGrow: 1,
+  container: {
+    flex: 1,
 
-    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+
+  scrollContent: {
+    flexGrow: 1,
 
     paddingHorizontal: 20,
 
-    paddingVertical: 20,
+    paddingTop: 10,
+
+    paddingBottom: 20,
+
+    justifyContent: 'center',
   },
 
-  topImageContainer: {
+  content: {
+    width: '100%',
+
+    maxWidth: 480,
+
+    alignSelf: 'center',
+  },
+
+  /* ==================================
+       HERO
+    ================================== */
+
+  heroContainer: {
+    height: 190,
+
     alignItems: 'center',
 
     justifyContent: 'center',
 
-    marginHorizontal: -4,
+    marginBottom: 0,
 
-    marginBottom: -2,
-
-    backgroundColor: '#E5E7EB',
-
-    borderTopLeftRadius: 24,
-
-    borderTopRightRadius: 24,
+    borderRadius: 24,
 
     overflow: 'hidden',
+
+    backgroundColor: '#FFFFFF',
   },
 
-  topImage: {
-    height: 220,
-    width: 300,
+  heroImage: {
+    width: '100%',
+
+    height: '100%',
   },
 
-  formContainer: {
+  /* ==================================
+       FORM CARD
+    ================================== */
+
+  formCard: {
+    paddingHorizontal: 18,
+
+    paddingTop: 22,
+
+    paddingBottom: 20,
+
+    borderRadius: 22,
+
+    borderWidth: 1,
+
+    borderColor: '#EEEEEE',
+
     backgroundColor: '#FFFFFF',
 
-    borderRadius: 10,
+    shadowColor: '#000000',
 
-    padding: 10,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
 
-    elevation: 4,
+    shadowOpacity: 0.08,
+
+    shadowRadius: 10,
+
+    elevation: 3,
   },
 
-  headerContainer: {
-    alignItems: 'center',
-  },
+  /* ==================================
+       HEADER
+    ================================== */
 
   header: {
-    fontSize: 18,
+    alignItems: 'center',
+
+    marginBottom: 22,
+  },
+
+  title: {
+    fontSize: 21,
+
+    lineHeight: 26,
 
     fontWeight: '700',
-
-    marginVertical: 10,
 
     color: '#333333',
 
     textAlign: 'center',
   },
 
-  passwordWrapper: {
+  subtitle: {
+    maxWidth: 310,
+
+    marginTop: 7,
+
+    fontSize: 13,
+
+    lineHeight: 19,
+
+    color: '#777777',
+
+    textAlign: 'center',
+  },
+
+  /* ==================================
+       CAMPOS
+    ================================== */
+
+  fieldGroup: {
+    marginBottom: 14,
+  },
+
+  label: {
+    marginLeft: 2,
+
+    marginBottom: 7,
+
+    fontSize: 13,
+
+    fontWeight: '600',
+
+    color: '#555555',
+  },
+
+  inputContainer: {
+    minHeight: 52,
+
+    paddingHorizontal: 14,
+
     flexDirection: 'row',
 
     alignItems: 'center',
 
+    borderWidth: 1,
+
+    borderColor: '#E1E1E1',
+
+    borderRadius: 13,
+
     backgroundColor: '#F0F0F0',
-
-    borderRadius: 8,
-
-    paddingHorizontal: 10,
-
-    marginTop: 10,
   },
 
-  passwordInput: {
+  inputError: {
+    borderColor: '#DC2626',
+  },
+
+  input: {
     flex: 1,
+
+    minWidth: 0,
 
     height: 50,
 
-    fontSize: 16,
+    marginLeft: 10,
+
+    paddingVertical: 0,
+
+    fontSize: 15,
 
     color: '#333333',
   },
 
-  iconButton: {
-    paddingHorizontal: 10,
+  eyeButton: {
+    width: 38,
 
-    paddingVertical: 8,
-  },
-
-  errorText: {
-    color: '#DC2626',
-
-    fontSize: 12,
-
-    marginTop: 5,
-
-    marginLeft: 4,
-  },
-
-  forgotPasswordContainer: {
-    alignSelf: 'flex-end',
-
-    paddingVertical: 10,
-
-    paddingHorizontal: 4,
-  },
-
-  forgotPasswordText: {
-    fontSize: 14,
-
-    color: '#E1093F',
-
-    fontWeight: '600',
-  },
-
-  button: {
-    minHeight: 50,
-
-    backgroundColor: '#4CAF50',
-
-    borderRadius: 5,
-
-    marginTop: 8,
+    height: 44,
 
     alignItems: 'center',
 
     justifyContent: 'center',
 
-    paddingHorizontal: 16,
+    marginRight: -7,
   },
 
-  buttonDisabled: {
-    opacity: 0.7,
+  errorText: {
+    marginTop: 5,
+
+    marginLeft: 3,
+
+    fontSize: 12,
+
+    color: '#DC2626',
   },
 
-  buttonText: {
-    color: '#FFFFFF',
+  /* ==================================
+       ESQUECI SENHA
+    ================================== */
+
+  forgotButton: {
+    alignSelf: 'flex-end',
+
+    minHeight: 34,
+
+    marginTop: -3,
+
+    marginBottom: 10,
+
+    justifyContent: 'center',
+  },
+
+  forgotText: {
+    fontSize: 13,
+
+    fontWeight: '600',
+
+    color: '#E1093F',
+  },
+
+  /* ==================================
+       BOTÃO
+    ================================== */
+
+  loginButton: {
+    minHeight: 54,
+
+    marginTop: 4,
+
+    paddingHorizontal: 18,
+
+    borderRadius: 14,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    gap: 9,
+
+    backgroundColor: '#4CAF50',
+
+    shadowColor: '#4CAF50',
+
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+
+    shadowOpacity: 0.22,
+
+    shadowRadius: 6,
+
+    elevation: 3,
+  },
+
+  loginButtonPressed: {
+    opacity: 0.88,
+  },
+
+  loginButtonDisabled: {
+    opacity: 0.65,
+  },
+
+  loginButtonText: {
+    fontSize: 16,
 
     fontWeight: '700',
 
-    fontSize: 16,
+    color: '#FFFFFF',
   },
 
   loadingRow: {
@@ -495,46 +688,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
 
     justifyContent: 'center',
+
+    gap: 9,
   },
 
-  loadingText: {
-    marginLeft: 8,
-  },
+  /* ==================================
+       CADASTRO
+    ================================== */
 
-  footer: {
+  signupContainer: {
     marginTop: 20,
 
     flexDirection: 'row',
 
-    justifyContent: 'center',
+    flexWrap: 'wrap',
 
     alignItems: 'center',
+
+    justifyContent: 'center',
   },
 
-  footerText: {
-    fontSize: 16,
+  signupText: {
+    fontSize: 14,
 
     color: '#555555',
   },
 
-  link: {
-    fontSize: 16,
+  signupLink: {
+    marginLeft: 5,
 
-    color: '#E1093F',
+    fontSize: 14,
 
     fontWeight: '700',
 
-    marginLeft: 5,
+    color: '#E1093F',
   },
 
+  /* ==================================
+       LOGO
+    ================================== */
+
   logoContainer: {
-    alignItems: 'center',
+    height: 70,
 
     marginTop: 8,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
   },
 
   logo: {
-    height: 80,
-    width: 124,
+    width: 116,
+
+    height: 62,
+  },
+
+  pressed: {
+    opacity: 0.6,
   },
 })

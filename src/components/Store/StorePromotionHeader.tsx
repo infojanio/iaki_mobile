@@ -35,15 +35,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingTop: 0,
     marginHorizontal: 0,
-    marginTop: 0,
+    marginTop: -16,
     marginBottom: 8,
     backgroundColor: '#F9FAFB',
   },
 
   storeHeaderContainer: {
     width: '100%',
-    marginBottom: 2,
-    paddingBottom: 2,
+    marginBottom: 24,
+    paddingBottom: 4,
   },
 
   bannerContainer: {

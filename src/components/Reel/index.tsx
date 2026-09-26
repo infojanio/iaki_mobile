@@ -1,17 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { SafeAreaView } from 'react-native-safe-area-context'
+
 import {
-  Dimensions,
-  Pressable,
-  Text,
-  StyleSheet,
-  Linking,
+  ActivityIndicator,
+  Alert,
   FlatList,
+  Image,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
 } from 'react-native'
 
 import type { FlatList as RNFlatList } from 'react-native'
-
-import { Box, View, Image, Spinner, useToast } from 'native-base'
 
 import { ReelDTO } from '@dtos/ReelDTO'
 
@@ -28,85 +30,161 @@ type Props = {
   isLoading?: boolean
 }
 
-const { width } = Dimensions.get('window')
-
-const CARD_W = Math.min(180, width - 24)
+/* =====================================
+   CONFIGURAÇÕES
+===================================== */
 
 const CARD_H = 330
-const CARD_GAP = 14
 
-const SNAP_INTERVAL = CARD_W + CARD_GAP
+const CARD_GAP = 8
+
+const HORIZONTAL_PADDING = 12
+
+const AUTOPLAY_TIME = 5000
 
 export function Reel({ reels: reelsFromProps = [], isLoading = false }: Props) {
-  const toast = useToast()
+  const { width } = useWindowDimensions()
 
   const listRef = useRef<RNFlatList<PromoReel>>(null)
 
+  /*
+   * Guarda o índice atual sem depender
+   * da atualização assíncrona do state.
+   */
+  const activeIndexRef = useRef(0)
+
   const [activeIndex, setActiveIndex] = useState(0)
 
+  /* =====================================
+     TAMANHO RESPONSIVO
+  ===================================== */
+
+  const cardWidth = Math.min(180, width - HORIZONTAL_PADDING * 2)
+
   /*
-   * A Home já buscou somente reels
-   * de lojas PREMIUM.
-   *
-   * Este componente apenas normaliza
-   * e exibe os dados recebidos.
+   * Distância exata entre o início
+   * de um card e o início do próximo.
    */
+  const snapInterval = cardWidth + CARD_GAP
+
+  /*
+   * MUITO IMPORTANTE:
+   *
+   * cria espaço depois do último card
+   * para que ele possa chegar até a
+   * mesma posição horizontal dos demais.
+   *
+   * Sem isso, em telas largas o último
+   * Reel pode não conseguir alinhar
+   * totalmente e o FlatList aparenta
+   * parar no penúltimo.
+   */
+  const endPadding = Math.max(
+    HORIZONTAL_PADDING,
+
+    width - HORIZONTAL_PADDING - cardWidth,
+  )
+
+  /* =====================================
+     NORMALIZAR REELS
+  ===================================== */
+
   const reels = useMemo<PromoReel[]>(() => {
     return reelsFromProps
-      .filter((reel) => Boolean(reel.id && reel.imageUrl))
+      .filter((reel) => Boolean(reel?.id && reel?.imageUrl))
       .map((reel) => ({
         id: reel.id,
+
         title: reel.title ?? 'Reel promocional',
+
         imageUrl: reel.imageUrl,
+
         link: reel.link ?? null,
+
         storeId: reel.storeId ?? null,
       }))
       .slice(0, 8)
   }, [reelsFromProps])
 
-  /*
-   * Quando a cidade mudar e a Home
-   * fornecer novos reels, volta para
-   * o primeiro item.
-   */
-  useEffect(() => {
-    setActiveIndex(0)
+  /* =====================================
+     ATUALIZAR ÍNDICE
+  ===================================== */
 
-    if (reels.length > 0) {
-      requestAnimationFrame(() => {
-        listRef.current?.scrollToOffset({
-          offset: 0,
-          animated: false,
-        })
-      })
+  function updateActiveIndex(index: number) {
+    activeIndexRef.current = index
+
+    setActiveIndex(index)
+  }
+
+  /* =====================================
+     VOLTAR AO PRIMEIRO REEL
+  ===================================== */
+
+  useEffect(() => {
+    updateActiveIndex(0)
+
+    if (reels.length === 0) {
+      return
     }
+
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToOffset({
+        offset: 0,
+
+        animated: false,
+      })
+    })
   }, [reels])
 
-  /*
-   * Autoplay circular.
-   */
+  /* =====================================
+     AUTOPLAY
+  ===================================== */
+
   useEffect(() => {
     if (reels.length <= 1) {
       return
     }
 
     const timer = setInterval(() => {
-      setActiveIndex((currentIndex) => {
-        const nextIndex = (currentIndex + 1) % reels.length
+      const currentIndex = activeIndexRef.current
 
-        listRef.current?.scrollToIndex({
-          index: nextIndex,
-          animated: true,
-        })
+      /*
+       * Exemplo com 4 reels:
+       *
+       * 0 → 1
+       * 1 → 2
+       * 2 → 3
+       * 3 → 0
+       */
+      const nextIndex = (currentIndex + 1) % reels.length
 
-        return nextIndex
+      /*
+       * Usamos offset em vez de
+       * scrollToIndex.
+       *
+       * É mais previsível para
+       * carrossel horizontal com
+       * cards menores que a tela.
+       */
+      listRef.current?.scrollToOffset({
+        offset: nextIndex * snapInterval,
+
+        animated: true,
       })
-    }, 5000)
 
-    return () => clearInterval(timer)
-  }, [reels.length])
+      updateActiveIndex(nextIndex)
+    }, AUTOPLAY_TIME)
 
-  function handlePress(link?: string | null) {
+    return () => {
+      clearInterval(timer)
+    }
+  }, [reels.length, snapInterval])
+
+  /* =====================================
+     ABRIR LINK
+  ===================================== */
+
+  async function handlePress(link?: string | null) {
     if (!link?.trim()) {
       return
     }
@@ -117,29 +195,44 @@ export function Reel({ reels: reelsFromProps = [], isLoading = false }: Props) {
       formattedLink = `https://${formattedLink}`
     }
 
-    Linking.openURL(formattedLink).catch(() => {
-      toast.show({
-        title: 'Não foi possível abrir o link.',
-        placement: 'top',
-      })
-    })
+    try {
+      await Linking.openURL(formattedLink)
+    } catch {
+      Alert.alert('Link indisponível', 'Não foi possível abrir este link.')
+    }
   }
+
+  /* =====================================
+     LOADING
+  ===================================== */
 
   if (isLoading) {
     return (
-      <Box alignItems="center" justifyContent="center" h={CARD_H}>
-        <Spinner accessibilityLabel="Carregando reels" />
-      </Box>
+      <View style={styles.loading}>
+        <ActivityIndicator size="small" color="#1D4ED8" />
+      </View>
     )
   }
+
+  /* =====================================
+     SEM REELS
+  ===================================== */
 
   if (reels.length === 0) {
     return null
   }
 
+  /* =====================================
+     COMPONENTE
+  ===================================== */
+
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      {/* TÍTULO */}
+
       <Text style={styles.title}>🟡 Vitrine</Text>
+
+      {/* CARROSSEL */}
 
       <FlatList
         ref={listRef}
@@ -147,107 +240,237 @@ export function Reel({ reels: reelsFromProps = [], isLoading = false }: Props) {
         horizontal
         keyExtractor={(item) => item.id}
         showsHorizontalScrollIndicator={false}
-        snapToInterval={SNAP_INTERVAL}
+        /*
+         * Cada rolagem para exatamente
+         * no início do próximo card.
+         */
+        snapToInterval={snapInterval}
         snapToAlignment="start"
         decelerationRate="fast"
         disableIntervalMomentum
+        /*
+         * Não utilizar pagingEnabled.
+         *
+         * pagingEnabled trabalha com
+         * a largura da tela, enquanto
+         * nossos cards possuem ~180px.
+         */
+
+        /*
+         * O paddingRight maior é o que
+         * permite posicionar corretamente
+         * o último Reel.
+         */
         contentContainerStyle={{
-          paddingRight: 12,
+          paddingLeft: HORIZONTAL_PADDING,
+
+          paddingRight: endPadding,
         }}
-        style={{
-          maxHeight: CARD_H + 12,
-        }}
+        /*
+         * Melhora o cálculo de posição
+         * da lista.
+         */
         getItemLayout={(_, index) => ({
-          length: SNAP_INTERVAL,
-          offset: SNAP_INTERVAL * index,
+          length: snapInterval,
+
+          offset: snapInterval * index,
+
           index,
         })}
-        onScrollToIndexFailed={(info) => {
-          listRef.current?.scrollToOffset({
-            offset: SNAP_INTERVAL * info.index,
-            animated: true,
-          })
-
-          setTimeout(() => {
-            listRef.current?.scrollToIndex({
-              index: info.index,
-              animated: true,
-            })
-          }, 250)
-        }}
+        /*
+         * Quando o usuário arrastar
+         * manualmente, atualizamos o
+         * índice real em que ele parou.
+         */
         onMomentumScrollEnd={(event) => {
           const offsetX = event.nativeEvent.contentOffset.x
 
-          const calculatedIndex = Math.round(offsetX / SNAP_INTERVAL)
+          const calculatedIndex = Math.round(offsetX / snapInterval)
 
           const safeIndex = Math.min(
             Math.max(calculatedIndex, 0),
+
             reels.length - 1,
           )
 
-          setActiveIndex(safeIndex)
+          updateActiveIndex(safeIndex)
         }}
         renderItem={({ item }) => (
           <Pressable
-            onPress={() => handlePress(item.link)}
-            style={{
-              width: CARD_W,
-              marginLeft: 12,
-              marginRight: 2,
-            }}
+            onPress={() => void handlePress(item.link)}
+            style={({ pressed }) => [
+              styles.card,
+
+              {
+                width: cardWidth,
+
+                height: CARD_H,
+
+                /*
+                 * TODOS os cards possuem
+                 * o mesmo marginRight.
+                 *
+                 * Isso mantém o cálculo
+                 * do snapInterval correto
+                 * até no último.
+                 */
+                marginRight: CARD_GAP,
+              },
+
+              pressed && styles.pressed,
+            ]}
           >
             <Image
               source={{
                 uri: item.imageUrl,
               }}
-              alt={item.title || 'Reel promocional'}
-              w={CARD_W}
-              h={CARD_H}
-              borderRadius="xl"
-              resizeMode="stretch"
+              style={styles.image}
+              resizeMode="cover"
+              resizeMethod="resize"
+              fadeDuration={0}
             />
           </Pressable>
         )}
       />
 
+      {/* =================================
+          INDICADORES
+      ================================= */}
+
       {reels.length > 1 && (
-        <Box flexDirection="row" justifyContent="center" mt={2}>
+        <View style={styles.dotsContainer}>
           {reels.map((reel, index) => (
             <View
               key={reel.id}
               style={[
                 styles.dot,
-                {
-                  opacity: index === activeIndex ? 1 : 0.35,
-                },
+
+                index === activeIndex ? styles.activeDot : styles.inactiveDot,
               ]}
             />
           ))}
-        </Box>
+        </View>
       )}
-    </SafeAreaView>
+    </View>
   )
 }
 
+/* =====================================
+   ESTILOS
+===================================== */
+
 const styles = StyleSheet.create({
   container: {
-    marginTop: -10,
+    width: '100%',
+
+    marginTop: 0,
+
     marginBottom: 2,
+
+    paddingTop: 0,
   },
 
+  /* ==================================
+       TÍTULO
+    ================================== */
+
   title: {
-    marginTop: 2,
-    marginLeft: 10,
-    marginBottom: 4,
+    marginTop: 0,
+
+    marginLeft: HORIZONTAL_PADDING,
+
+    marginBottom: 5,
+
     fontSize: 16,
-    fontWeight: 'bold',
+
+    lineHeight: 20,
+
+    fontWeight: '700',
+
+    color: '#1F2937',
+  },
+
+  /* ==================================
+       CARD
+    ================================== */
+
+  card: {
+    flexShrink: 0,
+
+    overflow: 'hidden',
+
+    borderRadius: 16,
+
+    backgroundColor: '#F3F4F6',
+  },
+
+  /* ==================================
+       IMAGEM
+    ================================== */
+
+  image: {
+    width: '100%',
+
+    height: '100%',
+
+    backgroundColor: '#F3F4F6',
+  },
+
+  /* ==================================
+       INDICADORES
+    ================================== */
+
+  dotsContainer: {
+    height: 18,
+
+    marginTop: 5,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
   },
 
   dot: {
-    width: 8,
-    height: 8,
+    height: 7,
+
     borderRadius: 4,
+
     marginHorizontal: 3,
-    backgroundColor: 'blue',
+
+    backgroundColor: '#1D4ED8',
+  },
+
+  activeDot: {
+    width: 18,
+
+    opacity: 1,
+  },
+
+  inactiveDot: {
+    width: 7,
+
+    opacity: 0.28,
+  },
+
+  /* ==================================
+       LOADING
+    ================================== */
+
+  loading: {
+    height: CARD_H,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  /* ==================================
+       PRESS
+    ================================== */
+
+  pressed: {
+    opacity: 0.9,
   },
 })

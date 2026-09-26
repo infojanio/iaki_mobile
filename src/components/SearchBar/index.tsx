@@ -15,8 +15,8 @@ export function SearchBar() {
     <Pressable onPress={handleNavigate}>
       <Box
         mx={1}
-        mt={1}
-        mb={1}
+        mt={2}
+        mb={2}
         bg="white"
         h={12}
         borderRadius={20}
@@ -29,7 +29,7 @@ export function SearchBar() {
             <Icon as={MaterialIcons} name="search" size={6} color="gray.400" />
 
             <Text color="gray.400" fontSize="md">
-              Buscar produtos em oferta...
+              Buscar produtos por estabelecimento...
             </Text>
           </HStack>
 

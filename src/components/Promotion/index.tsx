@@ -1,9 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { Dimensions, Pressable, StyleSheet, Linking } from 'react-native'
-import { Box, View, Image, useToast } from 'native-base'
-import { FlatList } from 'react-native'
-import type { FlatList as RNFlatList } from 'react-native'
+
+import {
+  Alert,
+  FlatList,
+  Image,
+  Linking,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native'
+
+import type { FlatList as RNFlatList, LayoutChangeEvent } from 'react-native'
 
 import { BannerDTO } from '@dtos/BannerDTO'
 
@@ -19,28 +27,69 @@ type Props = {
   banners?: BannerDTO[]
 }
 
-const { width } = Dimensions.get('window')
+/*
+ * Padding lateral do carrossel.
+ */
+const HORIZONTAL_PADDING = 10
 
-// Card quase tela cheia (padrão iFood / Uber Eats)
-const CARD_W = Math.min(420, width - 24)
-const CARD_H = 160
-const CARD_GAP = 14
+/*
+ * Espaço entre banners.
+ */
+const CARD_GAP = 8
 
-export function Promotion({ banners: bannersFromProps }: Props) {
-  const toast = useToast()
+/*
+ * Proporção recomendada para os banners.
+ *
+ * Em uma tela de aproximadamente 390px:
+ * largura útil ≈ 370
+ * altura ≈ 162
+ *
+ * Fica muito próximo do tamanho que
+ * você já utilizava de 160px.
+ */
+const BANNER_ASPECT_RATIO = 16 / 7
+
+export function Promotion({ banners: bannersFromProps = [] }: Props) {
+  const { width: windowWidth } = useWindowDimensions()
 
   const listRef = useRef<RNFlatList<PromoBanner>>(null)
+
   const [activeIndex, setActiveIndex] = useState(0)
 
-  // 🔹 Normaliza banners recebidos
-  const banners: PromoBanner[] = useMemo(() => {
-    return (bannersFromProps ?? [])
+  /*
+   * Usa inicialmente a largura da tela,
+   * mas depois substitui pela largura REAL
+   * disponível no componente.
+   */
+  const [containerWidth, setContainerWidth] = useState(windowWidth)
+
+  /* =====================================
+     TAMANHO RESPONSIVO
+  ===================================== */
+
+  const cardWidth = Math.max(1, containerWidth - HORIZONTAL_PADDING * 2)
+
+  const cardHeight = cardWidth / BANNER_ASPECT_RATIO
+
+  const snapInterval = cardWidth + CARD_GAP
+
+  /* =====================================
+     BANNERS
+  ===================================== */
+
+  const banners = useMemo<PromoBanner[]>(() => {
+    return bannersFromProps
+      .filter((banner) => Boolean(banner?.id && banner?.imageUrl))
       .map((banner) => ({
         id: banner.id,
+
         imageUrl: banner.imageUrl,
+
         position: banner.position ?? 0,
+
         storeId: banner.storeId,
-        link: banner.link ?? undefined,
+
+        link: banner.link ?? null,
       }))
       .sort(
         (firstBanner, secondBanner) =>
@@ -49,37 +98,69 @@ export function Promotion({ banners: bannersFromProps }: Props) {
       .slice(0, 8)
   }, [bannersFromProps])
 
+  /* =====================================
+     MEDIR CONTAINER
+  ===================================== */
+
+  function handleLayout(event: LayoutChangeEvent) {
+    const measuredWidth = event.nativeEvent.layout.width
+
+    if (measuredWidth > 0 && Math.abs(measuredWidth - containerWidth) > 1) {
+      setContainerWidth(measuredWidth)
+    }
+  }
+
+  /* =====================================
+     VOLTAR AO PRIMEIRO
+  ===================================== */
+
   useEffect(() => {
     setActiveIndex(0)
 
-    if (banners.length > 0) {
+    requestAnimationFrame(() => {
       listRef.current?.scrollToOffset({
         offset: 0,
         animated: false,
       })
-    }
-  }, [banners])
+    })
+  }, [banners, cardWidth])
 
-  // 🔹 Autoplay (mantido)
+  /* =====================================
+     AUTOPLAY
+  ===================================== */
+
   useEffect(() => {
-    if (banners.length <= 1) return
+    if (banners.length <= 1) {
+      return
+    }
 
     const timer = setInterval(() => {
-      setActiveIndex((prev) => {
-        const next = (prev + 1) % banners.length
-        listRef.current?.scrollToIndex({
-          index: next,
+      setActiveIndex((current) => {
+        const next = (current + 1) % banners.length
+
+        listRef.current?.scrollToOffset({
+          offset: snapInterval * next,
+
           animated: true,
         })
+
         return next
       })
     }, 5000)
 
-    return () => clearInterval(timer)
-  }, [banners.length])
+    return () => {
+      clearInterval(timer)
+    }
+  }, [banners.length, snapInterval])
 
-  function handlePress(link?: string | null) {
-    if (!link) return
+  /* =====================================
+     LINK
+  ===================================== */
+
+  async function handlePress(link?: string | null) {
+    if (!link?.trim()) {
+      return
+    }
 
     let formattedLink = link.trim()
 
@@ -87,86 +168,196 @@ export function Promotion({ banners: bannersFromProps }: Props) {
       formattedLink = `https://${formattedLink}`
     }
 
-    Linking.openURL(formattedLink).catch(() =>
-      toast.show({
-        title: 'Link inválido.',
-        placement: 'top',
-      }),
-    )
+    try {
+      await Linking.openURL(formattedLink)
+    } catch {
+      Alert.alert('Link indisponível', 'Não foi possível abrir este link.')
+    }
   }
 
-  if (!banners.length) return null
+  /* =====================================
+     SEM BANNERS
+  ===================================== */
+
+  if (banners.length === 0) {
+    return null
+  }
+
+  /* =====================================
+     TELA
+  ===================================== */
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container} onLayout={handleLayout}>
       <FlatList
         ref={listRef}
         data={banners}
         horizontal
-        pagingEnabled
+        keyExtractor={(item) => item.id}
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(item, index) => item.id ?? `banner-${index}`}
-        style={{ maxHeight: CARD_H + 12 }}
+        /*
+         * IMPORTANTE:
+         * removido pagingEnabled.
+         */
+        snapToInterval={snapInterval}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        disableIntervalMomentum
+        contentContainerStyle={{
+          paddingLeft: HORIZONTAL_PADDING,
+
+          paddingRight: HORIZONTAL_PADDING,
+        }}
         getItemLayout={(_, index) => ({
-          length: CARD_W + CARD_GAP,
-          offset: (CARD_W + CARD_GAP) * index,
+          length: snapInterval,
+
+          offset: snapInterval * index,
+
           index,
         })}
         onScrollToIndexFailed={(info) => {
-          setTimeout(() => {
-            listRef.current?.scrollToIndex({
-              index: info.index,
-              animated: true,
-            })
-          }, 250)
+          listRef.current?.scrollToOffset({
+            offset: snapInterval * info.index,
+
+            animated: true,
+          })
         }}
         onMomentumScrollEnd={(event) => {
-          const x = event.nativeEvent.contentOffset.x
-          const idx = Math.round(x / (CARD_W + CARD_GAP))
-          setActiveIndex(idx)
+          const offsetX = event.nativeEvent.contentOffset.x
+
+          const index = Math.round(offsetX / snapInterval)
+
+          const safeIndex = Math.min(
+            Math.max(index, 0),
+
+            banners.length - 1,
+          )
+
+          setActiveIndex(safeIndex)
         }}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <Pressable
-            onPress={() => handlePress(item.link)}
-            style={{ marginLeft: 12, marginRight: 2 }}
+            onPress={() => void handlePress(item.link)}
+            style={({ pressed }) => [
+              styles.card,
+
+              {
+                width: cardWidth,
+
+                height: cardHeight,
+
+                marginRight: index === banners.length - 1 ? 0 : CARD_GAP,
+              },
+
+              pressed && styles.pressed,
+            ]}
           >
             <Image
-              source={{ uri: item.imageUrl }}
-              alt="Banner promocional"
-              w={CARD_W}
-              h={CARD_H}
-              borderRadius="xl"
+              source={{
+                uri: item.imageUrl,
+              }}
+              style={styles.image}
               resizeMode="cover"
+              resizeMethod="resize"
+              fadeDuration={0}
             />
           </Pressable>
         )}
       />
 
+      {/* INDICADORES */}
+
       {banners.length > 1 && (
-        <Box flexDirection="row" justifyContent="center" mt={2}>
-          {banners.map((_, i) => (
+        <View style={styles.dotsContainer}>
+          {banners.map((banner, index) => (
             <View
-              key={i}
-              style={[styles.dot, { opacity: i === activeIndex ? 1 : 0.35 }]}
+              key={banner.id}
+              style={[
+                styles.dot,
+
+                index === activeIndex ? styles.activeDot : styles.inactiveDot,
+              ]}
             />
           ))}
-        </Box>
+        </View>
       )}
-    </SafeAreaView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    marginTop: 2,
-    marginBottom: -12,
+    width: '100%',
+
+    /*
+     * Não usamos:
+     *
+     * flex: 1
+     * SafeAreaView
+     * marginBottom negativo
+     */
+    marginTop: 0,
+
+    marginBottom: 4,
+
+    paddingTop: 0,
   },
+
+  card: {
+    overflow: 'hidden',
+
+    borderRadius: 14,
+
+    /*
+     * Caso a proporção da imagem
+     * seja diferente, a região
+     * restante fica praticamente
+     * branca/cinza muito claro.
+     */
+    backgroundColor: '#F9FAFB',
+  },
+
+  image: {
+    width: '100%',
+
+    height: '100%',
+  },
+
+  dotsContainer: {
+    height: 18,
+
+    marginTop: 4,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
   dot: {
-    width: 8,
-    height: 8,
+    height: 7,
+
     borderRadius: 4,
-    marginHorizontal: 2,
-    backgroundColor: 'blue',
+
+    marginHorizontal: 3,
+
+    backgroundColor: '#1D4ED8',
+  },
+
+  activeDot: {
+    width: 18,
+
+    opacity: 1,
+  },
+
+  inactiveDot: {
+    width: 7,
+
+    opacity: 0.3,
+  },
+
+  pressed: {
+    opacity: 0.92,
   },
 })
