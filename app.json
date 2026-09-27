@@ -10,14 +10,8 @@
 
     "androidStatusBar": {
       "translucent": false,
-      "backgroundColor": "#F2F8FB",
+      "backgroundColor": "#FFFFFF",
       "barStyle": "dark-content"
-    },
-
-    "splash": {
-      "image": "./src/assets/splash.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#F2F8FB"
     },
 
     "updates": {
@@ -40,14 +34,8 @@
       "versionCode": 1,
 
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/adaptive-icon-fixed.png",
-        "backgroundColor": "#F2F8FB"
-      },
-
-      "config": {
-        "googleMaps": {
-          "apiKey": ""
-        }
+        "foregroundImage": "./src/assets/adaptive-icon-clean.png",
+        "backgroundColor": "#FFFFFF"
       }
     },
 
@@ -75,9 +63,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./src/assets/splash.png",
-          "resizeMode": "cover",
-          "backgroundColor": "#F2F8FB"
+          "image": "./src/assets/splash-icon-clean.png",
+          "backgroundColor": "#FFFFFF",
+          "resizeMode": "contain",
+          "imageWidth": 180
         }
       ],
 

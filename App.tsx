@@ -1,6 +1,10 @@
-import { useEffect } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
-import { Platform, StatusBar } from 'react-native'
+import { Platform, StatusBar, StyleSheet, View } from 'react-native'
+
+import * as SplashScreen from 'expo-splash-screen'
+
+import * as NavigationBar from 'expo-navigation-bar'
 
 import { NativeBaseProvider } from 'native-base'
 
@@ -12,13 +16,15 @@ import {
   Roboto_700Bold,
 } from '@expo-google-fonts/roboto'
 
-import * as NavigationBar from 'expo-navigation-bar'
+import { AnimatedSplash } from '@components/AnimatedSplash'
 
 import { Loading } from '@components/Loading'
 
 import { AppModalRoot } from '@components/AppModalRoot'
 
 import { AppErrorBoundary } from '@components/AppErrorBoundary'
+
+import { NetworkGuard } from '@screens/NetworkGuard'
 
 import { Routes } from './src/routes'
 
@@ -31,17 +37,40 @@ import { CartProvider } from '@contexts/CartContext'
 import { StorePointsProvider } from '@contexts/StorePointsContext'
 
 import { checkAndApplyOtaNow, wireOtaOnAppState } from 'src/lib/updates'
-import { NetworkGuard } from '@screens/NetworkGuard'
+
+/*
+ * Mantém a splash nativa aberta
+ * até liberarmos manualmente.
+ */
+void SplashScreen.preventAutoHideAsync()
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  /* =====================================
+     FONTES
+  ===================================== */
+
+  const [fontsLoaded, fontError] = useFonts({
     Roboto_400Regular,
     Roboto_700Bold,
   })
 
-  /* ==============================
-     🔄 OTA UPDATES
-  ============================== */
+  /* =====================================
+     SPLASH
+  ===================================== */
+
+  const [nativeSplashHidden, setNativeSplashHidden] = useState(false)
+
+  const [showAnimatedSplash, setShowAnimatedSplash] = useState(true)
+
+  /*
+   * Impede hideAsync de ser chamado
+   * mais de uma vez.
+   */
+  const splashHandledRef = useRef(false)
+
+  /* =====================================
+     OTA
+  ===================================== */
 
   useEffect(() => {
     void checkAndApplyOtaNow()
@@ -53,9 +82,9 @@ export default function App() {
     }
   }, [])
 
-  /* ==============================
-     🤖 ANDROID NAV BAR
-  ============================== */
+  /* =====================================
+     ANDROID NAVIGATION BAR
+  ===================================== */
 
   useEffect(() => {
     async function configureNavigationBar() {
@@ -80,71 +109,118 @@ export default function App() {
     void configureNavigationBar()
   }, [])
 
-  /* ==============================
-     APP
-  ============================== */
+  /* =====================================
+     OCULTAR SPLASH NATIVA
+  ===================================== */
+
+  useEffect(() => {
+    /*
+     * Enquanto as fontes ainda estão
+     * carregando, mantém a splash nativa.
+     */
+    if (!fontsLoaded && !fontError) {
+      return
+    }
+
+    /*
+     * Evita executar novamente.
+     */
+    if (splashHandledRef.current) {
+      return
+    }
+
+    splashHandledRef.current = true
+
+    async function hideNativeSplash() {
+      try {
+        /*
+         * Pequeno frame para garantir
+         * que a árvore React já foi
+         * renderizada atrás da splash.
+         */
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            resolve()
+          })
+        })
+
+        await SplashScreen.hideAsync()
+
+        /*
+         * SOMENTE depois de remover
+         * a splash nativa, mostramos
+         * a splash animada.
+         */
+        setNativeSplashHidden(true)
+      } catch (error) {
+        console.warn('[App] Erro ao ocultar splash nativa:', error)
+
+        /*
+         * Não bloqueia o aplicativo
+         * caso hideAsync falhe.
+         */
+        setNativeSplashHidden(true)
+      }
+    }
+
+    void hideNativeSplash()
+  }, [fontsLoaded, fontError])
+
+  /* =====================================
+     TELA
+  ===================================== */
 
   return (
     <SafeAreaProvider>
-      <StatusBar
-        barStyle="dark-content"
-        translucent
-        backgroundColor="transparent"
-      />
+      <View style={styles.container}>
+        <StatusBar
+          barStyle="dark-content"
+          translucent
+          backgroundColor="transparent"
+        />
 
-      {/* =================================
-          PROTEÇÃO GLOBAL CONTRA ERROS
-      ================================= */}
-
-      <AppErrorBoundary>
         {/* =================================
-            PROTEÇÃO GLOBAL DE INTERNET
+            APP
         ================================= */}
 
-        <NetworkGuard>
-          {/* =================================
-              NATIVE BASE
-          ================================= */}
+        <AppErrorBoundary>
+          <NetworkGuard>
+            <NativeBaseProvider>
+              <AuthContextProvider>
+                <CityProvider>
+                  <CartProvider>
+                    <StorePointsProvider>
+                      {fontsLoaded || fontError ? <Routes /> : <Loading />}
 
-          <NativeBaseProvider>
-            {/* =================================
-                AUTENTICAÇÃO
-            ================================= */}
+                      <AppModalRoot />
+                    </StorePointsProvider>
+                  </CartProvider>
+                </CityProvider>
+              </AuthContextProvider>
+            </NativeBaseProvider>
+          </NetworkGuard>
+        </AppErrorBoundary>
 
-            <AuthContextProvider>
-              {/* =================================
-                  CIDADE
-              ================================= */}
+        {/* =================================
+            SPLASH ANIMADA
+        ================================= */}
 
-              <CityProvider>
-                {/* =================================
-                    CARRINHO
-                ================================= */}
-
-                <CartProvider>
-                  {/* =================================
-                      PONTOS
-                  ================================= */}
-
-                  <StorePointsProvider>
-                    {/* =================================
-                        ROTAS / LOADING
-                    ================================= */}
-
-                    {fontsLoaded ? <Routes /> : <Loading />}
-
-                    {/* =================================
-                        MODAIS GLOBAIS
-                    ================================= */}
-
-                    <AppModalRoot />
-                  </StorePointsProvider>
-                </CartProvider>
-              </CityProvider>
-            </AuthContextProvider>
-          </NativeBaseProvider>
-        </NetworkGuard>
-      </AppErrorBoundary>
+        {nativeSplashHidden && showAnimatedSplash && (
+          <AnimatedSplash
+            onFinish={() => {
+              setShowAnimatedSplash(false)
+            }}
+          />
+        )}
+      </View>
     </SafeAreaProvider>
   )
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+
+    backgroundColor: '#FFFFFF',
+  },
+})
