@@ -1,22 +1,27 @@
 import React, { useState } from 'react'
 
 import {
-  ScrollView,
+  ActivityIndicator,
+  Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
   View,
-  Image,
-  TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native'
+
+import { SafeAreaView } from 'react-native-safe-area-context'
+
+import { Feather, MaterialIcons } from '@expo/vector-icons'
 
 import { useNavigation } from '@react-navigation/native'
 
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 
-import { Controller, useForm } from 'react-hook-form'
-
-import type { FieldErrors } from 'react-hook-form'
+import { Controller, FieldErrors, useForm } from 'react-hook-form'
 
 import * as yup from 'yup'
 
@@ -24,12 +29,7 @@ import { yupResolver } from '@hookform/resolvers/yup'
 
 import * as ImagePicker from 'expo-image-picker'
 
-import { VStack, Center, Text, Icon, IconButton, useToast } from 'native-base'
-
-import { Feather, MaterialIcons } from '@expo/vector-icons'
-
 import { Input } from '@components/Input'
-import { Button } from '@components/Button'
 
 import { AppError } from '@utils/AppError'
 
@@ -51,6 +51,8 @@ const CLOUDINARY_UPLOAD_PRESET = 'avatars'
 
 const CLOUDINARY_FOLDER = 'avatars'
 
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+
 /* ======================================================
    FORMATAÇÃO
 ====================================================== */
@@ -69,6 +71,7 @@ function formatCPF(value: string) {
     .replace(/(\d{3})(\d)/, '$1.$2')
     .replace(/(\d{3})(\d)/, '$1.$2')
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+    .slice(0, 14)
 }
 
 function formatCEP(value: string) {
@@ -79,26 +82,30 @@ function formatCEP(value: string) {
 }
 
 /* ======================================================
-   FORMULÁRIO
+   FORM
 ====================================================== */
 
 type FormDataProps = {
   name: string
+
   email: string
+
   phone: string
+
   cpf: string
 
   password: string
+
   password_confirm: string
 
   street: string
 
-  /**
-   * Mantido como "state" porque esse
-   * é o campo atualmente utilizado
-   * pelo backend/formulário.
+  /*
+   * Mantido como state para preservar
+   * o campo utilizado atualmente
+   * pelo backend.
    *
-   * Na interface ele representa Cidade.
+   * Na tela representa Cidade.
    */
   state: string
 
@@ -111,30 +118,34 @@ type FormDataProps = {
 
 const signUpSchema = yup
   .object({
-    name: yup.string().required('Informe o nome'),
+    name: yup.string().trim().required('Informe o nome'),
 
-    email: yup.string().required('Informe o e-mail').email('E-mail inválido'),
+    email: yup
+      .string()
+      .trim()
+      .required('Informe o e-mail')
+      .email('Informe um e-mail válido'),
 
     phone: yup.string().required('Informe o telefone'),
 
     cpf: yup
       .string()
-      .required('CPF é obrigatório')
+      .required('Informe o CPF')
       .test('cpf-valido', 'CPF inválido', (value) => isValidCPF(value || '')),
 
     password: yup
       .string()
       .required('Informe a senha')
-      .min(6, 'A senha deve conter no mínimo 6 dígitos'),
+      .min(6, 'A senha deve conter no mínimo 6 caracteres'),
 
     password_confirm: yup
       .string()
-      .oneOf([yup.ref('password')], 'A senha digitada não confere!')
-      .required('Confirme a senha'),
+      .required('Confirme a senha')
+      .oneOf([yup.ref('password')], 'As senhas não conferem'),
 
-    street: yup.string().required('Informe a rua'),
+    street: yup.string().trim().required('Informe a rua'),
 
-    state: yup.string().required('Informe a cidade'),
+    state: yup.string().trim().required('Informe a cidade'),
 
     postalCode: yup.string().required('Informe o CEP'),
   })
@@ -157,7 +168,7 @@ const fieldOrder: Array<keyof FormDataProps> = [
 ]
 
 /* ======================================================
-   CLOUDINARY HELPERS
+   CLOUDINARY
 ====================================================== */
 
 function inferFileMeta(asset: ImagePicker.ImagePickerAsset) {
@@ -167,11 +178,11 @@ function inferFileMeta(asset: ImagePicker.ImagePickerAsset) {
   let mime = asset.mimeType
 
   if (!mime) {
-    const ext = (filename.split('.').pop() || '').toLowerCase()
+    const extension = (filename.split('.').pop() || '').toLowerCase()
 
-    if (ext === 'png') {
+    if (extension === 'png') {
       mime = 'image/png'
-    } else if (ext === 'webp') {
+    } else if (extension === 'webp') {
       mime = 'image/webp'
     } else {
       mime = 'image/jpeg'
@@ -185,6 +196,10 @@ function inferFileMeta(asset: ImagePicker.ImagePickerAsset) {
 }
 
 async function uploadAvatarToCloudinary(asset: ImagePicker.ImagePickerAsset) {
+  if (asset.fileSize && asset.fileSize > MAX_IMAGE_SIZE) {
+    throw new Error('Escolha uma imagem de até 5 MB.')
+  }
+
   const { filename, mime } = inferFileMeta(asset)
 
   const form = new FormData()
@@ -200,10 +215,8 @@ async function uploadAvatarToCloudinary(asset: ImagePicker.ImagePickerAsset) {
 
     const blob = await response.blob()
 
-    const MAX_SIZE = 5 * 1024 * 1024
-
-    if (blob.size > MAX_SIZE) {
-      throw new Error('Imagem acima de 5MB.')
+    if (blob.size > MAX_IMAGE_SIZE) {
+      throw new Error('Escolha uma imagem de até 5 MB.')
     }
 
     const file = new File([blob], filename, {
@@ -214,7 +227,9 @@ async function uploadAvatarToCloudinary(asset: ImagePicker.ImagePickerAsset) {
   } else {
     form.append('file', {
       uri: asset.uri,
+
       name: filename,
+
       type: mime,
     } as any)
   }
@@ -223,14 +238,13 @@ async function uploadAvatarToCloudinary(asset: ImagePicker.ImagePickerAsset) {
     `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
     {
       method: 'POST',
+
       body: form,
     },
   )
 
   if (!response.ok) {
-    const text = await response.text()
-
-    throw new Error(`Falha no upload do avatar. ${response.status} - ${text}`)
+    throw new Error('Não foi possível enviar a foto.')
   }
 
   const data = (await response.json()) as {
@@ -238,7 +252,7 @@ async function uploadAvatarToCloudinary(asset: ImagePicker.ImagePickerAsset) {
   }
 
   if (!data.secure_url) {
-    throw new Error('O Cloudinary não retornou a URL da imagem.')
+    throw new Error('Não foi possível obter a imagem enviada.')
   }
 
   return data.secure_url
@@ -258,6 +272,10 @@ type SignUpNavigationProps = NativeStackNavigationProp<
 ====================================================== */
 
 export function SignUp() {
+  const navigation = useNavigation<SignUpNavigationProps>()
+
+  const { signIn } = useAuth()
+
   const [isLoading, setIsLoading] = useState(false)
 
   const [showPassword, setShowPassword] = useState(false)
@@ -268,14 +286,8 @@ export function SignUp() {
 
   const [avatarUploading, setAvatarUploading] = useState(false)
 
-  const toast = useToast()
-
-  const { signIn } = useAuth()
-
-  const navigation = useNavigation<SignUpNavigationProps>()
-
   /* ====================================================
-     REACT HOOK FORM
+     FORM
   ==================================================== */
 
   const { control, handleSubmit, setFocus } = useForm<FormDataProps>({
@@ -283,44 +295,50 @@ export function SignUp() {
 
     defaultValues: {
       name: '',
+
       email: '',
+
       phone: '',
+
       cpf: '',
 
       password: '',
+
       password_confirm: '',
 
       street: '',
+
       state: '',
+
       postalCode: '',
     },
+
+    mode: 'onSubmit',
+
+    reValidateMode: 'onChange',
   })
 
   /* ====================================================
-     ERROS DO FORMULÁRIO
+     FORM INVÁLIDO
   ==================================================== */
 
   function handleInvalidForm(formErrors: FieldErrors<FormDataProps>) {
-    const firstErrorField = fieldOrder.find((field) => formErrors[field])
+    const firstErrorField = fieldOrder.find((field) =>
+      Boolean(formErrors[field]),
+    )
 
     if (!firstErrorField) {
       return
     }
 
-    /**
-     * Foca automaticamente
-     * no primeiro campo com erro.
+    /*
+     * Não mostramos Alert ou Toast aqui.
+     *
+     * Cada campo mostra sua própria
+     * mensagem de validação.
      */
-    setFocus(firstErrorField)
-
-    const message = formErrors[firstErrorField]?.message
-
-    toast.show({
-      title:
-        typeof message === 'string' ? message : 'Verifique os dados informados',
-
-      placement: 'top',
-      bgColor: 'red.500',
+    requestAnimationFrame(() => {
+      setFocus(firstErrorField)
     })
   }
 
@@ -329,47 +347,76 @@ export function SignUp() {
   ==================================================== */
 
   async function handleSignUp(data: FormDataProps) {
-    if (isLoading) {
+    if (isLoading || avatarUploading) {
       return
     }
 
     try {
       setIsLoading(true)
 
-      /**
-       * Cria usuário.
-       */
-      await api.post('/users', {
+      const normalizedEmail = data.email.trim().toLowerCase()
+
+      const payload = {
         ...data,
+
+        name: data.name.trim(),
+
+        email: normalizedEmail,
+
+        street: data.street.trim(),
+
+        state: data.state.trim(),
 
         avatar: avatarUrl ?? 'avatar.jpg',
 
         role: 'USER',
-      })
+      }
 
-      /**
-       * Faz login após
-       * cadastro.
+      /*
+       * Cria o usuário.
+       */
+      await api.post('/users', payload)
+
+      /*
+       * Faz login após o cadastro.
        *
        * Não navegamos manualmente.
-       * O fluxo principal de rotas
-       * reagirá ao usuário autenticado.
+       * O fluxo de autenticação decide
+       * qual será a próxima rota.
        */
-      await signIn(data.email, data.password)
-    } catch (error) {
-      setIsLoading(false)
+      await signIn(normalizedEmail, data.password)
+    } catch (error: any) {
+      console.error('[SignUp] Erro ao criar conta:', {
+        message: error?.message,
 
-      const isAppError = error instanceof AppError
+        status: error?.response?.status,
 
-      const title = isAppError
-        ? error.message
-        : 'Não foi possível criar a conta. Tente novamente mais tarde!'
-
-      toast.show({
-        title,
-        placement: 'top',
-        bgColor: 'red.500',
+        data: error?.response?.data,
       })
+
+      let message = 'Não foi possível criar a conta. Tente novamente.'
+
+      if (typeof error?.response?.data?.message === 'string') {
+        message = error.response.data.message
+      } else if (error instanceof AppError) {
+        message = error.message
+      } else if (
+        error?.code === 'ERR_NETWORK' ||
+        error?.message === 'Network Error'
+      ) {
+        message = 'Falha na conexão. Verifique sua internet e tente novamente.'
+      }
+
+      /*
+       * Alert apenas para erros reais
+       * da API/conexão.
+       *
+       * Erros de campo continuam
+       * aparecendo abaixo dos Inputs.
+       */
+      Alert.alert('Não foi possível criar a conta', message)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -378,188 +425,176 @@ export function SignUp() {
   ==================================================== */
 
   async function handlePickAvatar() {
-    if (avatarUploading) {
-      return
-    }
-
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
-
-    if (!permission.granted) {
-      toast.show({
-        title: 'Permissão necessária para acessar suas fotos.',
-
-        placement: 'top',
-
-        bgColor: 'red.500',
-      })
-
-      return
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-
-      allowsEditing: true,
-
-      aspect: [1, 1],
-
-      quality: 0.9,
-    })
-
-    if (result.canceled) {
-      return
-    }
-
-    const asset = result.assets?.[0]
-
-    if (!asset?.uri) {
+    if (avatarUploading || isLoading) {
       return
     }
 
     try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+
+      if (!permission.granted) {
+        Alert.alert(
+          'Permissão necessária',
+          'Permita o acesso às suas fotos para escolher uma imagem de perfil.',
+        )
+
+        return
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+
+        allowsEditing: true,
+
+        aspect: [1, 1],
+
+        quality: 0.85,
+      })
+
+      if (result.canceled) {
+        return
+      }
+
+      const asset = result.assets?.[0]
+
+      if (!asset?.uri) {
+        return
+      }
+
       setAvatarUploading(true)
 
       const url = await uploadAvatarToCloudinary(asset)
 
       setAvatarUrl(url)
-
-      toast.show({
-        title: 'Foto enviada!',
-
-        placement: 'top',
-
-        bgColor: 'emerald.600',
-      })
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : 'Não foi possível enviar sua foto.'
 
-      toast.show({
-        title: message,
-        placement: 'top',
-        bgColor: 'red.500',
-      })
+      Alert.alert('Foto de perfil', message)
     } finally {
       setAvatarUploading(false)
     }
   }
 
   /* ====================================================
-     RENDER
+     TELA
   ==================================================== */
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{
-        flex: 1,
-      }}
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={['top', 'left', 'right', 'bottom']}
     >
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingBottom: 24,
-        }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <VStack flex={1} p={4} pb={12} space={2} bg="gray.50">
-          {/* VOLTAR */}
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* =================================
+              CABEÇALHO
+          ================================= */}
 
-          <IconButton
-            borderRadius="full"
-            variant="ghost"
-            size="sm"
-            icon={<Icon as={Feather} name="chevron-left" size="8" />}
-            onPress={() => navigation.goBack()}
-            alignSelf="flex-start"
-          />
+          <View style={styles.header}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              disabled={isLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Voltar"
+              hitSlop={10}
+              style={({ pressed }) => [
+                styles.backButton,
 
-          {/* TÍTULO */}
-
-          <Center>
-            <Text fontSize="2xl" fontWeight="bold">
-              Criar conta
-            </Text>
-
-            <Text fontSize="sm" color="gray.500" mt={1}>
-              Preencha seus dados para continuar
-            </Text>
-          </Center>
-
-          {/* AVATAR */}
-
-          <Center mt={4} mb={2}>
-            <TouchableOpacity
-              onPress={handlePickAvatar}
-              activeOpacity={0.8}
-              disabled={avatarUploading}
+                pressed && styles.pressed,
+              ]}
             >
-              <View
-                style={{
-                  width: 96,
-                  height: 96,
+              <Feather name="chevron-left" size={26} color="#374151" />
+            </Pressable>
 
-                  borderRadius: 999,
+            <View style={styles.headerContent}>
+              <Text style={styles.title}>Criar conta</Text>
 
-                  backgroundColor: '#E5E7EB',
+              <Text style={styles.subtitle}>
+                Cadastre seus dados para começar a aproveitar o Clube IAki.
+              </Text>
+            </View>
+          </View>
 
-                  alignItems: 'center',
+          {/* =================================
+              AVATAR
+          ================================= */}
 
-                  justifyContent: 'center',
+          <View style={styles.avatarSection}>
+            <Pressable
+              onPress={handlePickAvatar}
+              disabled={avatarUploading || isLoading}
+              style={({ pressed }) => [
+                styles.avatarButton,
 
-                  overflow: 'hidden',
-                }}
-              >
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={styles.avatar}>
                 {avatarUploading ? (
-                  <ActivityIndicator />
+                  <ActivityIndicator size="small" color="#2563EB" />
                 ) : avatarUrl ? (
                   <Image
                     source={{
                       uri: avatarUrl,
                     }}
-                    style={{
-                      width: '100%',
-
-                      height: '100%',
-                    }}
+                    style={styles.avatarImage}
                     resizeMode="cover"
                   />
                 ) : (
-                  <Icon
-                    as={MaterialIcons}
-                    name="person"
-                    size={12}
-                    color="gray.400"
-                  />
+                  <MaterialIcons name="person" size={42} color="#9CA3AF" />
                 )}
               </View>
-            </TouchableOpacity>
 
-            <Text mt={2} color="gray.600" fontSize="xs">
-              Toque para escolher uma foto
+              <View style={styles.cameraButton}>
+                <Feather name="camera" size={15} color="#FFFFFF" />
+              </View>
+            </Pressable>
+
+            <Text style={styles.avatarText}>
+              {avatarUploading
+                ? 'Enviando foto...'
+                : avatarUrl
+                  ? 'Foto adicionada'
+                  : 'Adicionar foto de perfil'}
             </Text>
-          </Center>
 
-          {/* FORMULÁRIO */}
+            <Text style={styles.avatarOptional}>Opcional</Text>
+          </View>
 
-          <VStack space={4} mt={4}>
-            {/* NOME */}
+          {/* =================================
+              DADOS PESSOAIS
+          ================================= */}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Dados pessoais</Text>
 
             <Controller
               control={control}
               name="name"
               render={({
                 field: { onChange, onBlur, value, ref },
+
                 fieldState: { error },
               }) => (
                 <Input
                   ref={ref}
-                  placeholder="Nome completo"
+                  label="Nome completo"
+                  placeholder="Digite seu nome"
+                  leftIcon={<Feather name="user" size={19} color="#6B7280" />}
+                  autoComplete="name"
                   autoCapitalize="words"
                   returnKeyType="next"
+                  editable={!isLoading}
                   onBlur={onBlur}
                   onChangeText={onChange}
                   value={value}
@@ -569,22 +604,25 @@ export function SignUp() {
               )}
             />
 
-            {/* EMAIL */}
-
             <Controller
               control={control}
               name="email"
               render={({
                 field: { onChange, onBlur, value, ref },
+
                 fieldState: { error },
               }) => (
                 <Input
                   ref={ref}
-                  placeholder="E-mail"
+                  label="E-mail"
+                  placeholder="seuemail@exemplo.com"
+                  leftIcon={<Feather name="mail" size={19} color="#6B7280" />}
                   keyboardType="email-address"
+                  autoComplete="email"
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="next"
+                  editable={!isLoading}
                   onBlur={onBlur}
                   onChangeText={onChange}
                   value={value}
@@ -594,20 +632,23 @@ export function SignUp() {
               )}
             />
 
-            {/* TELEFONE */}
-
             <Controller
               control={control}
               name="phone"
               render={({
                 field: { onChange, onBlur, value, ref },
+
                 fieldState: { error },
               }) => (
                 <Input
                   ref={ref}
-                  placeholder="Telefone"
+                  label="Telefone"
+                  placeholder="(00) 00000-0000"
+                  leftIcon={<Feather name="phone" size={19} color="#6B7280" />}
                   keyboardType="phone-pad"
+                  autoComplete="tel"
                   returnKeyType="next"
+                  editable={!isLoading}
                   onBlur={onBlur}
                   onChangeText={(text) => onChange(formatPhone(text))}
                   value={value}
@@ -617,20 +658,24 @@ export function SignUp() {
               )}
             />
 
-            {/* CPF */}
-
             <Controller
               control={control}
               name="cpf"
               render={({
                 field: { onChange, onBlur, value, ref },
+
                 fieldState: { error },
               }) => (
                 <Input
                   ref={ref}
-                  placeholder="CPF"
+                  label="CPF"
+                  placeholder="000.000.000-00"
+                  leftIcon={
+                    <MaterialIcons name="badge" size={20} color="#6B7280" />
+                  }
                   keyboardType="numeric"
                   returnKeyType="next"
+                  editable={!isLoading}
                   onBlur={onBlur}
                   onChangeText={(text) => onChange(formatCPF(text))}
                   value={value}
@@ -639,98 +684,127 @@ export function SignUp() {
                 />
               )}
             />
+          </View>
 
-            {/* SENHA */}
+          {/* =================================
+              SEGURANÇA
+          ================================= */}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Segurança</Text>
 
             <Controller
               control={control}
               name="password"
               render={({
                 field: { onChange, onBlur, value, ref },
+
                 fieldState: { error },
               }) => (
                 <Input
                   ref={ref}
-                  placeholder="Senha"
+                  label="Senha"
+                  placeholder="Mínimo de 6 caracteres"
+                  leftIcon={<Feather name="lock" size={19} color="#6B7280" />}
                   secureTextEntry={!showPassword}
+                  autoComplete="new-password"
+                  autoCapitalize="none"
                   returnKeyType="next"
+                  editable={!isLoading}
                   onBlur={onBlur}
                   onChangeText={onChange}
                   value={value}
                   errorMessage={error?.message}
                   onSubmitEditing={() => setFocus('password_confirm')}
                   rightIcon={
-                    <IconButton
-                      icon={
-                        <Icon
-                          as={MaterialIcons}
-                          name={showPassword ? 'visibility-off' : 'visibility'}
-                          size={5}
-                        />
-                      }
+                    <Pressable
                       onPress={() => setShowPassword((current) => !current)}
-                      variant="ghost"
-                    />
+                      hitSlop={8}
+                      style={styles.eyeButton}
+                    >
+                      <Feather
+                        name={showPassword ? 'eye-off' : 'eye'}
+                        size={20}
+                        color="#6B7280"
+                      />
+                    </Pressable>
                   }
                 />
               )}
             />
-
-            {/* CONFIRMAR SENHA */}
 
             <Controller
               control={control}
               name="password_confirm"
               render={({
                 field: { onChange, onBlur, value, ref },
+
                 fieldState: { error },
               }) => (
                 <Input
                   ref={ref}
-                  placeholder="Confirme a senha"
+                  label="Confirmar senha"
+                  placeholder="Digite a senha novamente"
+                  leftIcon={<Feather name="lock" size={19} color="#6B7280" />}
                   secureTextEntry={!showConfirmPassword}
+                  autoComplete="new-password"
+                  autoCapitalize="none"
                   returnKeyType="next"
+                  editable={!isLoading}
                   onBlur={onBlur}
                   onChangeText={onChange}
                   value={value}
                   errorMessage={error?.message}
                   onSubmitEditing={() => setFocus('street')}
                   rightIcon={
-                    <IconButton
-                      icon={
-                        <Icon
-                          as={MaterialIcons}
-                          name={
-                            showConfirmPassword
-                              ? 'visibility-off'
-                              : 'visibility'
-                          }
-                          size={5}
-                        />
-                      }
+                    <Pressable
                       onPress={() =>
                         setShowConfirmPassword((current) => !current)
                       }
-                      variant="ghost"
-                    />
+                      hitSlop={8}
+                      style={styles.eyeButton}
+                    >
+                      <Feather
+                        name={showConfirmPassword ? 'eye-off' : 'eye'}
+                        size={20}
+                        color="#6B7280"
+                      />
+                    </Pressable>
                   }
                 />
               )}
             />
+          </View>
 
-            {/* RUA */}
+          {/* =================================
+              ENDEREÇO
+          ================================= */}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Endereço</Text>
 
             <Controller
               control={control}
               name="street"
               render={({
                 field: { onChange, onBlur, value, ref },
+
                 fieldState: { error },
               }) => (
                 <Input
                   ref={ref}
-                  placeholder="Rua"
+                  label="Rua"
+                  placeholder="Rua ou avenida"
+                  leftIcon={
+                    <MaterialIcons
+                      name="location-on"
+                      size={20}
+                      color="#6B7280"
+                    />
+                  }
+                  autoCapitalize="words"
                   returnKeyType="next"
+                  editable={!isLoading}
                   onBlur={onBlur}
                   onChangeText={onChange}
                   value={value}
@@ -740,20 +814,28 @@ export function SignUp() {
               )}
             />
 
-            {/* CIDADE */}
-
             <Controller
               control={control}
               name="state"
               render={({
                 field: { onChange, onBlur, value, ref },
+
                 fieldState: { error },
               }) => (
                 <Input
                   ref={ref}
-                  placeholder="Cidade"
+                  label="Cidade"
+                  placeholder="Digite sua cidade"
+                  leftIcon={
+                    <MaterialIcons
+                      name="location-city"
+                      size={20}
+                      color="#6B7280"
+                    />
+                  }
                   autoCapitalize="words"
                   returnKeyType="next"
+                  editable={!isLoading}
                   onBlur={onBlur}
                   onChangeText={onChange}
                   value={value}
@@ -763,65 +845,477 @@ export function SignUp() {
               )}
             />
 
-            {/* CEP */}
-
             <Controller
               control={control}
               name="postalCode"
               render={({
                 field: { onChange, onBlur, value, ref },
+
                 fieldState: { error },
               }) => (
                 <Input
                   ref={ref}
-                  placeholder="CEP"
+                  label="CEP"
+                  placeholder="00000-000"
+                  leftIcon={
+                    <MaterialIcons
+                      name="local-post-office"
+                      size={20}
+                      color="#6B7280"
+                    />
+                  }
                   keyboardType="numeric"
+                  autoComplete="postal-code"
                   returnKeyType="done"
+                  editable={!isLoading}
                   onBlur={onBlur}
                   onChangeText={(text) => onChange(formatCEP(text))}
                   value={value}
                   errorMessage={error?.message}
+                  onSubmitEditing={handleSubmit(
+                    handleSignUp,
+                    handleInvalidForm,
+                  )}
                 />
               )}
             />
-          </VStack>
+          </View>
 
-          {/* CADASTRAR */}
+          {/* =================================
+              CADASTRAR
+          ================================= */}
 
-          <Button
-            title={avatarUploading ? 'Enviando foto...' : 'Cadastrar'}
-            mt={8}
-            isLoading={isLoading}
+          <Pressable
             onPress={handleSubmit(handleSignUp, handleInvalidForm)}
-            isDisabled={avatarUploading || isLoading}
-          />
+            disabled={isLoading || avatarUploading}
+            style={({ pressed }) => [
+              styles.submitButton,
 
-          {/* TERMOS */}
+              (isLoading || avatarUploading) && styles.submitButtonDisabled,
 
-          <Center mt={6}>
-            <Text fontSize="xs" color="gray.500" textAlign="center">
-              Ao criar a conta, você concorda com nossos
-              {'\n'}
-              <Text
-                fontWeight="bold"
-                color="blue.600"
-                onPress={() => navigation.navigate('terms')}
-              >
-                Termos de Uso
-              </Text>{' '}
-              e nossa{' '}
-              <Text
-                fontWeight="bold"
-                color="blue.600"
-                onPress={() => navigation.navigate('privacy')}
-              >
-                Política de Privacidade
-              </Text>
-              .
+              pressed &&
+                !isLoading &&
+                !avatarUploading &&
+                styles.submitButtonPressed,
+            ]}
+          >
+            {isLoading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+
+                <Text style={styles.submitButtonText}>Criando conta...</Text>
+              </View>
+            ) : avatarUploading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+
+                <Text style={styles.submitButtonText}>Enviando foto...</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.submitButtonText}>Criar conta</Text>
+
+                <Feather name="arrow-right" size={20} color="#FFFFFF" />
+              </>
+            )}
+          </Pressable>
+
+          {/* =================================
+              TERMOS
+          ================================= */}
+
+          <Text style={styles.legalText}>
+            Ao criar a conta, você concorda com nossos{' '}
+            <Text
+              style={styles.legalLink}
+              onPress={() => navigation.navigate('terms')}
+            >
+              Termos de Uso
             </Text>
-          </Center>
-        </VStack>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            {' e nossa '}
+            <Text
+              style={styles.legalLink}
+              onPress={() => navigation.navigate('privacy')}
+            >
+              Política de Privacidade
+            </Text>
+            .
+          </Text>
+
+          {/* =================================
+              JÁ POSSUI CONTA
+          ================================= */}
+
+          <View style={styles.loginRow}>
+            <Text style={styles.loginText}>Já possui uma conta?</Text>
+
+            <Pressable onPress={() => navigation.goBack()}>
+              <Text style={styles.loginLink}>Entrar</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   )
 }
+
+/* ======================================================
+   ESTILOS
+====================================================== */
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+
+    backgroundColor: '#F8FAFC',
+  },
+
+  container: {
+    flex: 1,
+
+    backgroundColor: '#F8FAFC',
+  },
+
+  scrollContent: {
+    flexGrow: 1,
+
+    width: '100%',
+
+    maxWidth: 520,
+
+    alignSelf: 'center',
+
+    paddingHorizontal: 20,
+
+    paddingTop: 8,
+
+    paddingBottom: 36,
+  },
+
+  /* ==================================
+       HEADER
+    ================================== */
+
+  header: {
+    marginBottom: 12,
+  },
+
+  backButton: {
+    width: 44,
+
+    height: 44,
+
+    marginLeft: -8,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    borderRadius: 22,
+  },
+
+  headerContent: {
+    marginTop: 5,
+  },
+
+  title: {
+    fontSize: 28,
+
+    lineHeight: 34,
+
+    fontWeight: '800',
+
+    letterSpacing: -0.4,
+
+    color: '#111827',
+  },
+
+  subtitle: {
+    maxWidth: 420,
+
+    marginTop: 6,
+
+    fontSize: 14,
+
+    lineHeight: 21,
+
+    color: '#6B7280',
+  },
+
+  /* ==================================
+       AVATAR
+    ================================== */
+
+  avatarSection: {
+    alignItems: 'center',
+
+    marginTop: 12,
+
+    marginBottom: 26,
+  },
+
+  avatarButton: {
+    position: 'relative',
+  },
+
+  avatar: {
+    width: 104,
+
+    height: 104,
+
+    borderRadius: 52,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    overflow: 'hidden',
+
+    backgroundColor: '#E5E7EB',
+
+    borderWidth: 3,
+
+    borderColor: '#FFFFFF',
+
+    shadowColor: '#000000',
+
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+
+    shadowOpacity: 0.1,
+
+    shadowRadius: 8,
+
+    elevation: 3,
+  },
+
+  avatarImage: {
+    width: '100%',
+
+    height: '100%',
+  },
+
+  cameraButton: {
+    position: 'absolute',
+
+    right: 0,
+
+    bottom: 1,
+
+    width: 32,
+
+    height: 32,
+
+    borderRadius: 16,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    backgroundColor: '#2563EB',
+
+    borderWidth: 2,
+
+    borderColor: '#FFFFFF',
+  },
+
+  avatarText: {
+    marginTop: 10,
+
+    fontSize: 13,
+
+    fontWeight: '600',
+
+    color: '#374151',
+  },
+
+  avatarOptional: {
+    marginTop: 2,
+
+    fontSize: 11,
+
+    color: '#9CA3AF',
+  },
+
+  /* ==================================
+       SEÇÕES
+    ================================== */
+
+  section: {
+    gap: 15,
+
+    marginBottom: 26,
+
+    padding: 16,
+
+    borderRadius: 18,
+
+    backgroundColor: '#FFFFFF',
+
+    borderWidth: 1,
+
+    borderColor: '#E5E7EB',
+
+    shadowColor: '#000000',
+
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+
+    shadowOpacity: 0.035,
+
+    shadowRadius: 6,
+
+    elevation: 1,
+  },
+
+  sectionTitle: {
+    marginBottom: 1,
+
+    fontSize: 15,
+
+    lineHeight: 20,
+
+    fontWeight: '700',
+
+    color: '#1F2937',
+  },
+
+  /* ==================================
+       SENHA
+    ================================== */
+
+  eyeButton: {
+    width: 36,
+
+    height: 44,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  /* ==================================
+       BOTÃO
+    ================================== */
+
+  submitButton: {
+    minHeight: 54,
+
+    paddingHorizontal: 18,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    gap: 9,
+
+    borderRadius: 14,
+
+    backgroundColor: '#4CAF50',
+
+    shadowColor: '#4CAF50',
+
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+
+    shadowOpacity: 0.2,
+
+    shadowRadius: 6,
+
+    elevation: 3,
+  },
+
+  submitButtonDisabled: {
+    opacity: 0.6,
+  },
+
+  submitButtonPressed: {
+    opacity: 0.88,
+  },
+
+  submitButtonText: {
+    fontSize: 16,
+
+    fontWeight: '700',
+
+    color: '#FFFFFF',
+  },
+
+  loadingRow: {
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    gap: 9,
+  },
+
+  /* ==================================
+       LEGAL
+    ================================== */
+
+  legalText: {
+    marginTop: 20,
+
+    paddingHorizontal: 8,
+
+    fontSize: 12,
+
+    lineHeight: 18,
+
+    textAlign: 'center',
+
+    color: '#6B7280',
+  },
+
+  legalLink: {
+    fontWeight: '700',
+
+    color: '#2563EB',
+  },
+
+  /* ==================================
+       LOGIN
+    ================================== */
+
+  loginRow: {
+    marginTop: 20,
+
+    flexDirection: 'row',
+
+    flexWrap: 'wrap',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  loginText: {
+    fontSize: 14,
+
+    color: '#6B7280',
+  },
+
+  loginLink: {
+    marginLeft: 5,
+
+    fontSize: 14,
+
+    fontWeight: '700',
+
+    color: '#E1093F',
+  },
+
+  pressed: {
+    opacity: 0.65,
+  },
+})

@@ -1,67 +1,87 @@
-import React, { forwardRef, JSX } from 'react'
-import { TextInput, View, Text, StyleSheet, TextInputProps } from 'react-native'
+import React, { forwardRef, ReactNode, useState } from 'react'
 
-type InputProps = {
+import { StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native'
+
+type InputProps = TextInputProps & {
   label?: string
-  icon?: React.ReactNode
-  leftIcon?: JSX.Element
-  rightIcon?: JSX.Element
 
-  value: string
-  onChangeText: (text: string) => void
-  placeholder: string
-  secureTextEntry?: boolean
-  errorMessage?: string
-  onFocus?: () => void
-  keyboardType?:
-    | 'default'
-    | 'email-address'
-    | 'numeric'
-    | 'phone-pad'
-    | 'decimal-pad'
-  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters'
-  returnKeyType?: 'done' | 'next' | 'go' | 'search' | 'send'
-  onSubmitEditing?: () => void
-} & React.ComponentProps<typeof TextInput>
+  leftIcon?: ReactNode
+
+  rightIcon?: ReactNode
+
+  errorMessage?: string | null
+}
 
 export const Input = forwardRef<TextInput, InputProps>(
   (
     {
-      value,
-      onChangeText,
-      placeholder,
-      secureTextEntry = false,
-      errorMessage,
-      onFocus,
-      keyboardType = 'default',
-      autoCapitalize = 'sentences',
-      returnKeyType = 'done',
-      onSubmitEditing,
+      label,
       leftIcon,
       rightIcon,
+      errorMessage,
+      style,
+      placeholderTextColor = '#6B7280',
+      editable = true,
+      onFocus,
+      onBlur,
+      ...rest
     },
     ref,
   ) => {
+    const [isFocused, setIsFocused] = useState(false)
+
+    function handleFocus(event: any) {
+      setIsFocused(true)
+
+      onFocus?.(event)
+    }
+
+    function handleBlur(event: any) {
+      setIsFocused(false)
+
+      onBlur?.(event)
+    }
+
+    const hasError = Boolean(errorMessage)
+
     return (
       <View style={styles.container}>
-        <View style={styles.inputContainer}>
-          {leftIcon && <View style={styles.iconContainer}>{leftIcon}</View>}
+        {label ? <Text style={styles.label}>{label}</Text> : null}
+
+        <View
+          style={[
+            styles.inputContainer,
+
+            isFocused && !hasError && styles.inputContainerFocused,
+
+            hasError && styles.inputContainerError,
+
+            !editable && styles.inputContainerDisabled,
+          ]}
+        >
+          {leftIcon ? (
+            <View style={styles.leftIconContainer}>{leftIcon}</View>
+          ) : null}
+
           <TextInput
             ref={ref}
-            style={[styles.input, errorMessage ? styles.inputError : {}]}
-            value={value}
-            onChangeText={onChangeText}
-            placeholder={placeholder}
-            secureTextEntry={secureTextEntry}
-            onFocus={onFocus}
-            keyboardType={keyboardType}
-            autoCapitalize={autoCapitalize}
-            returnKeyType={returnKeyType}
-            onSubmitEditing={onSubmitEditing}
+            style={[styles.input, style]}
+            editable={editable}
+            placeholderTextColor={placeholderTextColor}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            selectionColor="#2563EB"
+            {...rest}
           />
-          {rightIcon && <View style={styles.iconContainer}>{rightIcon}</View>}
+
+          {rightIcon ? (
+            <View style={styles.rightIconContainer}>{rightIcon}</View>
+          ) : null}
         </View>
-        {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+
+        {errorMessage ? (
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        ) : null}
       </View>
     )
   },
@@ -71,30 +91,100 @@ Input.displayName = 'Input'
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 10,
+    width: '100%',
   },
+
+  label: {
+    marginLeft: 2,
+
+    marginBottom: 7,
+
+    fontSize: 13,
+
+    lineHeight: 18,
+
+    fontWeight: '600',
+
+    color: '#374151',
+  },
+
   inputContainer: {
-    flexDirection: 'row', // Garantir que os ícones e o input fiquem na mesma linha
-    alignItems: 'center', // Alinhar o conteúdo verticalmente
-    borderColor: '#ccc',
+    minHeight: 52,
+
+    paddingHorizontal: 14,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
     borderWidth: 1,
-    borderRadius: 5,
-    height: 40,
+
+    borderColor: '#D1D5DB',
+
+    borderRadius: 13,
+
+    backgroundColor: '#FFFFFF',
   },
+
+  inputContainerFocused: {
+    borderColor: '#2563EB',
+
+    borderWidth: 1.5,
+  },
+
+  inputContainerError: {
+    borderColor: '#DC2626',
+  },
+
+  inputContainerDisabled: {
+    opacity: 0.65,
+
+    backgroundColor: '#F3F4F6',
+  },
+
   input: {
-    flex: 1, // O campo de texto ocupa o espaço restante
-    paddingLeft: 10,
+    flex: 1,
+
+    minWidth: 0,
+
+    minHeight: 50,
+
+    paddingVertical: 0,
+
+    paddingHorizontal: 0,
+
+    fontSize: 15,
+
+    color: '#111827',
+
+    textAlignVertical: 'center',
   },
-  iconContainer: {
-    marginLeft: 10, // Adiciona espaçamento ao redor do ícone
+
+  leftIconContainer: {
     marginRight: 10,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
   },
-  inputError: {
-    borderColor: 'red',
+
+  rightIconContainer: {
+    marginLeft: 8,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
   },
+
   errorText: {
-    color: 'red',
-    fontSize: 12,
     marginTop: 5,
+
+    marginLeft: 3,
+
+    fontSize: 12,
+
+    lineHeight: 16,
+
+    color: '#DC2626',
   },
 })
