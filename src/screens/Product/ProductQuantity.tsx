@@ -116,9 +116,16 @@ export function ProductQuantity({ onPressProduct }: Props) {
       return []
     }
 
-    return products.filter((product) => product.store?.cityId === city.id)
-  }, [city?.id, products])
+    return products.filter((product) => {
+      const sameCity = product.store?.cityId === city.id
 
+      const stockQuantity = Number(product.quantity ?? 0)
+
+      const hasStock = stockQuantity > 0
+
+      return sameCity && hasStock
+    })
+  }, [city?.id, products])
   /* =====================================
      MAPA DE QUANTIDADES DO CARRINHO
   ===================================== */

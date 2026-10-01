@@ -25,12 +25,12 @@
     "assetBundlePatterns": ["**/*"],
 
     "ios": {
-      "bundleIdentifier": "com.club.iaki",
+      "bundleIdentifier": "com.clube.iaki",
       "buildNumber": "1"
     },
 
     "android": {
-      "package": "com.club.iaki",
+      "package": "com.clube.iaki",
       "versionCode": 1,
 
       "adaptiveIcon": {

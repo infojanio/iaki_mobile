@@ -332,6 +332,14 @@ export function AllProductsDiscount() {
     return products.filter((product) => {
       const discount = safeNumber(product?.cashbackPercentage)
 
+      const stockQuantity = Number(product?.quantity ?? 0)
+
+      const hasStock = stockQuantity > 0
+
+      if (!hasStock) {
+        return false
+      }
+
       if (cashbackFilter === 'all') {
         return discount > 0
       }
@@ -339,7 +347,6 @@ export function AllProductsDiscount() {
       return discount > minimumDiscount
     })
   }, [cashbackFilter, products])
-
   /* ==============================
      PAGINAÇÃO
   ============================== */

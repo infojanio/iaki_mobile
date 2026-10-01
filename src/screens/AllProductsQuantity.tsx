@@ -197,7 +197,11 @@ export function AllProductsQuantity() {
 
   const filteredProducts = useMemo(() => {
     if (quantityFilter === 'all') {
-      return products
+      return products.filter((product) => {
+        const quantity = safeNumber(product?.quantity)
+
+        return quantity > 0
+      })
     }
 
     const limit = safeNumber(quantityFilter)
@@ -205,7 +209,7 @@ export function AllProductsQuantity() {
     return products.filter((product) => {
       const quantity = safeNumber(product?.quantity)
 
-      return quantity < limit
+      return quantity > 0 && quantity < limit
     })
   }, [products, quantityFilter])
 

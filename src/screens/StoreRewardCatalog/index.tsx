@@ -35,10 +35,21 @@ interface Reward {
   id: string
   title: string
   description?: string
+
   pointsCost: number
+
   stock: number
+
   isActive: boolean
+
   image?: string | null
+
+  /*
+   * Data/hora de expiração do brinde.
+   *
+   * A API deve retornar este campo.
+   */
+  expiresAt?: string | null
 }
 
 interface PendingRedemption {
@@ -59,6 +70,7 @@ type ActiveTab = 'catalog' | 'pending'
 
 type RewardImageProps = {
   image?: string | null
+
   size?: 'large' | 'small'
 }
 
@@ -79,6 +91,26 @@ function isCanceledRequest(error: any) {
     error?.name === 'AbortError' ||
     error?.message === 'canceled'
   )
+}
+
+/*
+ * Verifica se o brinde está expirado.
+ *
+ * Sem expiresAt:
+ * o brinde é considerado válido.
+ */
+function isRewardExpired(reward: Reward) {
+  if (!reward.expiresAt) {
+    return false
+  }
+
+  const expirationTime = new Date(reward.expiresAt).getTime()
+
+  if (!Number.isFinite(expirationTime)) {
+    return false
+  }
+
+  return expirationTime <= Date.now()
 }
 
 function getImageUri(image?: string | null) {
@@ -250,12 +282,6 @@ export function StoreRewardCatalog() {
 
         setPending(Array.isArray(pendingData) ? pendingData : [])
 
-        /*
-         * Atualiza saldo também,
-         * mas uma falha isolada
-         * no wallet não derruba
-         * o catálogo inteiro.
-         */
         try {
           await fetchWallet(storeId)
         } catch (walletError) {
@@ -331,6 +357,22 @@ export function StoreRewardCatalog() {
         return
       }
 
+      /*
+       * Segurança adicional:
+       * mesmo que alguém consiga
+       * chamar a função diretamente,
+       * um brinde expirado nunca
+       * será enviado para o backend.
+       */
+      if (isRewardExpired(reward)) {
+        Alert.alert(
+          'Brinde expirado',
+          'Este brinde não está mais disponível para resgate.',
+        )
+
+        return
+      }
+
       try {
         setRedeemingId(reward.id)
 
@@ -347,10 +389,6 @@ export function StoreRewardCatalog() {
           )
         }
 
-        /*
-         * Atualiza saldo/listas antes
-         * de abrir o QR Code.
-         */
         try {
           await fetchWallet(storeId)
         } catch {
@@ -387,6 +425,13 @@ export function StoreRewardCatalog() {
 
   const handleRedeem = useCallback(
     (reward: Reward) => {
+      /*
+       * Primeiro verifica expiração.
+       */
+      if (isRewardExpired(reward)) {
+        return
+      }
+
       const pointsCost = safeNumber(reward.pointsCost)
 
       const currentBalance = safeNumber(balance)
@@ -460,7 +505,21 @@ export function StoreRewardCatalog() {
 
       const stock = safeNumber(item.stock)
 
-      const canRedeem = currentBalance >= pointsCost && stock > 0
+      /*
+       * NOVO:
+       * verifica se o brinde expirou.
+       */
+      const expired = isRewardExpired(item)
+
+      /*
+       * O botão só pode ser
+       * utilizado quando:
+       *
+       * - não expirou
+       * - possui estoque
+       * - usuário possui pontos
+       */
+      const canRedeem = !expired && currentBalance >= pointsCost && stock > 0
 
       const missingPoints = Math.max(0, pointsCost - currentBalance)
 
@@ -468,12 +527,30 @@ export function StoreRewardCatalog() {
 
       return (
         <View style={styles.rewardCard}>
-          {/* IMAGEM */}
+          {/* ============================
+                IMAGEM
+            ============================ */}
 
           <View style={styles.rewardImageArea}>
             <RewardImage image={item.image} />
 
-            {/* PONTOS */}
+            {/* ==========================
+                  EXPIRADO
+              ========================== */}
+
+            {expired ? (
+              <View style={styles.expiredOverlay}>
+                <View style={styles.expiredBadge}>
+                  <MaterialIcons name="event-busy" size={16} color="#B91C1C" />
+
+                  <Text style={styles.expiredText}>EXPIRADO</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* ==========================
+                  PONTOS
+              ========================== */}
 
             <View style={styles.pointsBadge}>
               <MaterialIcons name="stars" size={17} color="#7C3AED" />
@@ -481,16 +558,20 @@ export function StoreRewardCatalog() {
               <Text style={styles.pointsBadgeText}>{pointsCost} pts</Text>
             </View>
 
-            {/* ESTOQUE */}
+            {/* ==========================
+                  ESTOQUE
+              ========================== */}
 
-            {stock <= 0 ? (
+            {!expired && stock <= 0 ? (
               <View style={styles.outOfStockBadge}>
                 <Text style={styles.outOfStockText}>Esgotado</Text>
               </View>
             ) : null}
           </View>
 
-          {/* CONTEÚDO */}
+          {/* ============================
+                CONTEÚDO
+            ============================ */}
 
           <View style={styles.rewardContent}>
             <Text numberOfLines={2} style={styles.rewardTitle}>
@@ -506,7 +587,13 @@ export function StoreRewardCatalog() {
             {/* STATUS */}
 
             <View style={styles.rewardInfoRow}>
-              {stock > 0 ? (
+              {expired ? (
+                <View style={styles.expiredInfo}>
+                  <MaterialIcons name="event-busy" size={15} color="#B91C1C" />
+
+                  <Text style={styles.expiredInfoText}>Brinde expirado</Text>
+                </View>
+              ) : stock > 0 ? (
                 <View style={styles.stockContainer}>
                   <MaterialIcons name="inventory-2" size={15} color="#6B7280" />
 
@@ -518,26 +605,28 @@ export function StoreRewardCatalog() {
                 <Text style={styles.unavailableText}>Indisponível</Text>
               )}
 
-              {!canRedeem && stock > 0 ? (
+              {!expired && !canRedeem && stock > 0 ? (
                 <Text style={styles.missingPointsText}>
                   Faltam {missingPoints} pts
                 </Text>
               ) : null}
             </View>
 
-            {/* BOTÃO */}
+            {/* ============================
+                  BOTÃO
+              ============================ */}
 
             <Pressable
-              disabled={!canRedeem || redeemingId !== null}
+              disabled={expired || !canRedeem || redeemingId !== null}
               onPress={() => handleRedeem(item)}
               style={({ pressed }) => [
                 styles.redeemButton,
 
-                canRedeem
+                canRedeem && !expired
                   ? styles.redeemButtonAvailable
                   : styles.redeemButtonDisabled,
 
-                pressed && canRedeem && styles.pressed,
+                pressed && canRedeem && !expired && styles.pressed,
               ]}
             >
               {isRedeeming ? (
@@ -545,23 +634,32 @@ export function StoreRewardCatalog() {
               ) : (
                 <>
                   <MaterialIcons
-                    name={canRedeem ? 'redeem' : 'lock-outline'}
+                    name={
+                      expired
+                        ? 'event-busy'
+                        : canRedeem
+                          ? 'redeem'
+                          : 'lock-outline'
+                    }
                     size={19}
-                    color={canRedeem ? '#FFFFFF' : '#9CA3AF'}
+                    color={canRedeem && !expired ? '#FFFFFF' : '#9CA3AF'}
                   />
 
                   <Text
                     style={[
                       styles.redeemButtonText,
 
-                      !canRedeem && styles.redeemButtonTextDisabled,
+                      (!canRedeem || expired) &&
+                        styles.redeemButtonTextDisabled,
                     ]}
                   >
-                    {stock <= 0
-                      ? 'Brinde esgotado'
-                      : canRedeem
-                        ? 'Resgatar agora'
-                        : 'Pontos insuficientes'}
+                    {expired
+                      ? 'Brinde expirado'
+                      : stock <= 0
+                        ? 'Brinde esgotado'
+                        : canRedeem
+                          ? 'Resgatar agora'
+                          : 'Pontos insuficientes'}
                   </Text>
                 </>
               )}
@@ -725,7 +823,7 @@ export function StoreRewardCatalog() {
         </Pressable>
       </View>
 
-      {/* TÍTULO DA SEÇÃO */}
+      {/* TÍTULO */}
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>
@@ -835,6 +933,7 @@ export function StoreRewardCatalog() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+
     backgroundColor: '#F6F7FB',
   },
 
@@ -1092,6 +1191,52 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
 
+  /* ==================================================
+       EXPIRADO
+    ================================================== */
+
+  expiredOverlay: {
+    ...StyleSheet.absoluteFillObject,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    backgroundColor: 'rgba(255, 255, 255, 0.48)',
+  },
+
+  expiredBadge: {
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    paddingHorizontal: 14,
+
+    paddingVertical: 8,
+
+    borderRadius: 18,
+
+    backgroundColor: '#FEE2E2',
+
+    borderWidth: 1,
+
+    borderColor: '#FECACA',
+
+    elevation: 2,
+  },
+
+  expiredText: {
+    marginLeft: 5,
+
+    fontSize: 12,
+
+    fontWeight: '900',
+
+    letterSpacing: 0.4,
+
+    color: '#B91C1C',
+  },
+
   pointsBadge: {
     position: 'absolute',
 
@@ -1211,6 +1356,26 @@ const styles = StyleSheet.create({
 
     color: '#D97706',
   },
+
+  expiredInfo: {
+    flexDirection: 'row',
+
+    alignItems: 'center',
+  },
+
+  expiredInfoText: {
+    marginLeft: 5,
+
+    fontSize: 11,
+
+    fontWeight: '700',
+
+    color: '#B91C1C',
+  },
+
+  /* ==================================================
+       BUTTON
+    ================================================== */
 
   redeemButton: {
     minHeight: 50,
