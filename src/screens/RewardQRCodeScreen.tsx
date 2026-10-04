@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-
 import {
-  Box,
-  Button,
-  Center,
-  Divider,
-  HStack,
+  ActivityIndicator,
+  Alert,
   Image,
+  RefreshControl,
   ScrollView,
-  Spinner,
+  StyleSheet,
   Text,
-  VStack,
-  useToast,
-} from 'native-base'
+  TouchableOpacity,
+  View,
+} from 'react-native'
 
 import {
   useFocusEffect,
@@ -21,9 +18,7 @@ import {
 } from '@react-navigation/native'
 
 import { api } from '@services/api'
-
 import { ButtonBack } from '@components/ButtonBack'
-
 import { useStorePoints } from '@contexts/StorePointsContext'
 
 type RedemptionStatus = 'PENDING' | 'CONFIRMED' | 'CANCELED'
@@ -122,10 +117,7 @@ function normalizeStatus(status?: string): RedemptionStatus {
 
 export function RewardQRCodeScreen() {
   const route = useRoute<any>()
-
   const navigation = useNavigation<any>()
-
-  const toast = useToast()
 
   const { redemptionId, storeId } = route.params as RouteParams
 
@@ -134,7 +126,6 @@ export function RewardQRCodeScreen() {
   const [redemption, setRedemption] = useState<RedemptionDetails | null>(null)
 
   const [isLoading, setIsLoading] = useState(true)
-
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   const loadRedemption = useCallback(
@@ -152,7 +143,8 @@ export function RewardQRCodeScreen() {
           response.data?.redemption ?? response.data?.data ?? response.data
 
         if (!data?.id) {
-          throw new Error('Resgate não encontrado.')
+          //console.log('Resgate não encontrado.')
+          throw new Error('Resgate não encontrado, expirado!')
         }
 
         const normalized: RedemptionDetails = {
@@ -166,31 +158,22 @@ export function RewardQRCodeScreen() {
 
           reward: {
             id: data.reward?.id ?? data.rewardId,
-
             title: data.reward?.title ?? 'Brinde',
-
             description: data.reward?.description ?? null,
-
             image: data.reward?.image ?? null,
-
             pointsCost: Number(data.reward?.pointsCost ?? data.points ?? 0),
           },
 
           store: {
             id: data.store?.id ?? data.storeId,
-
             name: data.store?.name ?? 'Loja',
-
             avatar: data.store?.avatar ?? null,
           },
 
           user: {
             id: data.user?.id ?? data.userId,
-
             name: data.user?.name ?? 'Cliente',
-
             cpf: data.user?.cpf ?? null,
-
             phone: data.user?.phone ?? null,
           },
         }
@@ -201,33 +184,32 @@ export function RewardQRCodeScreen() {
           await fetchWallet(storeId)
         }
       } catch (error: any) {
-        console.error('[RewardRedemption] Erro:', {
+        console.log('[RewardRedemption] Erro:', {
           status: error?.response?.status,
-
           data: error?.response?.data,
-
           message: error?.message,
+          /*   status: error?.response?.status,
+          data: error?.response?.data,
+          message: error?.message,
+          */
         })
 
-        toast.show({
-          title:
-            error?.response?.data?.message ??
+        Alert.alert(
+          'Atenção',
+          error?.response?.data?.message ??
             'Não foi possível carregar o resgate.',
-          placement: 'top',
-          bgColor: 'red.500',
-        })
+        )
       } finally {
         setIsLoading(false)
         setIsRefreshing(false)
       }
     },
-    [redemptionId, storeId, fetchWallet, toast],
+    [redemptionId, storeId, fetchWallet],
   )
 
   useFocusEffect(
     useCallback(() => {
       setIsLoading(true)
-
       loadRedemption()
     }, [loadRedemption]),
   )
@@ -275,9 +257,9 @@ export function RewardQRCodeScreen() {
           title: 'Resgate confirmado',
           description:
             'O administrador aprovou o resgate. O brinde já pode ser entregue.',
-          bg: 'green.100',
-          border: 'green.400',
-          color: 'green.700',
+          backgroundColor: '#DCFCE7',
+          borderColor: '#4ADE80',
+          textColor: '#15803D',
         }
 
       case 'CANCELED':
@@ -285,191 +267,161 @@ export function RewardQRCodeScreen() {
           title: 'Resgate cancelado',
           description:
             'Esta solicitação foi cancelada. Procure a loja para mais informações.',
-          bg: 'red.100',
-          border: 'red.400',
-          color: 'red.700',
+          backgroundColor: '#FEE2E2',
+          borderColor: '#F87171',
+          textColor: '#B91C1C',
         }
 
       default:
         return {
           title: 'Aguardando confirmação!',
           description: 'Apresente essa tela na loja física.',
-          bg: 'amber.100',
-          border: 'amber.400',
-          color: 'amber.700',
+          backgroundColor: '#FEF3C7',
+          borderColor: '#FBBF24',
+          textColor: '#B45309',
         }
     }
   }, [redemption?.status])
 
   if (isLoading) {
     return (
-      <Center flex={1} bg="coolGray.50">
-        <Spinner size="lg" color="purple.600" />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#7C3AED" />
 
-        <Text mt={3} color="coolGray.500">
-          Carregando resgate...
-        </Text>
-      </Center>
+        <Text style={styles.loadingText}>Carregando resgate...</Text>
+      </View>
     )
   }
 
   if (!redemption) {
     return (
-      <VStack flex={1} bg="coolGray.50">
-        <HStack px={4} pt={12}>
+      <View style={styles.container}>
+        <View style={styles.topBar}>
           <ButtonBack />
-        </HStack>
+        </View>
 
-        <Center flex={1} px={6}>
-          <Text fontSize="lg" fontWeight="bold" color="coolGray.700">
-            Resgate não encontrado
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>
+            Resgate não encontrado, expirou!
           </Text>
 
-          <Text mt={2} textAlign="center" color="coolGray.500">
+          <Text style={styles.emptyDescription}>
             Não foi possível localizar esta solicitação.
           </Text>
 
-          <Button mt={6} bg="purple.600" onPress={() => loadRedemption(true)}>
-            Tentar novamente
-          </Button>
-        </Center>
-      </VStack>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            activeOpacity={0.8}
+            onPress={() => loadRedemption(true)}
+          >
+            <Text style={styles.primaryButtonText}>Tentar novamente</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     )
   }
 
   return (
-    <VStack flex={1} bg="coolGray.50">
-      <HStack
-        px={4}
-        pt={12}
-        pb={3}
-        alignItems="center"
-        bg="white"
-        borderBottomWidth={1}
-        borderBottomColor="coolGray.200"
-      >
+    <View style={styles.container}>
+      <View style={styles.header}>
         <ButtonBack />
 
-        <Text ml={4} fontSize="lg" fontWeight="bold" color="coolGray.800">
-          Comprovante do resgate
-        </Text>
-      </HStack>
+        <Text style={styles.headerTitle}>Comprovante do resgate</Text>
+      </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          padding: 16,
-          paddingBottom: 40,
-        }}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => loadRedemption(true)}
+          />
+        }
       >
-        <VStack space={4}>
-          <Box
-            p={4}
-            bg={statusInfo.bg}
-            borderWidth={1}
-            borderColor={statusInfo.border}
-            borderRadius="2xl"
+        <View style={styles.content}>
+          {/* STATUS */}
+          <View
+            style={[
+              styles.statusCard,
+              {
+                backgroundColor: statusInfo.backgroundColor,
+                borderColor: statusInfo.borderColor,
+              },
+            ]}
           >
-            <Text fontSize="md" fontWeight="bold" color={statusInfo.color}>
+            <Text style={[styles.statusTitle, { color: statusInfo.textColor }]}>
               {statusInfo.title}
             </Text>
 
-            <Text mt={1} fontSize="sm" color={statusInfo.color}>
+            <Text
+              style={[
+                styles.statusDescription,
+                { color: statusInfo.textColor },
+              ]}
+            >
               {statusInfo.description}
             </Text>
-          </Box>
+          </View>
 
-          <Box
-            bg="white"
-            borderRadius="2xl"
-            overflow="hidden"
-            shadow={1}
-            borderWidth={1}
-            borderColor="coolGray.200"
-          >
+          {/* BRINDE */}
+          <View style={styles.rewardCard}>
             <Image
               source={{
                 uri: redemption.reward.image ?? DEFAULT_REWARD_IMAGE,
               }}
-              alt={redemption.reward.title}
-              width="100%"
-              height={180}
+              style={styles.rewardImage}
               resizeMode="contain"
             />
 
-            <VStack p={4} space={2}>
-              <Text fontSize="xl" fontWeight="bold" color="coolGray.800">
-                {redemption.reward.title}
-              </Text>
+            <View style={styles.rewardInfo}>
+              <Text style={styles.rewardTitle}>{redemption.reward.title}</Text>
 
               {redemption.reward.description && (
-                <Text fontSize="sm" color="coolGray.500">
+                <Text style={styles.rewardDescription}>
                   {redemption.reward.description}
                 </Text>
               )}
-            </VStack>
-          </Box>
+            </View>
+          </View>
 
-          <Box p={5} bg="purple.600" borderRadius="2xl" alignItems="center">
-            <Text
-              fontSize="xs"
-              fontWeight="bold"
-              color="purple.100"
-              textTransform="uppercase"
-            >
-              Código para conferência
-            </Text>
+          {/* CÓDIGO */}
+          <View style={styles.codeCard}>
+            <Text style={styles.codeLabel}>CÓDIGO PARA CONFERÊNCIA</Text>
 
-            <Text
-              mt={2}
-              fontSize="3xl"
-              fontWeight="bold"
-              letterSpacing={3}
-              color="white"
-              selectable
-            >
-              {shortCode}
-            </Text>
+            <Text style={styles.code}>{shortCode}</Text>
 
-            <Text mt={2} fontSize="xs" color="purple.100" textAlign="center">
+            <Text style={styles.codeDescription}>
               O atendente deve localizar este resgate no painel.
             </Text>
-          </Box>
+          </View>
 
-          <Box
-            p={4}
-            bg="white"
-            borderRadius="2xl"
-            borderWidth={1}
-            borderColor="coolGray.200"
-            shadow={1}
-          >
-            <Text mb={3} fontSize="md" fontWeight="bold" color="coolGray.800">
-              Dados para conferência
-            </Text>
+          {/* DADOS */}
+          <View style={styles.detailsCard}>
+            <Text style={styles.sectionTitle}>Dados para conferência</Text>
 
             <DetailRow label="Loja" value={redemption.store.name} />
 
-            <Divider my={3} />
+            <Divider />
 
             <DetailRow label="Cliente" value={redemption.user.name} />
 
-            <Divider my={3} />
+            <Divider />
 
             <DetailRow label="CPF" value={maskCpf(redemption.user.cpf)} />
 
-            <Divider my={3} />
+            <Divider />
 
             <DetailRow label="Brinde" value={redemption.reward.title} />
 
-            <Divider my={3} />
+            <Divider />
 
             <DetailRow
               label="Pontos utilizados"
               value={`${redemption.points} pontos`}
             />
 
-            <Divider my={3} />
+            <Divider />
 
             <DetailRow
               label="Solicitado em"
@@ -478,7 +430,7 @@ export function RewardQRCodeScreen() {
 
             {redemption.usedAt && (
               <>
-                <Divider my={3} />
+                <Divider />
 
                 <DetailRow
                   label="Confirmado em"
@@ -486,41 +438,42 @@ export function RewardQRCodeScreen() {
                 />
               </>
             )}
-          </Box>
+          </View>
 
-          <Box
-            p={4}
-            bg="white"
-            borderRadius="2xl"
-            borderWidth={1}
-            borderColor="coolGray.200"
-          >
-            <Text fontSize="xs" color="coolGray.500">
-              Identificador completo
-            </Text>
+          {/* ID COMPLETO */}
+          <View style={styles.idCard}>
+            <Text style={styles.idLabel}>Identificador completo</Text>
 
-            <Text mt={1} fontSize="xs" color="coolGray.700" selectable>
+            <Text style={styles.idValue} selectable>
               {redemption.id}
             </Text>
-          </Box>
+          </View>
 
+          {/* ATUALIZAR */}
           {redemption.status === 'PENDING' && (
-            <Button
-              bg="purple.600"
-              isLoading={isRefreshing}
-              isLoadingText="Atualizando"
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                isRefreshing && styles.disabledButton,
+              ]}
+              activeOpacity={0.8}
+              disabled={isRefreshing}
               onPress={() => loadRedemption(true)}
             >
-              Atualizar status
-            </Button>
+              {isRefreshing ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Atualizar status</Text>
+              )}
+            </TouchableOpacity>
           )}
 
-          <Text px={4} fontSize="xs" color="coolGray.500" textAlign="center">
+          <Text style={styles.footerText}>
             Aguarde a confirmação antes de deixar o estabelecimento.
           </Text>
-        </VStack>
+        </View>
       </ScrollView>
-    </VStack>
+    </View>
   )
 }
 
@@ -531,20 +484,251 @@ type DetailRowProps = {
 
 function DetailRow({ label, value }: DetailRowProps) {
   return (
-    <HStack justifyContent="space-between" alignItems="flex-start" space={4}>
-      <Text flex={1} fontSize="sm" color="coolGray.500">
-        {label}
-      </Text>
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
 
-      <Text
-        flex={1}
-        fontSize="sm"
-        fontWeight="medium"
-        color="coolGray.800"
-        textAlign="right"
-      >
-        {value}
-      </Text>
-    </HStack>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
   )
 }
+
+function Divider() {
+  return <View style={styles.divider} />
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+  },
+
+  topBar: {
+    paddingHorizontal: 16,
+    paddingTop: 48,
+  },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 48,
+    paddingBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+
+  headerTitle: {
+    marginLeft: 16,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+
+  content: {
+    gap: 16,
+  },
+
+  statusCard: {
+    padding: 16,
+    borderWidth: 1,
+    borderRadius: 16,
+  },
+
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  statusDescription: {
+    marginTop: 4,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+
+  rewardCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+
+  rewardImage: {
+    width: '100%',
+    height: 180,
+    backgroundColor: '#FFFFFF',
+  },
+
+  rewardInfo: {
+    padding: 16,
+  },
+
+  rewardTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+
+  rewardDescription: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+
+  codeCard: {
+    padding: 20,
+    backgroundColor: '#7C3AED',
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+
+  codeLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#EDE9FE',
+    textTransform: 'uppercase',
+  },
+
+  code: {
+    marginTop: 8,
+    fontSize: 30,
+    fontWeight: '700',
+    letterSpacing: 3,
+    color: '#FFFFFF',
+  },
+
+  codeDescription: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#EDE9FE',
+    textAlign: 'center',
+  },
+
+  detailsCard: {
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+
+  sectionTitle: {
+    marginBottom: 12,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+
+  detailLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#6B7280',
+  },
+
+  detailValue: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1F2937',
+    textAlign: 'right',
+  },
+
+  divider: {
+    height: 1,
+    marginVertical: 12,
+    backgroundColor: '#E5E7EB',
+  },
+
+  idCard: {
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+
+  idLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+
+  idValue: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#374151',
+  },
+
+  primaryButton: {
+    minHeight: 48,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: '#7C3AED',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  primaryButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  disabledButton: {
+    opacity: 0.7,
+  },
+
+  footerText: {
+    paddingHorizontal: 16,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+
+  emptyContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#374151',
+  },
+
+  emptyDescription: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+})

@@ -31,7 +31,7 @@
 
     "android": {
       "package": "com.clube.iaki",
-      "versionCode": 1,
+      "versionCode": 3,
 
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon-clean.png",

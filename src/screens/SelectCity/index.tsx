@@ -619,15 +619,6 @@ export function SelectCity() {
             ListEmptyComponent={renderEmptyCities}
             contentContainerStyle={styles.listContent}
           />
-
-          <View style={styles.brandRow}>
-            <Image
-              source={IakiLogo}
-              style={styles.logo}
-              resizeMode="center"
-              fadeDuration={0}
-            />
-          </View>
         </SafeAreaView>
       </View>
     </ImageBackground>
