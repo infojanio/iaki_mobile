@@ -13,6 +13,8 @@ import {
 
 import type { FlatList as RNFlatList, LayoutChangeEvent } from 'react-native'
 
+import { useNavigation } from '@react-navigation/native'
+
 import { BannerDTO } from '@dtos/BannerDTO'
 
 type PromoBanner = {
@@ -50,6 +52,8 @@ const CARD_GAP = 8
 const BANNER_ASPECT_RATIO = 16 / 7
 
 export function Promotion({ banners: bannersFromProps = [] }: Props) {
+  const navigation = useNavigation<any>()
+
   const { width: windowWidth } = useWindowDimensions()
 
   const listRef = useRef<RNFlatList<PromoBanner>>(null)
@@ -157,12 +161,30 @@ export function Promotion({ banners: bannersFromProps = [] }: Props) {
      LINK
   ===================================== */
 
-  async function handlePress(link?: string | null) {
-    if (!link?.trim()) {
+  async function handlePress(item: PromoBanner) {
+    /*
+     * Prioridade 1:
+     * Se o banner pertence a uma loja,
+     * abre a loja dentro do aplicativo.
+     */
+    if (item.storeId) {
+      navigation.navigate('storeProducts', {
+        storeId: item.storeId,
+      })
+
       return
     }
 
-    let formattedLink = link.trim()
+    /*
+     * Prioridade 2:
+     * Compatibilidade com banners antigos
+     * que ainda possuem apenas link externo.
+     */
+    if (!item.link?.trim()) {
+      return
+    }
+
+    let formattedLink = item.link.trim()
 
     if (!/^https?:\/\//i.test(formattedLink)) {
       formattedLink = `https://${formattedLink}`
@@ -237,7 +259,7 @@ export function Promotion({ banners: bannersFromProps = [] }: Props) {
         }}
         renderItem={({ item, index }) => (
           <Pressable
-            onPress={() => void handlePress(item.link)}
+            onPress={() => void handlePress(item)}
             style={({ pressed }) => [
               styles.card,
 

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Clube IAkí",
     "slug": "iaki",
-    "version": "1.0.1",
+    "version": "1.0",
 
     "orientation": "portrait",
 
@@ -31,7 +31,7 @@
 
     "android": {
       "package": "com.clube.iaki",
-      "versionCode": 3,
+      "versionCode": 4,
 
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon-clean.png",
