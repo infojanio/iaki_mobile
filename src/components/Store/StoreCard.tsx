@@ -1,7 +1,14 @@
-import { TouchableOpacity, TouchableOpacityProps } from 'react-native'
-import { Box, HStack, Text, VStack, Image, useTheme, Icon } from 'native-base'
-import { StoreDTO } from '@dtos/StoreDTO'
+import {
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  type TouchableOpacityProps,
+} from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
+
+import { StoreDTO } from '@dtos/StoreDTO'
 import { RatingStars } from '@components/RatingStars'
 
 type Props = TouchableOpacityProps & {
@@ -9,52 +16,84 @@ type Props = TouchableOpacityProps & {
   onRate?: () => void
 }
 
-export function StoreCard({ store, ...rest }: Props) {
-  const { colors, sizes } = useTheme()
-
+export function StoreCard({ store, onRate: _onRate, ...rest }: Props) {
   return (
     <TouchableOpacity {...rest}>
-      <Box
-        bg="white"
-        borderRadius="lg"
-        shadow={2}
-        mb={4}
-        overflow="hidden"
-        p={2}
-      >
-        <HStack space={3} alignItems="center">
+      <View style={styles.card}>
+        <View style={styles.content}>
           <Image
             source={{ uri: store.avatar }}
-            alt={store.name}
-            w={70}
-            h={70}
-            borderRadius="md"
+            accessibilityLabel={store.name}
+            style={styles.avatar}
             resizeMode="cover"
           />
 
-          <VStack flex={1}>
-            <HStack mb={2}>
-              <Box>
-                <Icon
-                  as={MaterialIcons}
-                  name="location-on"
-                  size={sizes[1.5]}
-                  color={colors.red[600]}
-                />
-              </Box>
-              <Text fontSize="md"> {store.name}</Text>
-            </HStack>
-            <HStack>
-              <Box ml={4}>
-                <RatingStars rating={store.rating} count={store.ratingCount} />
-              </Box>
-              <Box ml={2}>
-                <Text>Avaliações</Text>
-              </Box>
-            </HStack>
-          </VStack>
-        </HStack>
-      </Box>
+          <View style={styles.details}>
+            <View style={styles.nameRow}>
+              <MaterialIcons name="location-on" size={20} color="#DC2626" />
+
+              <Text style={styles.name} numberOfLines={2}>
+                {store.name}
+              </Text>
+            </View>
+
+            <View style={styles.ratingRow}>
+              <RatingStars rating={store.rating} count={store.ratingCount} />
+
+              <Text style={styles.ratingLabel}>Avaliações</Text>
+            </View>
+          </View>
+        </View>
+      </View>
     </TouchableOpacity>
   )
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    marginBottom: 16,
+    padding: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 70,
+    height: 70,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  details: {
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  name: {
+    flex: 1,
+    marginLeft: 4,
+    fontSize: 16,
+    color: '#27272A',
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    paddingLeft: 16,
+  },
+  ratingLabel: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#52525B',
+  },
+})

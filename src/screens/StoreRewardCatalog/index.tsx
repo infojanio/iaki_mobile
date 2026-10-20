@@ -54,6 +54,9 @@ interface Reward {
 
 interface PendingRedemption {
   id: string
+  redemptionId?: string
+  status?: string
+  storeId?: string
 
   reward: {
     id: string
@@ -90,6 +93,24 @@ function isCanceledRequest(error: any) {
     error?.name === 'CanceledError' ||
     error?.name === 'AbortError' ||
     error?.message === 'canceled'
+  )
+}
+
+function isPendingRedemption(
+  value: unknown,
+  storeId: string,
+): value is PendingRedemption {
+  if (!value || typeof value !== 'object') return false
+
+  const redemption = value as PendingRedemption
+  const id = redemption.redemptionId ?? redemption.id
+  const status = redemption.status?.toUpperCase()
+
+  return (
+    typeof id === 'string' &&
+    id.trim().length > 0 &&
+    (!redemption.storeId || redemption.storeId === storeId) &&
+    (!status || status === 'PENDING')
   )
 }
 
@@ -280,7 +301,11 @@ export function StoreRewardCatalog() {
 
         setRewards(Array.isArray(rewardsData) ? rewardsData : [])
 
-        setPending(Array.isArray(pendingData) ? pendingData : [])
+        setPending(
+          Array.isArray(pendingData)
+            ? pendingData.filter((item) => isPendingRedemption(item, storeId))
+            : [],
+        )
 
         try {
           await fetchWallet(storeId)
@@ -294,6 +319,13 @@ export function StoreRewardCatalog() {
         if (isCanceledRequest(error)) {
           return
         }
+
+        if (requestId !== requestIdRef.current) {
+          return
+        }
+
+        // Uma resposta anterior não deve continuar aparecendo como resgate atual.
+        setPending([])
 
         console.error('[StoreRewardCatalog] Erro ao carregar:', {
           message: error?.message,
@@ -677,6 +709,7 @@ export function StoreRewardCatalog() {
 
   const renderPending = useCallback(
     ({ item }: ListRenderItemInfo<PendingRedemption>) => {
+      const redemptionId = item.redemptionId ?? item.id
       return (
         <View style={styles.pendingCard}>
           <RewardImage image={item.reward?.image} size="small" />
@@ -693,7 +726,7 @@ export function StoreRewardCatalog() {
             </View>
 
             <Pressable
-              onPress={() => handleOpenPending(item.id)}
+              onPress={() => handleOpenPending(redemptionId)}
               style={({ pressed }) => [
                 styles.qrButton,
 
