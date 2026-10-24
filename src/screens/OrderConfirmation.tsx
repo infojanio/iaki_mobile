@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Animated } from 'react-native'
+
+import { Alert, Animated, Linking } from 'react-native'
+
 import {
   Box,
   Text,
@@ -11,8 +13,11 @@ import {
   Spinner,
   Badge,
   Divider,
+  Pressable,
 } from 'native-base'
+
 import { useNavigation, useRoute } from '@react-navigation/native'
+import { MaterialIcons } from '@expo/vector-icons'
 
 import { api } from '@services/api'
 import { formatCurrency } from '@utils/format'
@@ -34,6 +39,8 @@ type ConfirmationOrder = {
   store: {
     id: string
     name: string
+    latitude: number | null
+    longitude: number | null
   }
   totalAmount: number
   discountApplied: number
@@ -48,7 +55,26 @@ function toNumber(value: unknown, fallback = 0) {
   }
 
   const parsed = Number(value)
+
   return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function parseCoordinate(value: unknown): number | null {
+  if (
+    value === null ||
+    value === undefined ||
+    (typeof value === 'string' && !value.trim())
+  ) {
+    return null
+  }
+
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    return null
+  }
+
+  const coordinate = Number(value)
+
+  return Number.isFinite(coordinate) ? coordinate : null
 }
 
 function formatDate(value: string | null) {
@@ -71,18 +97,21 @@ function getStatusInfo(status: string) {
         label: 'Aguardando validação',
         color: 'warning',
       }
+
     case 'VALIDATED':
       return {
         title: 'Compra validada!',
         label: 'Validado',
         color: 'success',
       }
+
     case 'EXPIRED':
       return {
         title: 'Pedido encerrado',
         label: 'Encerrado',
         color: 'coolGray',
       }
+
     default:
       return {
         title: 'Detalhes do pedido',
@@ -92,16 +121,53 @@ function getStatusInfo(status: string) {
   }
 }
 
+async function handleOpenStoreMaps(order: ConfirmationOrder) {
+  const { latitude, longitude } = order.store
+
+  if (
+    latitude === null ||
+    longitude === null ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    Math.abs(latitude) > 90 ||
+    Math.abs(longitude) > 180
+  ) {
+    Alert.alert(
+      'Localização indisponível',
+      'Esta loja ainda não possui uma localização válida cadastrada.',
+    )
+
+    return
+  }
+
+  const destination = encodeURIComponent(`${latitude},${longitude}`)
+
+  const url =
+    'https://www.google.com/maps/dir/?api=1' + `&destination=${destination}`
+
+  try {
+    await Linking.openURL(url)
+  } catch {
+    Alert.alert(
+      'Não foi possível abrir o mapa',
+      'Tente novamente em instantes.',
+    )
+  }
+}
+
 export function OrderConfirmation() {
   const route = useRoute<any>()
+
   const navigation = useNavigation<AppNavigatorRoutesProps>()
 
   const orderId = route.params?.orderId as string | undefined
 
   const [order, setOrder] = useState<ConfirmationOrder | null>(null)
+
   const [loading, setLoading] = useState(true)
 
   const scaleAnim = useRef(new Animated.Value(0.85)).current
+
   const opacityAnim = useRef(new Animated.Value(0)).current
 
   const fetchOrder = useCallback(async () => {
@@ -115,37 +181,54 @@ export function OrderConfirmation() {
 
     try {
       const response = await api.get(`/orders/${orderId}`)
+
       const data = response.data?.order ?? response.data
+
       if (!data?.id) {
         throw new Error('Pedido não encontrado.')
       }
 
       const mapped: ConfirmationOrder = {
         id: data.id,
+
         store: {
           id: data.store?.id ?? data.storeId ?? '',
+
           name:
             typeof data.store?.name === 'string' && data.store.name.trim()
               ? data.store.name.trim()
               : 'Loja não identificada',
+
+          latitude: parseCoordinate(data.store?.latitude),
+
+          longitude: parseCoordinate(data.store?.longitude),
         },
+
         totalAmount: toNumber(data.totalAmount),
+
         discountApplied: toNumber(data.discountApplied),
+
         status: data.status ?? '',
+
         createdAt: data.created_at ?? data.createdAt ?? null,
+
         items: (Array.isArray(data.items) ? data.items : []).map(
           (item: any, index: number): OrderItem => ({
             id: item.id ?? `${data.id}-item-${index}`,
+
             quantity: toNumber(item.quantity),
-            // Usa o valor registrado no pedido, sem recalcular
-            // pelo preço atual do catálogo.
+
+            // Valor registrado no pedido.
             subtotal:
               item.subtotal === null || item.subtotal === undefined
                 ? null
                 : toNumber(item.subtotal),
+
             product: {
               id: item.product?.id ?? '',
+
               name: item.product?.name ?? 'Produto indisponível',
+
               image: item.product?.image ?? null,
             },
           }),
@@ -155,6 +238,7 @@ export function OrderConfirmation() {
       setOrder(mapped)
     } catch (error) {
       console.error('[OrderConfirmation] Erro ao buscar pedido:', error)
+
       setOrder(null)
     } finally {
       setLoading(false)
@@ -178,6 +262,7 @@ export function OrderConfirmation() {
         tension: 100,
         useNativeDriver: true,
       }),
+
       Animated.timing(opacityAnim, {
         toValue: 1,
         duration: 350,
@@ -194,6 +279,7 @@ export function OrderConfirmation() {
     return (
       <Box flex={1} bg="gray.50" alignItems="center" justifyContent="center">
         <Spinner size="lg" color="blue.600" />
+
         <Text color="gray.600" mt={3}>
           Carregando seu pedido...
         </Text>
@@ -278,7 +364,7 @@ export function OrderConfirmation() {
             </HStack>
 
             <Text textAlign="center" color="gray.500" fontSize="sm" mt={3}>
-              Pedido #{order.id.slice(0, 8).toUpperCase()}
+              código: #{order.id.slice(0, 8).toUpperCase()}
             </Text>
 
             <Text
@@ -287,7 +373,7 @@ export function OrderConfirmation() {
               color="gray.800"
               mt={1}
             >
-              {order.store.name}
+              Vendido por: {order.store.name}
             </Text>
 
             <Text textAlign="center" color="gray.500" fontSize="xs" mt={1}>
@@ -305,8 +391,9 @@ export function OrderConfirmation() {
                 borderColor="blue.100"
               >
                 <Text fontSize="lg" fontWeight="bold" color="blue.900">
-                  Agora, vá até o estabelecimento... {'\n'}
-                  {'\n'}🟢 {order.store.name}
+                  Próximo passo, vá ao estabelecimento:
+                  {'\n\n'}
+                  📍 {order.store.name}
                 </Text>
 
                 <VStack space={3} mt={3}>
@@ -326,8 +413,57 @@ export function OrderConfirmation() {
                   />
                 </VStack>
 
-                <Button
+                <Pressable
                   mt={4}
+                  onPress={() => void handleOpenStoreMaps(order)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Como chegar à loja ${order.store.name}`}
+                  accessibilityHint="Abre a rota no Google Maps"
+                >
+                  {({ isPressed }) => (
+                    <HStack
+                      alignItems="center"
+                      space={3}
+                      px={4}
+                      py={4}
+                      minH={18}
+                      rounded="xl"
+                      bg={isPressed ? '#174EA6' : '#1A73E8'}
+                      style={{
+                        transform: [
+                          {
+                            scale: isPressed ? 0.98 : 1,
+                          },
+                        ],
+                      }}
+                    >
+                      <MaterialIcons
+                        name="directions"
+                        size={28}
+                        color="#FFFFFF"
+                      />
+
+                      <VStack flex={1} space={1}>
+                        <Text color="white" fontSize="md" fontWeight="bold">
+                          Como chegar
+                        </Text>
+
+                        <Text color="white" fontSize="xs">
+                          Ver rota no Google Maps
+                        </Text>
+                      </VStack>
+
+                      <MaterialIcons
+                        name="open-in-new"
+                        size={20}
+                        color="#FFFFFF"
+                      />
+                    </HStack>
+                  )}
+                </Pressable>
+                <Button
+                  mt={3}
+                  variant="outline"
                   colorScheme="blue"
                   rounded="xl"
                   onPress={() => navigation.navigate('orderHistory')}
@@ -364,7 +500,7 @@ export function OrderConfirmation() {
                 </Animated.View>
 
                 <Text color="purple.800" fontWeight="bold">
-                  pontos nesta loja
+                  pontos
                 </Text>
 
                 <Text
@@ -440,17 +576,19 @@ export function OrderConfirmation() {
                 <HStack key={item.id} space={3} alignItems="center">
                   {item.product.image ? (
                     <Image
-                      source={{ uri: item.product.image }}
+                      source={{
+                        uri: item.product.image,
+                      }}
                       alt={item.product.name}
-                      width={14}
-                      height={14}
+                      width={16}
+                      height={16}
                       rounded="lg"
                       resizeMode="contain"
                     />
                   ) : (
                     <Box
-                      width={14}
-                      height={14}
+                      width={16}
+                      height={16}
                       rounded="lg"
                       bg="gray.100"
                       alignItems="center"
@@ -487,6 +625,7 @@ export function OrderConfirmation() {
               <VStack space={2} mb={3}>
                 <HStack justifyContent="space-between">
                   <Text color="gray.600">Valor dos produtos</Text>
+
                   <Text>{formatCurrency(order.totalAmount)}</Text>
                 </HStack>
 

@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 
+import { Alert, FlatList, Linking } from 'react-native'
+
 import {
   Box,
   Text,
@@ -17,13 +19,11 @@ import {
 
 import { addDays, differenceInCalendarDays, format } from 'date-fns'
 
-import { api } from '@services/api'
-import { formatCurrency } from '@utils/format'
-
 import { useFocusEffect } from '@react-navigation/native'
 
+import { api } from '@services/api'
+import { formatCurrency } from '@utils/format'
 import { HomeScreen } from '@components/HomeScreen'
-import { FlatList } from 'react-native'
 
 interface Product {
   id: string
@@ -46,10 +46,13 @@ interface Order {
   status: string
   items: OrderItem[]
   pointsEarned?: number
+
   store?: {
     id: string
     name: string
     avatar?: string | null
+    latitude?: number | null
+    longitude?: number | null
   } | null
 }
 
@@ -67,10 +70,6 @@ const DEFAULT_PRODUCT_IMAGE = 'https://via.placeholder.com/80'
 const ORDER_EXPIRATION_DAYS = 30
 
 const STATUS_OPTIONS = [
-  /* {
-    value: '',
-    label: 'Todos',
-  }, */
   {
     value: 'PENDING',
     label: 'Pendente',
@@ -92,6 +91,10 @@ function calculateOrderPoints(order: Order) {
   return Math.floor(Math.max(valorPago, 0) / 10)
 }
 
+/*
+ * Avisos e cálculo do prazo preservados
+ * conforme a tela original.
+ */
 function getOrderExpirationInfo(order: Order): ExpirationInfo | null {
   if (order.status !== 'PENDING') {
     return null
@@ -172,13 +175,64 @@ function getOrderExpirationInfo(order: Order): ExpirationInfo | null {
   }
 }
 
+function parseCoordinate(value: unknown): number | null {
+  if (
+    value === null ||
+    value === undefined ||
+    (typeof value === 'string' && !value.trim())
+  ) {
+    return null
+  }
+
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    return null
+  }
+
+  const coordinate = Number(value)
+
+  return Number.isFinite(coordinate) ? coordinate : null
+}
+
+async function handleOpenStoreMaps(order: Order) {
+  const latitude = order.store?.latitude
+  const longitude = order.store?.longitude
+
+  if (
+    typeof latitude !== 'number' ||
+    typeof longitude !== 'number' ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    Math.abs(latitude) > 90 ||
+    Math.abs(longitude) > 180
+  ) {
+    Alert.alert(
+      'Localização indisponível',
+      'Esta loja ainda não possui uma localização válida cadastrada.',
+    )
+
+    return
+  }
+
+  const destination = encodeURIComponent(`${latitude},${longitude}`)
+
+  const url =
+    'https://www.google.com/maps/dir/?api=1' + `&destination=${destination}`
+
+  try {
+    await Linking.openURL(url)
+  } catch {
+    Alert.alert(
+      'Não foi possível abrir o mapa',
+      'Tente novamente em instantes.',
+    )
+  }
+}
+
 export function OrderHistory() {
   const [orders, setOrders] = useState<Order[]>([])
-
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
 
   const [loading, setLoading] = useState(true)
-
   const [selectedStatus, setSelectedStatus] = useState('PENDING')
 
   const [refreshing, setRefreshing] = useState(false)
@@ -202,22 +256,23 @@ export function OrderHistory() {
 
             const parsedOrder: Order = {
               id: order.id,
-
               createdAt: order.createdAt,
-
               totalAmount: total,
-
               discountApplied: discount,
-
               status: order.status,
-
               pointsEarned: order.pointsEarned,
 
               store: order.store
                 ? {
                     id: order.store.id ?? '',
+
                     name: order.store.name ?? 'Loja não identificada',
+
                     avatar: order.store.avatar ?? null,
+
+                    latitude: parseCoordinate(order.store.latitude),
+
+                    longitude: parseCoordinate(order.store.longitude),
                   }
                 : null,
 
@@ -237,6 +292,7 @@ export function OrderHistory() {
                 },
               })),
             }
+
             parsedOrder.pointsEarned =
               order.pointsEarned ?? calculateOrderPoints(parsedOrder)
 
@@ -269,7 +325,7 @@ export function OrderHistory() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchOrders()
+      void fetchOrders()
     }, [fetchOrders]),
   )
 
@@ -291,13 +347,10 @@ export function OrderHistory() {
     switch (status) {
       case 'PENDING':
         return 'warning'
-
       case 'VALIDATED':
         return 'success'
-
       case 'EXPIRED':
         return 'error'
-
       default:
         return 'coolGray'
     }
@@ -403,7 +456,9 @@ export function OrderHistory() {
                 <HStack alignItems="center" space={3} mb={3}>
                   {item.store?.avatar ? (
                     <Image
-                      source={{ uri: item.store.avatar }}
+                      source={{
+                        uri: item.store.avatar,
+                      }}
                       alt={item.store.name}
                       size="xs"
                       borderRadius="full"
@@ -428,12 +483,15 @@ export function OrderHistory() {
                     </Text>
 
                     <Text fontSize="xs" color="gray.500">
-                      Compra realizada em{' '}
-                      {format(new Date(item.createdAt), 'dd/MM/yyyy')}
+                      Pedido registrado em{' '}
+                      {Number.isNaN(new Date(item.createdAt).getTime())
+                        ? 'Data não informada'
+                        : format(new Date(item.createdAt), 'dd/MM/yyyy')}
                     </Text>
                   </VStack>
                 </HStack>
 
+                {/* Aviso original preservado */}
                 {expirationInfo && (
                   <Box
                     mb={4}
@@ -459,10 +517,40 @@ export function OrderHistory() {
                   </Box>
                 )}
 
+                {/* Novo botão para pedidos pendentes */}
+                {item.status === 'PENDING' && (
+                  <Pressable
+                    mb={4}
+                    onPress={() => void handleOpenStoreMaps(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Abrir rota até ${
+                      item.store?.name ?? 'a loja'
+                    } no Google Maps`}
+                  >
+                    {({ isPressed }) => (
+                      <Box
+                        px={4}
+                        py={3}
+                        borderRadius="lg"
+                        borderWidth={1}
+                        borderColor="blue.200"
+                        bg={isPressed ? 'blue.100' : 'blue.50'}
+                        alignItems="center"
+                      >
+                        <Text color="blue.700" fontWeight="bold">
+                          📍 Como chegar
+                        </Text>
+                      </Box>
+                    )}
+                  </Pressable>
+                )}
+
                 <VStack space={3} mb={3}>
                   {item.items.map((orderItem, index) => (
                     <HStack
-                      key={`order-${item.id}-item-${orderItem.id ?? index}`}
+                      key={
+                        `order-${item.id}-item-` + `${orderItem.id ?? index}`
+                      }
                       space={3}
                       alignItems="center"
                     >

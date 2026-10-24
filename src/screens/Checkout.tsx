@@ -226,12 +226,9 @@ export function Checkout() {
           cartItems.length > 0 ? (
             <VStack space={4} mt={3}>
               <Box bg="white" p={4} rounded="xl">
-                <HStack justifyContent="space-between">
-                  <Text color="gray.600">Subtotal</Text>
-
-                  <Text>{formatCurrency(subtotal)}</Text>
-                </HStack>
-
+                <Text color="red.500" fontSize="12" mt={2}>
+                  Pagamento somente na loja.
+                </Text>
                 <Divider my={3} />
 
                 <HStack justifyContent="space-between">
@@ -243,10 +240,6 @@ export function Checkout() {
                     {formatCurrency(total)}
                   </Text>
                 </HStack>
-
-                <Text color="red.500" fontSize="xs" mt={2}>
-                  Pagamento diretamente na loja.
-                </Text>
               </Box>
 
               <Box
@@ -257,11 +250,11 @@ export function Checkout() {
                 borderColor="purple.100"
               >
                 <Text color="purple.800" fontWeight="bold" fontSize="lg">
-                  Previsão: {pointsToEarn} pontos
+                  🪙 Acumule {pointsToEarn} pontos!
                 </Text>
 
                 <Text color="purple.700" fontSize="sm" mt={1}>
-                  Os pontos serão creditados após validar a compra.
+                  Só serão creditados após validar a compra.
                 </Text>
 
                 <Text color="purple.600" fontSize="14" mt={2}>
