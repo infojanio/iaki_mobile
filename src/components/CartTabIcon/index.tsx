@@ -34,7 +34,7 @@ export function CartTabIcon({ color, badgeCount = 0, size = 20 }: Props) {
             top: 0,
             right: 0,
 
-            backgroundColor: '#EF4444',
+            backgroundColor: '#dc0c0cff',
 
             borderRadius: 8,
 
@@ -52,8 +52,8 @@ export function CartTabIcon({ color, badgeCount = 0, size = 20 }: Props) {
             style={{
               color: '#fff',
 
-              fontSize: 8,
-              lineHeight: 10,
+              fontSize: 14,
+              lineHeight: 14,
 
               fontWeight: '700',
 

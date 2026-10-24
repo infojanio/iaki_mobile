@@ -438,19 +438,6 @@ export function Home() {
               <BusinessCategory />
             </View>
 
-            {/* LOJAS EM DESTAQUE */}
-
-            <View
-              style={{
-                marginTop: responsive.sectionGap,
-              }}
-            >
-              <FeaturedStores
-                stores={stores.slice(0, 10)}
-                isLoading={isLoadingStores}
-              />
-            </View>
-
             {/* BRINDES */}
 
             <View
@@ -463,6 +450,19 @@ export function Home() {
                 isLoading={isLoadingRewards}
                 onSeeAll={() => navigation.navigate('rewards')}
                 onPressReward={handleOpenReward}
+              />
+            </View>
+
+            {/* LOJAS EM DESTAQUE */}
+
+            <View
+              style={{
+                marginTop: responsive.sectionGap,
+              }}
+            >
+              <FeaturedStores
+                stores={stores.slice(0, 10)}
+                isLoading={isLoadingStores}
               />
             </View>
 

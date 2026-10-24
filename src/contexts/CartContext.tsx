@@ -195,7 +195,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   ============================== */
 
   const fetchCart = useCallback(
-    async (storeId: string) => {
+    async (storeId: string, storeNameHint?: string | null) => {
       if (!storeId) return
 
       const requestId = ++fetchRequestIdRef.current
@@ -237,7 +237,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
         setCartItems(normalizedItems)
         setActiveStoreId(storeId)
-        setActiveStoreName(cart?.storeName ?? cart?.store?.name ?? null)
+        const returnedStoreId = cart?.store?.id ?? cart?.storeId
+
+        if (returnedStoreId && returnedStoreId !== storeId) {
+          throw new Error('O carrinho retornado pertence a outra loja.')
+        }
+
+        const resolvedStoreName =
+          [cart?.store?.name, cart?.storeName, storeNameHint]
+            .find(
+              (value): value is string =>
+                typeof value === 'string' && value.trim().length > 0,
+            )
+            ?.trim() ?? null
+
+        setActiveStoreName(resolvedStoreName)
 
         setCartBadgeCount(
           normalizedItems.reduce((total, item) => total + item.quantity, 0),
@@ -284,6 +298,28 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const ensureStoreContext = useCallback(
     async (storeId: string): Promise<boolean> => {
+      if (!activeStoreId) {
+        fetchRequestIdRef.current += 1
+
+        setActiveStoreId(storeId)
+        setActiveStoreName(null)
+
+        return true
+      }
+
+      if (activeStoreId === storeId) {
+        return true
+      }
+
+      if (cartItemsRef.current.length === 0) {
+        fetchRequestIdRef.current += 1
+
+        setActiveStoreId(storeId)
+        setActiveStoreName(null)
+
+        return true
+      }
+
       if (!storeId) {
         return false
       }
@@ -700,27 +736,43 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return undefined
     }
 
+    const requestId = ++fetchRequestIdRef.current
+
     try {
       const openCart = await cartService.getOpenCart()
+
+      if (requestId !== fetchRequestIdRef.current) {
+        return undefined
+      }
 
       if (!openCart) {
         resetCartContext()
         return undefined
       }
 
-      setActiveStoreId(openCart.storeId)
-      setActiveStoreName(openCart.storeName ?? null)
+      const storeId = openCart.storeId ?? openCart.store?.id
 
-      await fetchCart(openCart.storeId)
+      if (!storeId) {
+        throw new Error('O carrinho não informou a loja.')
+      }
 
-      return openCart.storeId
+      const storeName =
+        [openCart.store?.name, openCart.storeName]
+          .find(
+            (value): value is string =>
+              typeof value === 'string' && value.trim().length > 0,
+          )
+          ?.trim() ?? null
+
+      // fetchCart atualiza os itens, a identificação e o nome juntos.
+      await fetchCart(storeId, storeName)
+
+      return storeId
     } catch (error) {
       console.error('[CartContext] syncOpenCart error:', error)
-
       throw error
     }
   }, [city?.id, fetchCart, resetCartContext])
-
   /* ==============================
      CHECKOUT
   ============================== */

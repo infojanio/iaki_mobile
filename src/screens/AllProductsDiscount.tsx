@@ -27,12 +27,12 @@ import { api } from '@services/api'
 
 import { ProductDTO } from '@dtos/ProductDTO'
 
-import { ProductCard } from '@components/ProductCard'
 import { HomeScreen } from '@components/HomeScreen'
 
 import { CartContext } from '@contexts/CartContext'
 
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
+import { ProductCard } from '@components/ProductCard'
 
 const ITEMS_PER_PAGE = 6
 

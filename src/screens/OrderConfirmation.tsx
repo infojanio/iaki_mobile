@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Animated } from 'react-native'
 import {
   Box,
   Text,
@@ -11,238 +12,555 @@ import {
   Badge,
   Divider,
 } from 'native-base'
-import { useRoute, useNavigation } from '@react-navigation/native'
-import { Animated } from 'react-native'
+import { useNavigation, useRoute } from '@react-navigation/native'
 
 import { api } from '@services/api'
 import { formatCurrency } from '@utils/format'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
-import { OrderDTO, OrderItemDTO } from '@dtos/OrderDTO'
 
-const DEFAULT_IMAGE = 'https://via.placeholder.com/80'
+type OrderItem = {
+  id: string
+  quantity: number
+  subtotal: number | null
+  product: {
+    id: string
+    name: string
+    image: string | null
+  }
+}
+
+type ConfirmationOrder = {
+  id: string
+  store: {
+    id: string
+    name: string
+  }
+  totalAmount: number
+  discountApplied: number
+  status: string
+  createdAt: string | null
+  items: OrderItem[]
+}
+
+function toNumber(value: unknown, fallback = 0) {
+  if (value === null || value === undefined || value === '') {
+    return fallback
+  }
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function formatDate(value: string | null) {
+  if (!value) return 'Não informada'
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Não informada'
+  }
+
+  return date.toLocaleDateString('pt-BR')
+}
+
+function getStatusInfo(status: string) {
+  switch (status) {
+    case 'PENDING':
+      return {
+        title: 'Pedido registrado!',
+        label: 'Aguardando validação',
+        color: 'warning',
+      }
+    case 'VALIDATED':
+      return {
+        title: 'Compra validada!',
+        label: 'Validado',
+        color: 'success',
+      }
+    case 'EXPIRED':
+      return {
+        title: 'Pedido encerrado',
+        label: 'Encerrado',
+        color: 'coolGray',
+      }
+    default:
+      return {
+        title: 'Detalhes do pedido',
+        label: 'Consulte o status na loja',
+        color: 'coolGray',
+      }
+  }
+}
 
 export function OrderConfirmation() {
   const route = useRoute<any>()
   const navigation = useNavigation<AppNavigatorRoutesProps>()
 
-  const { orderId, pointsEarned = 0 } = route.params
+  const orderId = route.params?.orderId as string | undefined
 
-  const [order, setOrder] = useState<OrderDTO | null>(null)
+  const [order, setOrder] = useState<ConfirmationOrder | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const scaleAnim = useRef(new Animated.Value(0)).current
+  const scaleAnim = useRef(new Animated.Value(0.85)).current
+  const opacityAnim = useRef(new Animated.Value(0)).current
 
-  useEffect(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 4,
-      tension: 120,
-      useNativeDriver: true,
-    }).start()
-  }, [])
+  const fetchOrder = useCallback(async () => {
+    setLoading(true)
 
-  useEffect(() => {
-    async function fetchOrder() {
-      if (!orderId) return
-
-      try {
-        const res = await api.get(`/orders/${orderId}`)
-        const data = res.data
-
-        const mapped: OrderDTO = {
-          id: data.id,
-          store: {
-            id: data.store?.id ?? '',
-            name: data.store?.name ?? 'Loja não identificada',
-          },
-          totalAmount: Number(data.totalAmount ?? 0),
-          discountApplied: Number(data.discountApplied ?? 0),
-          status: data.status,
-          created_at:
-            data.created_at ?? data.createdAt ?? new Date().toISOString(),
-          validated_at: data.validated_at ?? null,
-          items: (data.items ?? []).map(
-            (item: any): OrderItemDTO => ({
-              id: item.id ?? `${data.id}-item-${item.product?.id ?? ''}`,
-              quantity: Number(item.quantity ?? 0),
-              product: {
-                id: item.product?.id ?? '',
-                name: item.product?.name ?? 'Produto desconhecido',
-                price: Number(item.product?.price ?? 0),
-                image: item.product?.image ?? DEFAULT_IMAGE,
-                cashbackPercentage: 0,
-              },
-            }),
-          ),
-        }
-
-        setOrder(mapped)
-      } catch (err) {
-        console.error('Erro ao buscar pedido:', err)
-        setOrder(null)
-      } finally {
-        setLoading(false)
-      }
+    if (!orderId) {
+      setOrder(null)
+      setLoading(false)
+      return
     }
 
-    fetchOrder()
+    try {
+      const response = await api.get(`/orders/${orderId}`)
+      const data = response.data?.order ?? response.data
+      if (!data?.id) {
+        throw new Error('Pedido não encontrado.')
+      }
+
+      const mapped: ConfirmationOrder = {
+        id: data.id,
+        store: {
+          id: data.store?.id ?? data.storeId ?? '',
+          name:
+            typeof data.store?.name === 'string' && data.store.name.trim()
+              ? data.store.name.trim()
+              : 'Loja não identificada',
+        },
+        totalAmount: toNumber(data.totalAmount),
+        discountApplied: toNumber(data.discountApplied),
+        status: data.status ?? '',
+        createdAt: data.created_at ?? data.createdAt ?? null,
+        items: (Array.isArray(data.items) ? data.items : []).map(
+          (item: any, index: number): OrderItem => ({
+            id: item.id ?? `${data.id}-item-${index}`,
+            quantity: toNumber(item.quantity),
+            // Usa o valor registrado no pedido, sem recalcular
+            // pelo preço atual do catálogo.
+            subtotal:
+              item.subtotal === null || item.subtotal === undefined
+                ? null
+                : toNumber(item.subtotal),
+            product: {
+              id: item.product?.id ?? '',
+              name: item.product?.name ?? 'Produto indisponível',
+              image: item.product?.image ?? null,
+            },
+          }),
+        ),
+      }
+
+      setOrder(mapped)
+    } catch (error) {
+      console.error('[OrderConfirmation] Erro ao buscar pedido:', error)
+      setOrder(null)
+    } finally {
+      setLoading(false)
+    }
   }, [orderId])
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return 'warning'
-      case 'VALIDATED':
-        return 'success'
-      case 'EXPIRED':
-        return 'error'
-      default:
-        return 'coolGray'
-    }
-  }
+  useEffect(() => {
+    void fetchOrder()
+  }, [fetchOrder])
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return 'Pendente'
-      case 'VALIDATED':
-        return 'Validado'
-      case 'EXPIRED':
-        return 'Cancelado'
-      default:
-        return status
-    }
-  }
+  useEffect(() => {
+    if (loading || !order) return
+
+    scaleAnim.setValue(0.85)
+    opacityAnim.setValue(0)
+
+    const animation = Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 5,
+        tension: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: true,
+      }),
+    ])
+
+    animation.start()
+
+    return () => animation.stop()
+  }, [loading, order, scaleAnim, opacityAnim])
 
   if (loading) {
-    return <Spinner size="lg" mt={8} />
+    return (
+      <Box flex={1} bg="gray.50" alignItems="center" justifyContent="center">
+        <Spinner size="lg" color="blue.600" />
+        <Text color="gray.600" mt={3}>
+          Carregando seu pedido...
+        </Text>
+      </Box>
+    )
   }
 
   if (!order) {
     return (
-      <Box flex={1} alignItems="center" justifyContent="center" p={4}>
-        <Text fontSize="lg" color="gray.500">
-          Pedido não encontrado ou erro ao carregar.
+      <Box
+        flex={1}
+        bg="gray.50"
+        alignItems="center"
+        justifyContent="center"
+        p={6}
+        safeArea
+      >
+        <Text fontSize="lg" fontWeight="bold" textAlign="center">
+          Não conseguimos carregar o pedido
         </Text>
-        <Button mt={4} onPress={() => navigation.goBack()}>
-          Voltar
+
+        <Text color="gray.600" textAlign="center" mt={2}>
+          Tente novamente ou consulte seus pedidos.
+        </Text>
+
+        <Button mt={5} onPress={() => void fetchOrder()}>
+          Tentar novamente
+        </Button>
+
+        <Button
+          mt={3}
+          variant="outline"
+          onPress={() => navigation.navigate('orderHistory')}
+        >
+          Meus pedidos
         </Button>
       </Box>
     )
   }
 
+  const isPending = order.status === 'PENDING'
+  const isValidated = order.status === 'VALIDATED'
+  const isExpired = order.status === 'EXPIRED'
+
+  const statusInfo = getStatusInfo(order.status)
+
+  const netAmount = Math.max(order.totalAmount - order.discountApplied, 0)
+
+  const estimatedPoints = Math.floor(netAmount / 10)
+
   return (
-    <ScrollView flex={1} bg="gray.50" p={4}>
-      <VStack space={6} bg="white" p={5} borderRadius="xl" shadow={2}>
-        {/* 🎉 Header */}
-        <HStack justifyContent="space-between" alignItems="center">
-          <Text fontSize="xl" fontWeight="bold">
-            🎉 Pedido Confirmado!
-          </Text>
-          <Badge colorScheme={getStatusColor(order.status)}>
-            {getStatusText(order.status)}
-          </Badge>
-        </HStack>
-
-        <Text color="gray.500">
-          Pedido #{order.id.substring(0, 8).toUpperCase()}
-        </Text>
-
-        <Text color="gray.600" fontSize="sm">
-          Loja: {order.store.name}
-        </Text>
-
-        <Text color="gray.500">
-          Data: {new Date(order.created_at).toLocaleDateString('pt-BR')}
-        </Text>
-
-        {/* 🪙 BLOCO DE PONTOS */}
-        <Box
-          bg="purple.50"
-          p={6}
-          borderRadius="2xl"
-          alignItems="center"
-          borderWidth={1}
-          borderColor="purple.200"
-        >
-          <Animated.View
-            style={{
-              transform: [{ scale: scaleAnim }],
-            }}
-          >
-            <Text fontSize="60" fontWeight="bold" color="purple.600">
-              +{pointsEarned}
-            </Text>
-          </Animated.View>
-
-          <Text fontSize="md" color="purple.700" mt={2}>
-            Pontos ganhos nesta compra 🪙
-          </Text>
-
-          <Text fontSize="xs" color="purple.500">
-            Continue comprando para subir de nível 🚀
-          </Text>
-        </Box>
-
-        <Divider />
-
-        {/* 📦 Itens */}
-        <Text fontSize="lg" fontWeight="bold">
-          Itens do Pedido
-        </Text>
-
+    <Box flex={1} bg="gray.50" safeAreaTop>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: 32,
+        }}
+      >
         <VStack space={4}>
-          {order.items.map((item: OrderItemDTO, index: number) => (
-            <HStack
-              key={`${order.id}-item-${index}`}
-              space={3}
-              alignItems="center"
+          <Box bg="white" p={5} rounded="2xl">
+            <Animated.View
+              style={{
+                opacity: opacityAnim,
+                transform: [{ scale: scaleAnim }],
+              }}
             >
-              <Image
-                source={{ uri: item.product.image ?? DEFAULT_IMAGE }}
-                alt={item.product.name}
-                size="sm"
-                borderRadius="md"
-              />
-              <VStack flex={1}>
-                <Text fontWeight="bold">{item.product.name}</Text>
-                <Text color="gray.500">
-                  {item.quantity}x {formatCurrency(item.product.price)}
-                </Text>
-              </VStack>
-
-              <Text fontWeight="bold">
-                {formatCurrency(item.product.price * item.quantity)}
+              <Text
+                textAlign="center"
+                fontSize="2xl"
+                fontWeight="bold"
+                color={isValidated ? 'green.700' : 'blue.800'}
+              >
+                {statusInfo.title}
               </Text>
+            </Animated.View>
+
+            <HStack justifyContent="center" mt={3}>
+              <Badge colorScheme={statusInfo.color} rounded="md" px={3} py={1}>
+                {statusInfo.label}
+              </Badge>
             </HStack>
-          ))}
+
+            <Text textAlign="center" color="gray.500" fontSize="sm" mt={3}>
+              Pedido #{order.id.slice(0, 8).toUpperCase()}
+            </Text>
+
+            <Text
+              textAlign="center"
+              fontWeight="semibold"
+              color="gray.800"
+              mt={1}
+            >
+              {order.store.name}
+            </Text>
+
+            <Text textAlign="center" color="gray.500" fontSize="xs" mt={1}>
+              Registrado em {formatDate(order.createdAt)}
+            </Text>
+          </Box>
+
+          {isPending && (
+            <>
+              <Box
+                bg="blue.50"
+                p={5}
+                rounded="2xl"
+                borderWidth={1}
+                borderColor="blue.100"
+              >
+                <Text fontSize="lg" fontWeight="bold" color="blue.900">
+                  Agora, vá até o estabelecimento... {'\n'}
+                  {'\n'}🟢 {order.store.name}
+                </Text>
+
+                <VStack space={3} mt={3}>
+                  <NextStep
+                    number="1"
+                    text="Confira a disponibilidade dos produtos."
+                  />
+
+                  <NextStep
+                    number="2"
+                    text="Faça o pagamento no estabelecimento."
+                  />
+
+                  <NextStep
+                    number="3"
+                    text="Apresente o código ao atendente e peça a validação dos pontos."
+                  />
+                </VStack>
+
+                <Button
+                  mt={4}
+                  colorScheme="blue"
+                  rounded="xl"
+                  onPress={() => navigation.navigate('orderHistory')}
+                >
+                  Meus pedidos
+                </Button>
+
+                <Text color="blue.800" fontSize="xs" mt={3}>
+                  Este pedido não reserva nem separa os produtos.
+                </Text>
+              </Box>
+
+              <Box
+                bg="purple.50"
+                p={5}
+                rounded="2xl"
+                borderWidth={1}
+                borderColor="purple.100"
+                alignItems="center"
+              >
+                <Text color="purple.700" fontSize="sm">
+                  Você poderá receber
+                </Text>
+
+                <Animated.View
+                  style={{
+                    opacity: opacityAnim,
+                    transform: [{ scale: scaleAnim }],
+                  }}
+                >
+                  <Text fontSize="5xl" fontWeight="bold" color="purple.700">
+                    {estimatedPoints}
+                  </Text>
+                </Animated.View>
+
+                <Text color="purple.800" fontWeight="bold">
+                  pontos nesta loja
+                </Text>
+
+                <Text
+                  color="purple.700"
+                  fontSize="sm"
+                  textAlign="center"
+                  mt={2}
+                >
+                  Aguardando a validação da compra.
+                </Text>
+
+                <Text
+                  color="purple.600"
+                  fontSize="xs"
+                  textAlign="center"
+                  mt={2}
+                >
+                  Estimativa de 1 ponto a cada R$ 10 pagos.
+                </Text>
+              </Box>
+            </>
+          )}
+
+          {isValidated && (
+            <Box
+              bg="green.50"
+              p={5}
+              rounded="2xl"
+              borderWidth={1}
+              borderColor="green.200"
+            >
+              <Text color="green.800" fontWeight="bold" fontSize="lg">
+                Compra concluída
+              </Text>
+
+              <Text color="green.800" fontSize="sm" mt={2}>
+                Consulte seu saldo de pontos nesta loja.
+              </Text>
+
+              <Text color="green.800" fontSize="sm" mt={2}>
+                Para trocar seus pontos, abra a loja no aplicativo e acesse a
+                seção Brindes.
+              </Text>
+            </Box>
+          )}
+
+          {isExpired && (
+            <Box
+              bg="orange.50"
+              p={5}
+              rounded="2xl"
+              borderWidth={1}
+              borderColor="orange.200"
+            >
+              <Text color="orange.900" fontWeight="bold">
+                Este pedido não pode mais ser validado
+              </Text>
+
+              <Text color="orange.800" fontSize="sm" mt={2}>
+                Para realizar a compra, adicione os produtos ao carrinho e
+                registre um novo pedido.
+              </Text>
+            </Box>
+          )}
+
+          <Box bg="white" p={5} rounded="2xl">
+            <Text fontSize="md" fontWeight="bold" mb={4}>
+              Resumo dos produtos
+            </Text>
+
+            <VStack space={4}>
+              {order.items.map((item) => (
+                <HStack key={item.id} space={3} alignItems="center">
+                  {item.product.image ? (
+                    <Image
+                      source={{ uri: item.product.image }}
+                      alt={item.product.name}
+                      width={14}
+                      height={14}
+                      rounded="lg"
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <Box
+                      width={14}
+                      height={14}
+                      rounded="lg"
+                      bg="gray.100"
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      <Text color="gray.500" fontSize="xs">
+                        Sem foto
+                      </Text>
+                    </Box>
+                  )}
+
+                  <VStack flex={1}>
+                    <Text fontWeight="semibold" numberOfLines={2}>
+                      {item.product.name}
+                    </Text>
+
+                    <Text color="gray.500" fontSize="xs" mt={1}>
+                      Quantidade: {item.quantity}
+                    </Text>
+                  </VStack>
+
+                  {item.subtotal !== null && (
+                    <Text fontWeight="bold" fontSize="sm">
+                      {formatCurrency(item.subtotal)}
+                    </Text>
+                  )}
+                </HStack>
+              ))}
+            </VStack>
+
+            <Divider my={4} />
+
+            {order.discountApplied > 0 && (
+              <VStack space={2} mb={3}>
+                <HStack justifyContent="space-between">
+                  <Text color="gray.600">Valor dos produtos</Text>
+                  <Text>{formatCurrency(order.totalAmount)}</Text>
+                </HStack>
+
+                <HStack justifyContent="space-between">
+                  <Text color="green.700">Desconto registrado</Text>
+
+                  <Text color="green.700">
+                    -{formatCurrency(order.discountApplied)}
+                  </Text>
+                </HStack>
+              </VStack>
+            )}
+
+            <HStack justifyContent="space-between">
+              <Text fontWeight="bold">Valor do pedido</Text>
+
+              <Text fontWeight="bold">{formatCurrency(netAmount)}</Text>
+            </HStack>
+
+            {isPending && (
+              <Text color="gray.500" fontSize="xs" mt={2}>
+                Pagamento diretamente na loja.
+              </Text>
+            )}
+          </Box>
+
+          {!isPending && (
+            <Button
+              colorScheme="blue"
+              rounded="xl"
+              onPress={() => navigation.navigate('orderHistory')}
+            >
+              Meus pedidos
+            </Button>
+          )}
+
+          <Button
+            variant="outline"
+            colorScheme="blue"
+            rounded="xl"
+            onPress={() => navigation.navigate('home')}
+          >
+            Voltar ao início
+          </Button>
         </VStack>
+      </ScrollView>
+    </Box>
+  )
+}
 
-        <Divider />
+type NextStepProps = {
+  number: string
+  text: string
+}
 
-        {/* 💰 Total */}
-        <HStack justifyContent="space-between">
-          <Text fontWeight="bold">Total Pago:</Text>
-          <Text fontWeight="bold">{formatCurrency(order.totalAmount)}</Text>
-        </HStack>
+function NextStep({ number, text }: NextStepProps) {
+  return (
+    <HStack space={3} alignItems="flex-start">
+      <Box
+        width={6}
+        height={6}
+        rounded="full"
+        bg="blue.700"
+        alignItems="center"
+        justifyContent="center"
+      >
+        <Text color="white" fontWeight="bold" fontSize="xs">
+          {number}
+        </Text>
+      </Box>
 
-        <Button
-          mt={4}
-          colorScheme="blue"
-          rounded="xl"
-          onPress={() => navigation.navigate('home')}
-        >
-          Continuar Comprando 🚀
-        </Button>
-
-        <Button
-          variant="outline"
-          rounded="xl"
-          onPress={() => navigation.navigate('orderHistory')}
-        >
-          Ver Histórico
-        </Button>
-      </VStack>
-    </ScrollView>
+      <Text flex={1} color="blue.900" fontSize="sm">
+        {text}
+      </Text>
+    </HStack>
   )
 }
