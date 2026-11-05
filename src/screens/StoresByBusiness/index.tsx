@@ -1,6 +1,11 @@
-import { useContext, useEffect, useState } from 'react'
 import { Box, Text, VStack, useToast } from 'native-base'
-import { useRoute, useNavigation } from '@react-navigation/native'
+import { useCallback, useContext, useRef, useState } from 'react'
+import {
+  useFocusEffect,
+  useRoute,
+  useNavigation,
+} from '@react-navigation/native'
+import { AppState, FlatList } from 'react-native'
 
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
@@ -10,8 +15,7 @@ import { Loading } from '@components/Loading'
 import { StoreCard } from '@components/Store/StoreCard'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CityContext } from '@contexts/CityContext'
-import { BackHome } from '@components/BackHome'
-import { FlatList } from 'react-native'
+
 import { HomeScreen } from '@components/HomeScreen'
 
 type RouteParams = {
@@ -35,42 +39,72 @@ export function StoresByBusiness() {
     })
   }
 
-  async function fetchStores() {
-    if (!businessCategoryId || !city?.id) {
-      setStores([])
-      setIsLoading(false)
-      return
-    }
+  const cityId = city?.id
+  const requestIdRef = useRef(0)
+  const [refreshing, setRefreshing] = useState(false)
 
-    try {
-      setIsLoading(true)
+  const fetchStores = useCallback(
+    async (mode: 'loading' | 'refresh' | 'silent' = 'silent') => {
+      const requestId = ++requestIdRef.current
 
-      const response = await api.get(
-        `/stores/city/${city?.id}/category/${businessCategoryId}`,
-      )
+      setIsLoading(mode === 'loading')
+      setRefreshing(mode === 'refresh')
 
-      //const response = await api.get(`/stores/business/:categoryId/city/:cityId}`)
+      if (!cityId || !businessCategoryId) {
+        setStores([])
+        setIsLoading(false)
+        setRefreshing(false)
+        return
+      }
 
-      setStores(response.data)
-    } catch (error) {
-      const title =
-        error instanceof AppError
-          ? error.message
-          : 'Não foi possível carregar as lojas'
+      try {
+        const { data } = await api.get<StoreDTO[]>(
+          `/stores/city/${cityId}/category/${businessCategoryId}`,
+        )
 
-      toast.show({
-        title,
-        placement: 'top',
-        bgColor: 'red.500',
+        if (requestId === requestIdRef.current) {
+          setStores(data)
+        }
+      } catch (error) {
+        if (requestId !== requestIdRef.current || mode === 'silent') return
+
+        toast.show({
+          title:
+            error instanceof AppError
+              ? error.message
+              : 'Não foi possível carregar as lojas',
+          placement: 'top',
+          bgColor: 'red.500',
+        })
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setIsLoading(false)
+          setRefreshing(false)
+        }
+      }
+    },
+    [businessCategoryId, cityId, toast],
+  )
+
+  useFocusEffect(
+    useCallback(() => {
+      void fetchStores('loading')
+
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') void fetchStores()
       })
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
-  useEffect(() => {
-    fetchStores()
-  }, [businessCategoryId, city?.id])
+      const interval = setInterval(() => {
+        if (AppState.currentState === 'active') void fetchStores()
+      }, 15_000)
+
+      return () => {
+        requestIdRef.current += 1
+        subscription.remove()
+        clearInterval(interval)
+      }
+    }, [fetchStores]),
+  )
 
   return (
     <VStack flex={1} bg="gray.100" safeArea>
@@ -83,6 +117,8 @@ export function StoresByBusiness() {
           data={stores}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 8 }}
+          refreshing={refreshing}
+          onRefresh={() => void fetchStores('refresh')}
           renderItem={({ item }) => (
             <StoreCard store={item} onPress={() => handleOpenStore(item.id)} />
           )}

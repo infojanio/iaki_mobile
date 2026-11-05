@@ -1,58 +1,63 @@
 import React, {
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react'
-import { FlatList } from 'react-native'
+import {
+  AppState,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  TextInput,
+} from 'react-native'
 import { Box, HStack, Icon, Text, VStack, useToast } from 'native-base'
-import { TextInput, StyleSheet, Pressable, RefreshControl } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { MaterialIcons } from '@expo/vector-icons'
 import debounce from 'lodash.debounce'
 
-//add produto carrinho
 import { CartContext } from '@contexts/CartContext'
+import { CityContext } from '@contexts/CityContext'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
-
 import { api } from '@services/api'
 import { AppError } from '@utils/AppError'
 import { ProductDTO } from '@dtos/ProductDTO'
 import { ProductCard } from '@components/ProductCard'
 import { Loading } from '@components/Loading'
 import { HomeScreen } from '@components/HomeScreen'
-import { CityContext } from '@contexts/CityContext'
 
 const PAGE_SIZE = 24
 const SEARCH_DEBOUNCE_MS = 450
 
-const removeAccents = (str: string) =>
-  str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+type LoadMode = 'initial' | 'search' | 'refresh' | 'background' | 'more'
 
-const makeTmpId = (seed: string, page: number, idx: number) =>
-  `tmp-${page}-${idx}-${(seed || 'x').slice(0, 6)}`
+function normalizeQuery(text: string) {
+  return text
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
 
-const normalizeProducts = (raw: ProductDTO[], currentPage: number) =>
-  (raw || []).map((p, idx) => {
-    const base = String((p as any)?.id ?? (p as any)?._id ?? '')
-    const safeId = base || makeTmpId(p?.name ?? '', currentPage, idx)
+function normalizeProducts(raw: unknown): ProductDTO[] {
+  if (!Array.isArray(raw)) return []
 
-    return {
-      ...p,
-      id: safeId,
-    }
+  return raw.flatMap((product) => {
+    const id = product?.id ?? product?._id
+    return id ? [{ ...product, id: String(id) }] : []
   })
+}
 
 export function SearchProducts() {
   const toast = useToast()
-  const inputRef = useRef<TextInput>(null)
+  const toastRef = useRef(toast)
+  toastRef.current = toast
 
-  const { city } = useContext(CityContext)
-
-  //add produto carrinho
   const navigation = useNavigation<AppNavigatorRoutesProps>()
+  const { city } = useContext(CityContext)
+  const cityId = city?.id
+
   const {
     cartItems,
     activeStoreId,
@@ -61,66 +66,59 @@ export function SearchProducts() {
     decrementProduct,
   } = useContext(CartContext)
 
-  const [updatingProductIds, setUpdatingProductIds] = useState<string[]>([])
+  const inputRef = useRef<TextInput>(null)
+  const queryRef = useRef('')
+  const requestRef = useRef<AbortController | null>(null)
+  const pendingSearchRef = useRef(false)
+  const productLocksRef = useRef(new Set<string>())
+
   const [searchTerm, setSearchTerm] = useState('')
   const [activeQuery, setActiveQuery] = useState('')
   const [products, setProducts] = useState<ProductDTO[]>([])
-
   const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
-
+  const [hasMore, setHasMore] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [isSearching, setIsSearching] = useState(false)
-
-  const requestControllerRef = useRef<AbortController | null>(null)
-  const requestSequenceRef = useRef(0)
-  const loadingMoreRef = useRef(false)
-
-  //add produto carrinho
-  const handleOpenProductDetails = (productId: string) => {
-    navigation.navigate('productDetails', { productId })
-  }
-
-  useFocusEffect(
-    useCallback(() => {
-      setTimeout(() => inputRef.current?.focus(), 150)
-    }, []),
-  )
+  const [updatingProductIds, setUpdatingProductIds] = useState<string[]>([])
 
   const loadProducts = useCallback(
-    async (pageNumber = 1, shouldRefresh = false, query = activeQuery) => {
-      if (!city?.id) {
+    async (pageNumber: number, mode: LoadMode, query = queryRef.current) => {
+      if (!cityId) {
+        requestRef.current?.abort()
+        requestRef.current = null
         setProducts([])
+        setPage(1)
+        setHasMore(false)
         setIsLoading(false)
+        setIsLoadingMore(false)
+        setIsRefreshing(false)
         return
       }
 
-      if (pageNumber > 1 && loadingMoreRef.current) return
+      if (
+        (mode === 'more' || mode === 'background') &&
+        (requestRef.current || pendingSearchRef.current)
+      ) {
+        return
+      }
 
-      if (pageNumber === 1) requestControllerRef.current?.abort()
+      requestRef.current?.abort()
 
       const controller = new AbortController()
-      requestControllerRef.current = controller
-      const requestSequence = ++requestSequenceRef.current
+      requestRef.current = controller
+
+      setIsLoading(mode === 'initial' || mode === 'search')
+      setIsLoadingMore(mode === 'more')
+      setIsRefreshing(mode === 'refresh')
 
       try {
-        if (pageNumber === 1 && !shouldRefresh) {
-          setIsLoading(true)
-        }
-
-        if (pageNumber > 1) {
-          loadingMoreRef.current = true
-          setIsLoadingMore(true)
-        }
-
-        const response = await api.get(
+        const { data } = await api.get(
           query ? '/products/search' : '/products/active',
           {
             signal: controller.signal,
             params: {
-              cityId: city.id,
+              cityId,
               page: pageNumber,
               pageSize: PAGE_SIZE,
               ...(query ? { query } : {}),
@@ -128,300 +126,236 @@ export function SearchProducts() {
           },
         )
 
-        if (requestSequence !== requestSequenceRef.current) return
-
-        const responseData =
-          response.data?.products ?? response.data?.data ?? response.data ?? []
-        const fetched = normalizeProducts(
-          Array.isArray(responseData) ? responseData : [],
-          pageNumber,
-        )
-
-        setProducts((current) => {
-          if (pageNumber === 1) return fetched
-
-          const knownIds = new Set(current.map((product) => product.id))
-          return [
-            ...current,
-            ...fetched.filter((product) => !knownIds.has(product.id)),
-          ]
-        })
-
-        const pagination = response.data?.pagination ?? response.data?.meta
-        const totalPages = Number(pagination?.totalPages ?? 0)
-
-        setHasMore(
-          totalPages > 0
-            ? pageNumber < totalPages
-            : fetched.length === PAGE_SIZE,
-        )
-        setPage(pageNumber)
-      } catch (error: any) {
         if (
-          error?.name === 'CanceledError' ||
-          error?.name === 'AbortError' ||
-          error?.code === 'ERR_CANCELED'
+          controller.signal.aborted ||
+          requestRef.current !== controller ||
+          query !== queryRef.current
         ) {
           return
         }
 
-        const title =
-          error instanceof AppError
-            ? error.message
-            : 'Erro ao carregar produtos.'
+        const raw = data?.products ?? data?.data ?? data ?? []
+        const fetched = normalizeProducts(raw)
+        const pagination = data?.pagination ?? data?.meta
+        const totalPages = Number(pagination?.totalPages ?? 0)
 
-        toast.show({
-          title,
+        setProducts((current) => {
+          const merged = new Map<string, ProductDTO>()
+
+          if (pageNumber > 1) {
+            current.forEach((product) => merged.set(product.id, product))
+          }
+
+          fetched.forEach((product) => merged.set(product.id, product))
+
+          return [...merged.values()]
+        })
+
+        setActiveQuery(query)
+        setPage(pageNumber)
+        setHasMore(
+          totalPages > 0
+            ? pageNumber < totalPages
+            : Array.isArray(raw) && raw.length >= PAGE_SIZE,
+        )
+      } catch (error) {
+        if (
+          controller.signal.aborted ||
+          requestRef.current !== controller ||
+          mode === 'background'
+        ) {
+          return
+        }
+
+        toastRef.current.show({
+          title:
+            error instanceof AppError
+              ? error.message
+              : 'Erro ao carregar produtos.',
           placement: 'top',
           bgColor: 'red.500',
         })
-
-        if (pageNumber === 1) {
-          setProducts([])
-        }
-
-        setHasMore(false)
       } finally {
-        if (requestSequence === requestSequenceRef.current) {
+        if (requestRef.current === controller) {
+          requestRef.current = null
           setIsLoading(false)
           setIsLoadingMore(false)
           setIsRefreshing(false)
         }
-
-        loadingMoreRef.current = false
       }
     },
-    [activeQuery, city?.id, toast],
+    [cityId],
   )
 
   const searchProducts = useMemo(
     () =>
       debounce((query: string) => {
-        setActiveQuery(query)
-        setIsSearching(Boolean(query))
-        setPage(1)
-        setHasMore(true)
-        void loadProducts(1, false, query)
+        pendingSearchRef.current = false
+        void loadProducts(1, 'search', query)
       }, SEARCH_DEBOUNCE_MS),
     [loadProducts],
   )
 
+  useFocusEffect(
+    useCallback(() => {
+      void loadProducts(1, 'initial')
+
+      const focusTimer = setTimeout(() => {
+        inputRef.current?.focus()
+      }, 150)
+
+      let previousState = AppState.currentState
+
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active' && previousState !== 'active') {
+          void loadProducts(1, 'background')
+        }
+
+        previousState = state
+      })
+
+      return () => {
+        clearTimeout(focusTimer)
+        subscription.remove()
+        searchProducts.cancel()
+        pendingSearchRef.current = false
+
+        const request = requestRef.current
+        requestRef.current = null
+        request?.abort()
+      }
+    }, [loadProducts, searchProducts]),
+  )
+
   function handleSearchChange(text: string) {
+    const query = normalizeQuery(text)
+
     setSearchTerm(text)
 
-    const formattedQuery = removeAccents(text.trim())
+    if (query === queryRef.current) return
 
-    if (!formattedQuery) {
-      searchProducts.cancel()
-      setActiveQuery('')
-      setIsSearching(false)
-      setHasMore(true)
-      void loadProducts(1, false, '')
+    queryRef.current = query
+    pendingSearchRef.current = Boolean(query)
+    searchProducts.cancel()
+
+    const request = requestRef.current
+    requestRef.current = null
+    request?.abort()
+
+    setProducts([])
+    setActiveQuery(query)
+    setPage(1)
+    setHasMore(false)
+    setIsLoadingMore(false)
+    setIsRefreshing(false)
+
+    if (!query) {
+      void loadProducts(1, 'search', '')
       return
     }
 
-    searchProducts(formattedQuery)
+    setIsLoading(true)
+    searchProducts(query)
   }
 
-  function handleClearSearch() {
-    setSearchTerm('')
+  function handleRefresh() {
     searchProducts.cancel()
-    setActiveQuery('')
-    setIsSearching(false)
-    setHasMore(true)
-    void loadProducts(1, false, '')
+    pendingSearchRef.current = false
+    void loadProducts(1, 'refresh')
   }
 
   function handleLoadMore() {
-    if (loadingMoreRef.current || isLoading || !hasMore) return
-
-    void loadProducts(page + 1, false, activeQuery)
-  }
-
-  async function handleRefresh() {
-    setIsRefreshing(true)
-    searchProducts.cancel()
-    setHasMore(true)
-    await loadProducts(1, true, activeQuery)
-  }
-
-  useEffect(() => {
-    setSearchTerm('')
-    setActiveQuery('')
-    setIsSearching(false)
-    setPage(1)
-    setHasMore(true)
-    void loadProducts(1, false, '')
-
-    return () => {
-      searchProducts.cancel()
-      requestControllerRef.current?.abort()
+    if (
+      !hasMore ||
+      isLoading ||
+      isRefreshing ||
+      requestRef.current ||
+      pendingSearchRef.current
+    ) {
+      return
     }
-  }, [city?.id])
 
-  const cartQuantityByProductId = useMemo(() => {
-    const quantities = new Map<string, number>()
+    void loadProducts(page + 1, 'more', activeQuery)
+  }
 
-    if (!activeStoreId) return quantities
-
-    cartItems.forEach((item) => {
-      quantities.set(item.productId, item.quantity)
-    })
-
-    return quantities
-  }, [activeStoreId, cartItems])
-
-  const updatingProductIdSet = useMemo(
-    () => new Set(updatingProductIds),
-    [updatingProductIds],
+  const cartQuantityByProductId = useMemo(
+    () => new Map(cartItems.map((item) => [item.productId, item.quantity])),
+    [cartItems],
   )
 
-  //funções para adicionar e remover produtos diretamente no carrinho:
-  function getProductStoreId(currentProduct: ProductDTO) {
-    return currentProduct.storeId ?? currentProduct.store?.id ?? null
+  function getProductStoreId(product: ProductDTO) {
+    return product.storeId ?? product.store?.id ?? null
   }
 
-  function getCartQuantity(currentProduct: ProductDTO) {
-    const productStoreId = getProductStoreId(currentProduct)
+  function getCartQuantity(product: ProductDTO) {
+    const storeId = getProductStoreId(product)
 
-    if (!productStoreId || activeStoreId !== productStoreId) {
-      return 0
-    }
+    if (!storeId || storeId !== activeStoreId) return 0
 
-    return cartQuantityByProductId.get(currentProduct.id) ?? 0
+    return cartQuantityByProductId.get(product.id) ?? 0
   }
 
-  function isProductUpdating(productId: string) {
-    return updatingProductIdSet.has(productId)
-  }
+  async function updateProductQuantity(
+    product: ProductDTO,
+    action: 'increment' | 'decrement',
+  ) {
+    if (productLocksRef.current.has(product.id)) return
 
-  function setProductUpdating(productId: string, updating: boolean) {
-    setUpdatingProductIds((current) => {
-      if (updating) {
-        if (current.includes(productId)) {
-          return current
-        }
+    const quantity = getCartQuantity(product)
+    const storeId = getProductStoreId(product)
 
-        return [...current, productId]
+    if (action === 'decrement' && quantity <= 0) return
+
+    if (action === 'increment') {
+      if (!storeId) {
+        toast.show({
+          title: 'Não foi possível identificar a loja',
+          description: 'Atualize a tela e tente novamente.',
+          placement: 'top',
+          bgColor: 'red.500',
+        })
+        return
       }
 
-      return current.filter((id) => id !== productId)
-    })
-  }
+      const stock = Number(product.quantity ?? 0)
 
-  async function handleIncrementProduct(currentProduct: ProductDTO) {
-    if (isProductUpdating(currentProduct.id)) {
-      return
+      if (!Number.isFinite(stock) || stock <= 0 || quantity >= stock) {
+        toast.show({
+          title: stock <= 0 ? 'Produto esgotado' : 'Estoque insuficiente',
+          placement: 'top',
+          bgColor: 'orange.500',
+        })
+        return
+      }
     }
 
-    const productStoreId = getProductStoreId(currentProduct)
-
-    if (!productStoreId) {
-      console.error('[SearchProducts] Produto sem storeId:', currentProduct)
-
-      toast.show({
-        title: 'Não foi possível identificar a loja',
-        description: 'Atualize a tela e tente novamente.',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-
-      return
-    }
-
-    const stockQuantity = Number(currentProduct.quantity ?? 0)
-
-    const cartQuantity = getCartQuantity(currentProduct)
-
-    if (stockQuantity <= 0) {
-      toast.show({
-        title: 'Produto esgotado',
-        placement: 'top',
-        bgColor: 'orange.500',
-      })
-
-      return
-    }
-
-    if (cartQuantity >= stockQuantity) {
-      toast.show({
-        title: 'Estoque insuficiente',
-        description: 'Quantidade máxima disponível atingida.',
-        placement: 'top',
-        bgColor: 'orange.500',
-      })
-
-      return
-    }
+    productLocksRef.current.add(product.id)
+    setUpdatingProductIds((current) => [...current, product.id])
 
     try {
-      setProductUpdating(currentProduct.id, true)
-
-      if (cartQuantity === 0) {
+      if (action === 'decrement') {
+        await decrementProduct(product.id)
+      } else if (quantity > 0) {
+        await incrementProduct(product.id)
+      } else if (storeId) {
         await addProductCart({
-          productId: currentProduct.id,
-          storeId: productStoreId,
+          productId: product.id,
+          storeId,
           quantity: 1,
         })
-      } else {
-        await incrementProduct(currentProduct.id)
       }
     } catch (error: any) {
-      console.error(
-        '[SearchProducts] Erro ao adicionar:',
-        error?.response?.status,
-        error?.response?.data,
-        error?.message,
-      )
-
       toast.show({
-        title: 'Erro ao adicionar produto',
-        description:
-          error?.response?.data?.message ??
-          error?.message ??
-          'Não foi possível adicionar o produto.',
+        title: 'Não foi possível atualizar o carrinho',
+        description: error?.response?.data?.message ?? error?.message,
         placement: 'top',
         bgColor: 'red.500',
       })
     } finally {
-      setProductUpdating(currentProduct.id, false)
-    }
-  }
-
-  async function handleDecrementProduct(currentProduct: ProductDTO) {
-    if (isProductUpdating(currentProduct.id)) {
-      return
-    }
-
-    const cartQuantity = getCartQuantity(currentProduct)
-
-    if (cartQuantity <= 0) {
-      return
-    }
-
-    try {
-      setProductUpdating(currentProduct.id, true)
-
-      await decrementProduct(currentProduct.id)
-    } catch (error: any) {
-      console.error(
-        '[SearchProducts] Erro ao diminuir:',
-        error?.response?.status,
-        error?.response?.data,
-        error?.message,
+      productLocksRef.current.delete(product.id)
+      setUpdatingProductIds((current) =>
+        current.filter((id) => id !== product.id),
       )
-
-      toast.show({
-        title: 'Erro ao atualizar produto',
-        description:
-          error?.response?.data?.message ??
-          error?.message ??
-          'Não foi possível diminuir a quantidade.',
-        placement: 'top',
-        bgColor: 'red.500',
-      })
-    } finally {
-      setProductUpdating(currentProduct.id, false)
     }
   }
 
@@ -429,7 +363,7 @@ export function SearchProducts() {
     <VStack flex={1} bg="#F8FAFC">
       <HomeScreen title="Pesquisar" />
 
-      <Box px={3} pt={3} pb={2} bg="#F8FAFC">
+      <Box px={3} pt={3} pb={2}>
         <HStack
           h={12}
           bg="white"
@@ -460,7 +394,12 @@ export function SearchProducts() {
           />
 
           {searchTerm.length > 0 && (
-            <Pressable onPress={handleClearSearch}>
+            <Pressable
+              onPress={() => handleSearchChange('')}
+              accessibilityRole="button"
+              accessibilityLabel="Limpar busca"
+              hitSlop={8}
+            >
               <Icon
                 as={MaterialIcons}
                 name="close"
@@ -473,12 +412,12 @@ export function SearchProducts() {
 
         <HStack mt={2} justifyContent="space-between" alignItems="center">
           <Text fontSize="xs" color="coolGray.500">
-            {isSearching
-              ? `${products.length} resultado(s) encontrados`
-              : `${products.length} produto(s) carregados`}
+            {activeQuery
+              ? `${products.length} resultado(s) carregado(s)`
+              : `${products.length} produto(s) carregado(s)`}
           </Text>
 
-          {!isSearching && (
+          {!activeQuery && (
             <Text fontSize="xs" color="blue.600" fontWeight="700">
               Todos os produtos
             </Text>
@@ -491,13 +430,10 @@ export function SearchProducts() {
       ) : (
         <FlatList
           data={products}
-          extraData={{
-            cartItems,
-            activeStoreId,
-            updatingProductIds,
-          }}
+          extraData={{ cartItems, activeStoreId, updatingProductIds }}
           keyExtractor={(item) => item.id}
           numColumns={3}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={[
@@ -515,10 +451,16 @@ export function SearchProducts() {
               <ProductCard
                 data={item}
                 cartQuantity={getCartQuantity(item)}
-                isUpdating={isProductUpdating(item.id)}
-                onIncrement={() => handleIncrementProduct(item)}
-                onDecrement={() => handleDecrementProduct(item)}
-                onPress={() => handleOpenProductDetails(item.id)}
+                isUpdating={updatingProductIds.includes(item.id)}
+                onIncrement={() =>
+                  void updateProductQuantity(item, 'increment')
+                }
+                onDecrement={() =>
+                  void updateProductQuantity(item, 'decrement')
+                }
+                onPress={() =>
+                  navigation.navigate('productDetails', { productId: item.id })
+                }
               />
             </Box>
           )}
@@ -548,8 +490,7 @@ export function SearchProducts() {
                 textAlign="center"
                 color="coolGray.500"
               >
-                Tente buscar por outro nome ou confira se a cidade selecionada
-                possui produtos cadastrados.
+                Tente buscar por outro nome ou confira a cidade selecionada.
               </Text>
             </VStack>
           }

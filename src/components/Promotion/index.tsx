@@ -1,21 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-
 import {
   Alert,
+  AppState,
   FlatList,
   Image,
   Linking,
   Pressable,
   StyleSheet,
-  useWindowDimensions,
   View,
 } from 'react-native'
 
-import type { FlatList as RNFlatList, LayoutChangeEvent } from 'react-native'
+import type {
+  LayoutChangeEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+} from 'react-native'
 
-import { useNavigation } from '@react-navigation/native'
-
-import { BannerDTO } from '@dtos/BannerDTO'
+import { useIsFocused, useNavigation } from '@react-navigation/native'
+import type { BannerDTO } from '@dtos/BannerDTO'
 
 type PromoBanner = {
   id: string
@@ -29,144 +31,122 @@ type Props = {
   banners?: BannerDTO[]
 }
 
-/*
- * Padding lateral do carrossel.
- */
+const EMPTY_BANNERS: BannerDTO[] = []
+
 const HORIZONTAL_PADDING = 10
+const BANNER_HEIGHT = 180
+const AUTOPLAY_DELAY = 5000
 
-/*
- * Espaço entre banners.
- */
-const CARD_GAP = 8
-
-/*
- * Proporção recomendada para os banners.
- *
- * Em uma tela de aproximadamente 390px:
- * largura útil ≈ 370
- * altura ≈ 162
- *
- * Fica muito próximo do tamanho que
- * você já utilizava de 160px.
- */
-const BANNER_ASPECT_RATIO = 16 / 7
-
-export function Promotion({ banners: bannersFromProps = [] }: Props) {
+export function Promotion({
+  banners: bannersFromProps = EMPTY_BANNERS,
+}: Props) {
   const navigation = useNavigation<any>()
+  const isFocused = useIsFocused()
 
-  const { width: windowWidth } = useWindowDimensions()
+  const listRef = useRef<FlatList<PromoBanner>>(null)
 
-  const listRef = useRef<RNFlatList<PromoBanner>>(null)
-
+  const [containerWidth, setContainerWidth] = useState(0)
   const [activeIndex, setActiveIndex] = useState(0)
-
-  /*
-   * Usa inicialmente a largura da tela,
-   * mas depois substitui pela largura REAL
-   * disponível no componente.
-   */
-  const [containerWidth, setContainerWidth] = useState(windowWidth)
-
-  /* =====================================
-     TAMANHO RESPONSIVO
-  ===================================== */
-
-  const cardWidth = Math.max(1, containerWidth - HORIZONTAL_PADDING * 2)
-
-  const cardHeight = cardWidth / BANNER_ASPECT_RATIO
-
-  const snapInterval = cardWidth + CARD_GAP
-
-  /* =====================================
-     BANNERS
-  ===================================== */
+  const [isDragging, setIsDragging] = useState(false)
+  const [isAppActive, setIsAppActive] = useState(
+    AppState.currentState === 'active',
+  )
 
   const banners = useMemo<PromoBanner[]>(() => {
     return bannersFromProps
       .filter((banner) => Boolean(banner?.id && banner?.imageUrl))
       .map((banner) => ({
         id: banner.id,
-
         imageUrl: banner.imageUrl,
-
         position: banner.position ?? 0,
-
         storeId: banner.storeId,
-
         link: banner.link ?? null,
       }))
-      .sort(
-        (firstBanner, secondBanner) =>
-          firstBanner.position - secondBanner.position,
-      )
+      .sort((first, second) => first.position - second.position)
       .slice(0, 8)
   }, [bannersFromProps])
 
-  /* =====================================
-     MEDIR CONTAINER
-  ===================================== */
+  // Reinicia somente quando a sequência de banners muda.
+  const bannersKey = JSON.stringify(banners.map((banner) => banner.id))
 
-  function handleLayout(event: LayoutChangeEvent) {
-    const measuredWidth = event.nativeEvent.layout.width
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      setIsAppActive(state === 'active')
+    })
 
-    if (measuredWidth > 0 && Math.abs(measuredWidth - containerWidth) > 1) {
-      setContainerWidth(measuredWidth)
-    }
-  }
-
-  /* =====================================
-     VOLTAR AO PRIMEIRO
-  ===================================== */
+    return () => subscription.remove()
+  }, [])
 
   useEffect(() => {
     setActiveIndex(0)
+    setIsDragging(false)
 
-    requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
       listRef.current?.scrollToOffset({
         offset: 0,
         animated: false,
       })
     })
-  }, [banners, cardWidth])
 
-  /* =====================================
-     AUTOPLAY
-  ===================================== */
+    return () => cancelAnimationFrame(frame)
+  }, [bannersKey, containerWidth])
 
+  // Aguarda cinco segundos após cada troca ou interação.
   useEffect(() => {
-    if (banners.length <= 1) {
+    if (
+      banners.length <= 1 ||
+      containerWidth <= 0 ||
+      isDragging ||
+      !isFocused ||
+      !isAppActive
+    ) {
       return
     }
 
-    const timer = setInterval(() => {
-      setActiveIndex((current) => {
-        const next = (current + 1) % banners.length
+    const timer = setTimeout(() => {
+      const nextIndex = (activeIndex + 1) % banners.length
 
-        listRef.current?.scrollToOffset({
-          offset: snapInterval * next,
+      listRef.current?.scrollToOffset({
+        offset: nextIndex * containerWidth,
 
-          animated: true,
-        })
-
-        return next
+        // Evita atravessar todos os banners ao voltar ao início.
+        animated: nextIndex !== 0,
       })
-    }, 5000)
 
-    return () => {
-      clearInterval(timer)
-    }
-  }, [banners.length, snapInterval])
+      setActiveIndex(nextIndex)
+    }, AUTOPLAY_DELAY)
 
-  /* =====================================
-     LINK
-  ===================================== */
+    return () => clearTimeout(timer)
+  }, [
+    activeIndex,
+    banners.length,
+    bannersKey,
+    containerWidth,
+    isDragging,
+    isFocused,
+    isAppActive,
+  ])
+
+  function handleLayout(event: LayoutChangeEvent) {
+    const width = event.nativeEvent.layout.width
+
+    if (width <= 0) return
+
+    setContainerWidth((current) =>
+      Math.abs(current - width) > 0.5 ? width : current,
+    )
+  }
+
+  function updateActiveIndex(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    if (containerWidth <= 0 || banners.length === 0) return
+
+    const offset = event.nativeEvent.contentOffset.x
+    const index = Math.round(offset / containerWidth)
+
+    setActiveIndex(Math.min(Math.max(index, 0), banners.length - 1))
+  }
 
   async function handlePress(item: PromoBanner) {
-    /*
-     * Prioridade 1:
-     * Se o banner pertence a uma loja,
-     * abre a loja dentro do aplicativo.
-     */
     if (item.storeId) {
       navigation.navigate('storeProducts', {
         storeId: item.storeId,
@@ -175,20 +155,11 @@ export function Promotion({ banners: bannersFromProps = [] }: Props) {
       return
     }
 
-    /*
-     * Prioridade 2:
-     * Compatibilidade com banners antigos
-     * que ainda possuem apenas link externo.
-     */
-    if (!item.link?.trim()) {
-      return
-    }
+    const link = item.link?.trim()
 
-    let formattedLink = item.link.trim()
+    if (!link) return
 
-    if (!/^https?:\/\//i.test(formattedLink)) {
-      formattedLink = `https://${formattedLink}`
-    }
+    const formattedLink = /^https?:\/\//i.test(link) ? link : `https://${link}`
 
     try {
       await Linking.openURL(formattedLink)
@@ -197,106 +168,83 @@ export function Promotion({ banners: bannersFromProps = [] }: Props) {
     }
   }
 
-  /* =====================================
-     SEM BANNERS
-  ===================================== */
-
-  if (banners.length === 0) {
-    return null
-  }
-
-  /* =====================================
-     TELA
-  ===================================== */
+  if (banners.length === 0) return null
 
   return (
     <View style={styles.container} onLayout={handleLayout}>
-      <FlatList
-        ref={listRef}
-        data={banners}
-        horizontal
-        keyExtractor={(item) => item.id}
-        showsHorizontalScrollIndicator={false}
-        /*
-         * IMPORTANTE:
-         * removido pagingEnabled.
-         */
-        snapToInterval={snapInterval}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        disableIntervalMomentum
-        contentContainerStyle={{
-          paddingLeft: HORIZONTAL_PADDING,
+      {/* Reserva a altura antes mesmo de medir a largura. */}
+      <View style={styles.carousel}>
+        {containerWidth > 0 && (
+          <FlatList
+            ref={listRef}
+            data={banners}
+            horizontal
+            pagingEnabled
+            bounces={false}
+            overScrollMode="never"
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={banners.length > 1}
+            style={styles.list}
+            extraData={containerWidth}
+            keyExtractor={(item) => item.id}
+            getItemLayout={(_, index) => ({
+              length: containerWidth,
+              offset: containerWidth * index,
+              index,
+            })}
+            onScrollBeginDrag={() => {
+              setIsDragging(true)
+            }}
+            onScrollEndDrag={(event) => {
+              updateActiveIndex(event)
+              setIsDragging(false)
+            }}
+            onMomentumScrollEnd={updateActiveIndex}
+            renderItem={({ item, index }) => {
+              const hasAction = Boolean(item.storeId || item.link?.trim())
 
-          paddingRight: HORIZONTAL_PADDING,
-        }}
-        getItemLayout={(_, index) => ({
-          length: snapInterval,
-
-          offset: snapInterval * index,
-
-          index,
-        })}
-        onScrollToIndexFailed={(info) => {
-          listRef.current?.scrollToOffset({
-            offset: snapInterval * info.index,
-
-            animated: true,
-          })
-        }}
-        onMomentumScrollEnd={(event) => {
-          const offsetX = event.nativeEvent.contentOffset.x
-
-          const index = Math.round(offsetX / snapInterval)
-
-          const safeIndex = Math.min(
-            Math.max(index, 0),
-
-            banners.length - 1,
-          )
-
-          setActiveIndex(safeIndex)
-        }}
-        renderItem={({ item, index }) => (
-          <Pressable
-            onPress={() => void handlePress(item)}
-            style={({ pressed }) => [
-              styles.card,
-
-              {
-                width: cardWidth,
-
-                height: cardHeight,
-
-                marginRight: index === banners.length - 1 ? 0 : CARD_GAP,
-              },
-
-              pressed && styles.pressed,
-            ]}
-          >
-            <Image
-              source={{
-                uri: item.imageUrl,
-              }}
-              style={styles.image}
-              resizeMode="cover"
-              resizeMethod="resize"
-              fadeDuration={0}
-            />
-          </Pressable>
+              return (
+                <View style={[styles.page, { width: containerWidth }]}>
+                  <Pressable
+                    disabled={!hasAction}
+                    accessibilityRole={hasAction ? 'button' : 'image'}
+                    accessibilityLabel={
+                      hasAction
+                        ? `Abrir oferta do banner ${index + 1}`
+                        : `Banner promocional ${index + 1}`
+                    }
+                    onPress={() => void handlePress(item)}
+                    style={({ pressed }) => [
+                      styles.card,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Image
+                      source={{ uri: item.imageUrl }}
+                      style={styles.image}
+                      resizeMode="contain"
+                      resizeMethod="resize"
+                      fadeDuration={0}
+                    />
+                  </Pressable>
+                </View>
+              )
+            }}
+          />
         )}
-      />
-
-      {/* INDICADORES */}
+      </View>
 
       {banners.length > 1 && (
-        <View style={styles.dotsContainer}>
+        <View
+          style={styles.dotsContainer}
+          accessible
+          accessibilityLabel={`Banner ${activeIndex + 1} de ${banners.length}`}
+        >
           {banners.map((banner, index) => (
             <View
               key={banner.id}
               style={[
                 styles.dot,
-
                 index === activeIndex ? styles.activeDot : styles.inactiveDot,
               ]}
             />
@@ -310,73 +258,60 @@ export function Promotion({ banners: bannersFromProps = [] }: Props) {
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-
-    /*
-     * Não usamos:
-     *
-     * flex: 1
-     * SafeAreaView
-     * marginBottom negativo
-     */
-    marginTop: 0,
-
     marginBottom: 4,
+  },
 
-    paddingTop: 0,
+  carousel: {
+    height: BANNER_HEIGHT,
+  },
+
+  list: {
+    height: BANNER_HEIGHT,
+  },
+
+  // Cada página ocupa exatamente a largura do carrossel.
+  // O espaçamento fica dentro da página, mantendo o centro.
+  page: {
+    height: BANNER_HEIGHT,
+    paddingHorizontal: HORIZONTAL_PADDING,
   },
 
   card: {
-    overflow: 'hidden',
-
+    flex: 1,
     borderRadius: 14,
-
-    /*
-     * Caso a proporção da imagem
-     * seja diferente, a região
-     * restante fica praticamente
-     * branca/cinza muito claro.
-     */
     backgroundColor: '#F9FAFB',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   image: {
     width: '100%',
-
     height: '100%',
   },
 
   dotsContainer: {
-    height: 18,
-
-    marginTop: 4,
-
+    height: 22,
     flexDirection: 'row',
-
     alignItems: 'center',
-
     justifyContent: 'center',
   },
 
   dot: {
-    height: 7,
-
-    borderRadius: 4,
-
+    height: 6,
+    borderRadius: 3,
     marginHorizontal: 3,
-
     backgroundColor: '#1D4ED8',
   },
 
   activeDot: {
     width: 18,
-
     opacity: 1,
   },
 
   inactiveDot: {
-    width: 7,
-
-    opacity: 0.3,
+    width: 6,
+    opacity: 0.25,
   },
 
   pressed: {
