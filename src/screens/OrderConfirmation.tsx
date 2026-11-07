@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-
 import { Alert, Animated, Linking } from 'react-native'
-
 import {
   Box,
   Text,
@@ -15,14 +13,25 @@ import {
   Divider,
   Pressable,
 } from 'native-base'
-
-import { useNavigation, useRoute } from '@react-navigation/native'
+import {
+  RouteProp,
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native'
 import { MaterialIcons } from '@expo/vector-icons'
-
 import { api } from '@services/api'
 import { formatCurrency } from '@utils/format'
 import { AppNavigatorRoutesProps } from '@routes/app.routes'
-
+import { OrderDeliveryModal } from '@components/OrderDeliveryModal'
+import type { DeliveryPilotStore } from '../config/deliveryPilot'
+type ConfirmationRouteParams = {
+  orderConfirmation: {
+    orderId: string
+    pointsEarned?: number
+    pointsUsed?: number
+  }
+}
 type OrderItem = {
   id: string
   quantity: number
@@ -33,7 +42,6 @@ type OrderItem = {
     image: string | null
   }
 }
-
 type ConfirmationOrder = {
   id: string
   store: {
@@ -48,17 +56,13 @@ type ConfirmationOrder = {
   createdAt: string | null
   items: OrderItem[]
 }
-
 function toNumber(value: unknown, fallback = 0) {
   if (value === null || value === undefined || value === '') {
     return fallback
   }
-
   const parsed = Number(value)
-
   return Number.isFinite(parsed) ? parsed : fallback
 }
-
 function parseCoordinate(value: unknown): number | null {
   if (
     value === null ||
@@ -67,28 +71,20 @@ function parseCoordinate(value: unknown): number | null {
   ) {
     return null
   }
-
   if (typeof value !== 'number' && typeof value !== 'string') {
     return null
   }
-
   const coordinate = Number(value)
-
   return Number.isFinite(coordinate) ? coordinate : null
 }
-
 function formatDate(value: string | null) {
   if (!value) return 'Não informada'
-
   const date = new Date(value)
-
   if (Number.isNaN(date.getTime())) {
     return 'Não informada'
   }
-
   return date.toLocaleDateString('pt-BR')
 }
-
 function getStatusInfo(status: string) {
   switch (status) {
     case 'PENDING':
@@ -97,21 +93,18 @@ function getStatusInfo(status: string) {
         label: 'Aguardando validação',
         color: 'warning',
       }
-
     case 'VALIDATED':
       return {
         title: 'Compra validada!',
         label: 'Validado',
         color: 'success',
       }
-
     case 'EXPIRED':
       return {
         title: 'Pedido encerrado',
         label: 'Encerrado',
         color: 'coolGray',
       }
-
     default:
       return {
         title: 'Detalhes do pedido',
@@ -120,10 +113,8 @@ function getStatusInfo(status: string) {
       }
   }
 }
-
 async function handleOpenStoreMaps(order: ConfirmationOrder) {
   const { latitude, longitude } = order.store
-
   if (
     latitude === null ||
     longitude === null ||
@@ -136,17 +127,13 @@ async function handleOpenStoreMaps(order: ConfirmationOrder) {
       'Localização indisponível',
       'Esta loja ainda não possui uma localização válida cadastrada.',
     )
-
     return
   }
-
   const destination = encodeURIComponent(`${latitude},${longitude}`)
-
-  const url =
-    'https://www.google.com/maps/dir/?api=1' + `&destination=${destination}`
-
   try {
-    await Linking.openURL(url)
+    await Linking.openURL(
+      'https://www.google.com/maps/dir/?api=1' + `&destination=${destination}`,
+    )
   } catch {
     Alert.alert(
       'Não foi possível abrir o mapa',
@@ -154,107 +141,152 @@ async function handleOpenStoreMaps(order: ConfirmationOrder) {
     )
   }
 }
-
 export function OrderConfirmation() {
-  const route = useRoute<any>()
-
+  const route =
+    useRoute<RouteProp<ConfirmationRouteParams, 'orderConfirmation'>>()
   const navigation = useNavigation<AppNavigatorRoutesProps>()
-
-  const orderId = route.params?.orderId as string | undefined
-
+  const orderId = route.params?.orderId
   const [order, setOrder] = useState<ConfirmationOrder | null>(null)
-
   const [loading, setLoading] = useState(true)
+  const [showDelivery, setShowDelivery] = useState(false)
+  const [deliveryConfig, setDeliveryConfig] = useState<{
+    orderId: string
+    settings: DeliveryPilotStore
+  } | null>(null)
+  const [deliveryError, setDeliveryError] = useState(false)
+
+  // Consulta novamente ao voltar à tela, sem polling.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      setDeliveryConfig(null)
+      setDeliveryError(false)
+      setShowDelivery(false)
+
+      if (!order || order.status !== 'PENDING' || !order.store.id) return
+      const currentOrderId = order.id
+      const storeId = order.store.id
+
+      async function loadDeliverySettings() {
+        try {
+          const response = await api.get(`/stores/${storeId}`)
+          if (!active) return
+          const store = response.data?.store ?? response.data
+
+          if (!store || store.id !== storeId) {
+            throw new Error('Configuração da loja indisponível.')
+          }
+
+          if (store.isActive !== true || store.deliveryEnabled !== true) return
+
+          const whatsapp =
+            typeof store.deliveryWhatsapp === 'string'
+              ? store.deliveryWhatsapp.replace(/\D/g, '')
+              : ''
+
+          const methods = Array.isArray(store.deliveryPaymentMethods)
+            ? store.deliveryPaymentMethods.filter(
+                (method: unknown): method is string =>
+                  typeof method === 'string' && method.trim() !== '',
+              )
+            : []
+
+          if (!/^55\d{10,11}$/.test(whatsapp) || methods.length === 0) {
+            throw new Error('Configuração de entrega incompleta.')
+          }
+
+          setDeliveryConfig({
+            orderId: currentOrderId,
+            settings: {
+              storeId,
+              storeName: store.name || order?.store.name || 'Loja',
+              whatsapp,
+              paymentMethods: [...new Set<string>(methods)],
+            },
+          })
+        } catch {
+          if (active) setDeliveryError(true)
+        }
+      }
+
+      void loadDeliverySettings()
+      return () => {
+        active = false
+      }
+    }, [order]),
+  )
 
   const scaleAnim = useRef(new Animated.Value(0.85)).current
-
   const opacityAnim = useRef(new Animated.Value(0)).current
-
+  const requestIdRef = useRef(0)
   const fetchOrder = useCallback(async () => {
+    const requestId = ++requestIdRef.current
     setLoading(true)
-
+    setShowDelivery(false)
     if (!orderId) {
       setOrder(null)
       setLoading(false)
       return
     }
-
     try {
       const response = await api.get(`/orders/${orderId}`)
-
+      if (requestId !== requestIdRef.current) return
       const data = response.data?.order ?? response.data
-
       if (!data?.id) {
         throw new Error('Pedido não encontrado.')
       }
-
       const mapped: ConfirmationOrder = {
         id: data.id,
-
         store: {
           id: data.store?.id ?? data.storeId ?? '',
-
           name:
             typeof data.store?.name === 'string' && data.store.name.trim()
               ? data.store.name.trim()
               : 'Loja não identificada',
-
           latitude: parseCoordinate(data.store?.latitude),
-
           longitude: parseCoordinate(data.store?.longitude),
         },
-
         totalAmount: toNumber(data.totalAmount),
-
         discountApplied: toNumber(data.discountApplied),
-
         status: data.status ?? '',
-
         createdAt: data.created_at ?? data.createdAt ?? null,
-
         items: (Array.isArray(data.items) ? data.items : []).map(
           (item: any, index: number): OrderItem => ({
             id: item.id ?? `${data.id}-item-${index}`,
-
             quantity: toNumber(item.quantity),
-
-            // Valor registrado no pedido.
             subtotal:
               item.subtotal === null || item.subtotal === undefined
                 ? null
                 : toNumber(item.subtotal),
-
             product: {
               id: item.product?.id ?? '',
-
               name: item.product?.name ?? 'Produto indisponível',
-
               image: item.product?.image ?? null,
             },
           }),
         ),
       }
-
       setOrder(mapped)
     } catch (error) {
+      if (requestId !== requestIdRef.current) return
       console.error('[OrderConfirmation] Erro ao buscar pedido:', error)
-
       setOrder(null)
     } finally {
-      setLoading(false)
+      if (requestId === requestIdRef.current) {
+        setLoading(false)
+      }
     }
   }, [orderId])
-
   useEffect(() => {
     void fetchOrder()
+    return () => {
+      requestIdRef.current += 1
+    }
   }, [fetchOrder])
-
   useEffect(() => {
     if (loading || !order) return
-
     scaleAnim.setValue(0.85)
     opacityAnim.setValue(0)
-
     const animation = Animated.parallel([
       Animated.spring(scaleAnim, {
         toValue: 1,
@@ -262,31 +294,25 @@ export function OrderConfirmation() {
         tension: 100,
         useNativeDriver: true,
       }),
-
       Animated.timing(opacityAnim, {
         toValue: 1,
         duration: 350,
         useNativeDriver: true,
       }),
     ])
-
     animation.start()
-
     return () => animation.stop()
   }, [loading, order, scaleAnim, opacityAnim])
-
   if (loading) {
     return (
       <Box flex={1} bg="gray.50" alignItems="center" justifyContent="center">
         <Spinner size="lg" color="blue.600" />
-
         <Text color="gray.600" mt={3}>
           Carregando seu pedido...
         </Text>
       </Box>
     )
   }
-
   if (!order) {
     return (
       <Box
@@ -300,15 +326,12 @@ export function OrderConfirmation() {
         <Text fontSize="lg" fontWeight="bold" textAlign="center">
           Não conseguimos carregar o pedido
         </Text>
-
         <Text color="gray.600" textAlign="center" mt={2}>
           Tente novamente ou consulte seus pedidos.
         </Text>
-
         <Button mt={5} onPress={() => void fetchOrder()}>
           Tentar novamente
         </Button>
-
         <Button
           mt={3}
           variant="outline"
@@ -319,17 +342,17 @@ export function OrderConfirmation() {
       </Box>
     )
   }
-
   const isPending = order.status === 'PENDING'
   const isValidated = order.status === 'VALIDATED'
   const isExpired = order.status === 'EXPIRED'
-
   const statusInfo = getStatusInfo(order.status)
-
+  const pilot =
+    deliveryConfig?.orderId === order.id &&
+    deliveryConfig.settings.storeId === order.store.id
+      ? deliveryConfig.settings
+      : null
   const netAmount = Math.max(order.totalAmount - order.discountApplied, 0)
-
   const estimatedPoints = Math.floor(netAmount / 10)
-
   return (
     <Box flex={1} bg="gray.50" safeAreaTop>
       <ScrollView
@@ -340,6 +363,22 @@ export function OrderConfirmation() {
         }}
       >
         <VStack space={4}>
+          {isPending && deliveryError && (
+            <Box bg="orange.50" p={4} rounded="xl">
+              <Text color="orange.900" fontSize="sm">
+                Não foi possível consultar a opção de entrega. Tente atualizar o
+                pedido.
+              </Text>
+              <Button
+                mt={2}
+                variant="outline"
+                onPress={() => void fetchOrder()}
+              >
+                Atualizar pedido
+              </Button>
+            </Box>
+          )}
+
           <Box bg="white" p={5} rounded="2xl">
             <Animated.View
               style={{
@@ -356,17 +395,14 @@ export function OrderConfirmation() {
                 {statusInfo.title}
               </Text>
             </Animated.View>
-
             <HStack justifyContent="center" mt={3}>
               <Badge colorScheme={statusInfo.color} rounded="md" px={3} py={1}>
                 {statusInfo.label}
               </Badge>
             </HStack>
-
             <Text textAlign="center" color="gray.500" fontSize="sm" mt={3}>
-              código: #{order.id.slice(0, 8).toUpperCase()}
+              Código: #{order.id.slice(0, 8).toUpperCase()}
             </Text>
-
             <Text
               textAlign="center"
               fontWeight="semibold"
@@ -375,14 +411,53 @@ export function OrderConfirmation() {
             >
               Vendido por: {order.store.name}
             </Text>
-
             <Text textAlign="center" color="gray.500" fontSize="xs" mt={1}>
               Registrado em {formatDate(order.createdAt)}
             </Text>
           </Box>
-
           {isPending && (
             <>
+              {pilot && (
+                <Box
+                  bg="green.50"
+                  p={5}
+                  rounded="2xl"
+                  borderWidth={1}
+                  borderColor="green.200"
+                >
+                  <HStack alignItems="center" space={2}>
+                    <MaterialIcons
+                      name="local-shipping"
+                      size={24}
+                      color="#15803D"
+                    />
+                    <Text
+                      color="green.900"
+                      fontWeight="bold"
+                      fontSize="lg"
+                      flex={1}
+                    >
+                      Prefere receber em casa?
+                    </Text>
+                  </HStack>
+                  <Text color="green.800" fontSize="sm" mt={3}>
+                    Solicite a entrega deste pedido pelo WhatsApp. A loja
+                    confirma a disponibilidade, a taxa e o prazo.
+                  </Text>
+                  <Button
+                    mt={4}
+                    size="lg"
+                    colorScheme="green"
+                    rounded="xl"
+                    onPress={() => setShowDelivery(true)}
+                  >
+                    Solicitar entrega
+                  </Button>
+                  <Text color="green.800" fontSize="xs" mt={3}>
+                    A entrega só estará combinada após a confirmação!
+                  </Text>
+                </Box>
+              )}
               <Box
                 bg="blue.50"
                 p={5}
@@ -391,28 +466,26 @@ export function OrderConfirmation() {
                 borderColor="blue.100"
               >
                 <Text fontSize="lg" fontWeight="bold" color="blue.900">
-                  Próximo passo, vá ao estabelecimento:
+                  {pilot
+                    ? 'Se preferir retirar na loja:'
+                    : 'Próximo passo, vá ao estabelecimento:'}
                   {'\n\n'}
                   📍 {order.store.name}
                 </Text>
-
                 <VStack space={3} mt={3}>
                   <NextStep
                     number="1"
                     text="Confira a disponibilidade dos produtos."
                   />
-
                   <NextStep
                     number="2"
                     text="Faça o pagamento no estabelecimento."
                   />
-
                   <NextStep
                     number="3"
                     text="Apresente o código ao atendente e peça a validação dos pontos."
                   />
                 </VStack>
-
                 <Pressable
                   mt={4}
                   onPress={() => void handleOpenStoreMaps(order)}
@@ -442,17 +515,14 @@ export function OrderConfirmation() {
                         size={28}
                         color="#FFFFFF"
                       />
-
                       <VStack flex={1} space={1}>
                         <Text color="white" fontSize="md" fontWeight="bold">
                           Como chegar
                         </Text>
-
                         <Text color="white" fontSize="xs">
                           Ver rota no Google Maps
                         </Text>
                       </VStack>
-
                       <MaterialIcons
                         name="open-in-new"
                         size={20}
@@ -470,12 +540,10 @@ export function OrderConfirmation() {
                 >
                   Meus pedidos
                 </Button>
-
                 <Text color="blue.800" fontSize="xs" mt={3}>
                   Este pedido não reserva nem separa os produtos.
                 </Text>
               </Box>
-
               <Box
                 bg="purple.50"
                 p={5}
@@ -487,7 +555,6 @@ export function OrderConfirmation() {
                 <Text color="purple.700" fontSize="sm">
                   Você poderá receber
                 </Text>
-
                 <Animated.View
                   style={{
                     opacity: opacityAnim,
@@ -498,11 +565,9 @@ export function OrderConfirmation() {
                     {estimatedPoints}
                   </Text>
                 </Animated.View>
-
                 <Text color="purple.800" fontWeight="bold">
                   pontos
                 </Text>
-
                 <Text
                   color="purple.700"
                   fontSize="sm"
@@ -511,7 +576,6 @@ export function OrderConfirmation() {
                 >
                   Aguardando a validação da compra.
                 </Text>
-
                 <Text
                   color="purple.600"
                   fontSize="xs"
@@ -523,7 +587,6 @@ export function OrderConfirmation() {
               </Box>
             </>
           )}
-
           {isValidated && (
             <Box
               bg="green.50"
@@ -535,18 +598,15 @@ export function OrderConfirmation() {
               <Text color="green.800" fontWeight="bold" fontSize="lg">
                 Compra concluída
               </Text>
-
               <Text color="green.800" fontSize="sm" mt={2}>
                 Consulte seu saldo de pontos nesta loja.
               </Text>
-
               <Text color="green.800" fontSize="sm" mt={2}>
                 Para trocar seus pontos, abra a loja no aplicativo e acesse a
                 seção Brindes.
               </Text>
             </Box>
           )}
-
           {isExpired && (
             <Box
               bg="orange.50"
@@ -558,19 +618,16 @@ export function OrderConfirmation() {
               <Text color="orange.900" fontWeight="bold">
                 Este pedido não pode mais ser validado
               </Text>
-
               <Text color="orange.800" fontSize="sm" mt={2}>
                 Para realizar a compra, adicione os produtos ao carrinho e
                 registre um novo pedido.
               </Text>
             </Box>
           )}
-
           <Box bg="white" p={5} rounded="2xl">
             <Text fontSize="md" fontWeight="bold" mb={4}>
               Resumo dos produtos
             </Text>
-
             <VStack space={4}>
               {order.items.map((item) => (
                 <HStack key={item.id} space={3} alignItems="center">
@@ -599,17 +656,14 @@ export function OrderConfirmation() {
                       </Text>
                     </Box>
                   )}
-
                   <VStack flex={1}>
                     <Text fontWeight="semibold" numberOfLines={2}>
                       {item.product.name}
                     </Text>
-
                     <Text color="gray.500" fontSize="xs" mt={1}>
                       Quantidade: {item.quantity}
                     </Text>
                   </VStack>
-
                   {item.subtotal !== null && (
                     <Text fontWeight="bold" fontSize="sm">
                       {formatCurrency(item.subtotal)}
@@ -618,40 +672,33 @@ export function OrderConfirmation() {
                 </HStack>
               ))}
             </VStack>
-
             <Divider my={4} />
-
             {order.discountApplied > 0 && (
               <VStack space={2} mb={3}>
                 <HStack justifyContent="space-between">
                   <Text color="gray.600">Valor dos produtos</Text>
-
                   <Text>{formatCurrency(order.totalAmount)}</Text>
                 </HStack>
-
                 <HStack justifyContent="space-between">
                   <Text color="green.700">Desconto registrado</Text>
-
                   <Text color="green.700">
                     -{formatCurrency(order.discountApplied)}
                   </Text>
                 </HStack>
               </VStack>
             )}
-
             <HStack justifyContent="space-between">
               <Text fontWeight="bold">Valor do pedido</Text>
-
               <Text fontWeight="bold">{formatCurrency(netAmount)}</Text>
             </HStack>
-
             {isPending && (
               <Text color="gray.500" fontSize="xs" mt={2}>
-                Pagamento diretamente na loja.
+                {pilot
+                  ? 'Pagamento diretamente à loja. Se solicitar entrega, confirme a taxa e o valor final pelo WhatsApp.'
+                  : 'Pagamento diretamente na loja.'}
               </Text>
             )}
           </Box>
-
           {!isPending && (
             <Button
               colorScheme="blue"
@@ -661,7 +708,6 @@ export function OrderConfirmation() {
               Meus pedidos
             </Button>
           )}
-
           <Button
             variant="outline"
             colorScheme="blue"
@@ -672,15 +718,21 @@ export function OrderConfirmation() {
           </Button>
         </VStack>
       </ScrollView>
+      {showDelivery && isPending && pilot && (
+        <OrderDeliveryModal
+          key={`${order.id}-${pilot.storeId}`}
+          order={order}
+          pilot={pilot}
+          onClose={() => setShowDelivery(false)}
+        />
+      )}
     </Box>
   )
 }
-
 type NextStepProps = {
   number: string
   text: string
 }
-
 function NextStep({ number, text }: NextStepProps) {
   return (
     <HStack space={3} alignItems="flex-start">
@@ -696,7 +748,6 @@ function NextStep({ number, text }: NextStepProps) {
           {number}
         </Text>
       </Box>
-
       <Text flex={1} color="blue.900" fontSize="sm">
         {text}
       </Text>

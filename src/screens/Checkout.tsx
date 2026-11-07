@@ -1,7 +1,14 @@
-import React, { useContext, useEffect, useRef, useState } from 'react'
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 
 import { Alert, FlatList } from 'react-native'
-import { useNavigation } from '@react-navigation/native'
+
+import { useFocusEffect, useNavigation } from '@react-navigation/native'
 
 import { Box, Text, VStack, HStack, Image, Button, Divider } from 'native-base'
 
@@ -11,12 +18,21 @@ import { AppNavigatorRoutesProps } from '@routes/app.routes'
 import { CartContext } from '@contexts/CartContext'
 import { ButtonBack } from '@components/ButtonBack'
 
+type DeliveryInfo = {
+  storeId: string
+  status: 'available' | 'pickup' | 'unknown'
+}
+
 export function Checkout() {
   const navigation = useNavigation<AppNavigatorRoutesProps>()
 
-  const { cartItems, syncOpenCart } = useContext(CartContext)
+  const { cartItems, syncOpenCart, activeStoreId } = useContext(CartContext)
 
   const [loading, setLoading] = useState(false)
+
+  const [deliveryInfo, setDeliveryInfo] = useState<DeliveryInfo | null>(null)
+
+  const [deliveryLoading, setDeliveryLoading] = useState(false)
 
   const submittingRef = useRef(false)
   const initialSyncStartedRef = useRef(false)
@@ -40,6 +56,91 @@ export function Checkout() {
     void loadCart()
   }, [syncOpenCart])
 
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+
+      setDeliveryInfo(null)
+
+      if (!activeStoreId) {
+        setDeliveryLoading(false)
+        return
+      }
+
+      const storeId = activeStoreId
+
+      async function fetchDeliveryInfo() {
+        setDeliveryLoading(true)
+
+        try {
+          const response = await api.get(`/stores/${storeId}`)
+
+          if (!active) return
+
+          const store = response.data?.store ?? response.data
+
+          if (store?.id !== storeId) {
+            throw new Error('Loja não identificada.')
+          }
+
+          const whatsapp =
+            typeof store.deliveryWhatsapp === 'string'
+              ? store.deliveryWhatsapp.replace(/\D/g, '')
+              : ''
+
+          const hasPaymentMethods =
+            Array.isArray(store.deliveryPaymentMethods) &&
+            store.deliveryPaymentMethods.some(
+              (method: unknown) =>
+                typeof method === 'string' && method.trim() !== '',
+            )
+
+          let status: DeliveryInfo['status'] = 'unknown'
+
+          if (store.isActive === true && store.deliveryEnabled === false) {
+            status = 'pickup'
+          } else if (
+            store.isActive === true &&
+            store.deliveryEnabled === true &&
+            /^55\d{10,11}$/.test(whatsapp) &&
+            hasPaymentMethods
+          ) {
+            status = 'available'
+          }
+
+          setDeliveryInfo({
+            storeId,
+            status,
+          })
+        } catch {
+          if (active) {
+            setDeliveryInfo({
+              storeId,
+              status: 'unknown',
+            })
+          }
+        } finally {
+          if (active) {
+            setDeliveryLoading(false)
+          }
+        }
+      }
+
+      void fetchDeliveryInfo()
+
+      return () => {
+        active = false
+      }
+    }, [activeStoreId]),
+  )
+
+  const deliveryStatus =
+    deliveryInfo?.storeId === activeStoreId ? deliveryInfo.status : 'unknown'
+
+  const checkingDelivery =
+    deliveryLoading ||
+    Boolean(activeStoreId && deliveryInfo?.storeId !== activeStoreId)
+
   const subtotal = cartItems.reduce(
     (sum, item) => sum + Number(item.price) * Number(item.quantity),
     0,
@@ -58,6 +159,7 @@ export function Checkout() {
 
     try {
       const response = await api.post('/cart/checkout')
+
       const orderId = response.data?.orderId
 
       if (!orderId) {
@@ -226,9 +328,54 @@ export function Checkout() {
           cartItems.length > 0 ? (
             <VStack space={4} mt={3}>
               <Box bg="white" p={4} rounded="xl">
-                <Text color="red.500" fontSize="12" mt={2}>
-                  Pagamento somente na loja.
-                </Text>
+                <Box
+                  bg={deliveryStatus === 'available' ? 'green.50' : 'gray.50'}
+                  p={3}
+                  rounded="lg"
+                  accessibilityLiveRegion="polite"
+                >
+                  {checkingDelivery ? (
+                    <Text color="gray.600" fontSize="sm">
+                      Consultando opções de entrega...
+                    </Text>
+                  ) : deliveryStatus === 'available' ? (
+                    <>
+                      <Text color="green.800" fontSize="sm" fontWeight="bold">
+                        🚚 Esta loja aceita solicitações de entrega
+                      </Text>
+
+                      <Text color="green.700" fontSize="xs" mt={2}>
+                        Registre o pedido e toque em Solicitar entrega na
+                        próxima tela. A loja confirma disponibilidade, taxa e
+                        prazo pelo WhatsApp.
+                      </Text>
+                    </>
+                  ) : deliveryStatus === 'pickup' ? (
+                    <>
+                      <Text color="gray.800" fontSize="sm" fontWeight="bold">
+                        📍 Retirada na loja
+                      </Text>
+
+                      <Text color="gray.600" fontSize="xs" mt={2}>
+                        A solicitação de entrega não está habilitada. Faça o
+                        pagamento e peça a validação da compra no
+                        estabelecimento.
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text color="gray.800" fontSize="sm" fontWeight="bold">
+                        Combine o atendimento com a loja
+                      </Text>
+
+                      <Text color="gray.600" fontSize="xs" mt={2}>
+                        Não foi possível confirmar a opção de entrega. O
+                        registro do pedido não confirma uma entrega.
+                      </Text>
+                    </>
+                  )}
+                </Box>
+
                 <Divider my={3} />
 
                 <HStack justifyContent="space-between">
@@ -240,6 +387,12 @@ export function Checkout() {
                     {formatCurrency(total)}
                   </Text>
                 </HStack>
+
+                {deliveryStatus === 'available' && (
+                  <Text color="gray.500" fontSize="xs" mt={2}>
+                    Taxa de entrega não incluída.
+                  </Text>
+                )}
               </Box>
 
               <Box
@@ -282,33 +435,5 @@ export function Checkout() {
         }
       />
     </Box>
-  )
-}
-
-type InstructionStepProps = {
-  number: string
-  text: string
-}
-
-function InstructionStep({ number, text }: InstructionStepProps) {
-  return (
-    <HStack space={3} alignItems="flex-start">
-      <Box
-        width={6}
-        height={6}
-        rounded="full"
-        bg="blue.700"
-        alignItems="center"
-        justifyContent="center"
-      >
-        <Text color="white" fontWeight="bold" fontSize="xs">
-          {number}
-        </Text>
-      </Box>
-
-      <Text flex={1} color="blue.800" fontSize="sm">
-        {text}
-      </Text>
-    </HStack>
   )
 }
