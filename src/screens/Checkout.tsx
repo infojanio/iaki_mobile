@@ -352,14 +352,13 @@ export function Checkout() {
                     </>
                   ) : deliveryStatus === 'pickup' ? (
                     <>
-                      <Text color="gray.800" fontSize="sm" fontWeight="bold">
+                      <Text color="gray.800" fontSize="16" fontWeight="bold">
                         📍 Retirada na loja
                       </Text>
 
                       <Text color="gray.600" fontSize="xs" mt={2}>
                         A solicitação de entrega não está habilitada. Faça o
-                        pagamento e peça a validação da compra no
-                        estabelecimento.
+                        pagamento e a validação da compra no estabelecimento.
                       </Text>
                     </>
                   ) : (
@@ -390,7 +389,7 @@ export function Checkout() {
 
                 {deliveryStatus === 'available' && (
                   <Text color="gray.500" fontSize="xs" mt={2}>
-                    Taxa de entrega não incluída.
+                    * Receba em casa ou retire na loja.
                   </Text>
                 )}
               </Box>
