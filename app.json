@@ -33,6 +33,12 @@
       "package": "com.clube.iaki",
       "versionCode": 4,
 
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBJizHsX0e7eu_uVUTyJsIWB0FTPMpVLIE"
+        }
+      },
+
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon-clean.png",
         "backgroundColor": "#FFFFFF"

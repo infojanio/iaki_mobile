@@ -21,7 +21,8 @@ import * as Location from 'expo-location'
 import { api } from '@services/api'
 import { useAuth } from '@hooks/useAuth'
 import { formatCurrency } from '@utils/format'
-import { DeliveryPilotStore } from 'src/config/deliveryPilot'
+
+import type { DeliveryPilotStore } from 'src/config/deliveryPilot'
 
 type DeliveryPoint = {
   latitude: number
@@ -30,15 +31,12 @@ type DeliveryPoint = {
 
 export type DeliveryOrder = {
   id: string
-
   store: {
     id: string
     name: string
   }
-
   totalAmount: number
   discountApplied: number
-
   items: {
     quantity: number
     subtotal: number | null
@@ -62,7 +60,6 @@ type ApiOrderItem = {
   } | null
 }
 
-// Referência aproximada; não é selecionada como destino.
 const CAMPOS_BELOS_REFERENCE: DeliveryPoint = {
   latitude: -13.0367,
   longitude: -46.7717,
@@ -91,16 +88,15 @@ function parseCoordinate(value: unknown): number | null {
     return null
   }
 
-  const number = Number(value)
+  const parsed = Number(value)
 
-  return Number.isFinite(number) ? number : null
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 function parsePoint(value: unknown): DeliveryPoint | null {
   if (!value || typeof value !== 'object') return null
 
   const data = value as Record<string, unknown>
-
   const latitude = parseCoordinate(data.latitude)
   const longitude = parseCoordinate(data.longitude)
 
@@ -120,7 +116,7 @@ function parsePaymentMethods(value: unknown): string[] {
   if (!Array.isArray(value)) return []
 
   return [
-    ...new Set<string>(
+    ...new Set(
       value
         .filter(
           (method): method is string =>
@@ -135,6 +131,57 @@ function singleLine(value: string) {
   return value.replace(/[\r\n]+/g, ' ').trim()
 }
 
+async function getCurrentPoint(): Promise<DeliveryPoint> {
+  const permission = await Location.requestForegroundPermissionsAsync()
+
+  if (permission.status !== 'granted') {
+    throw new Error(
+      'Permita o acesso à localização ou escolha o destino manualmente no mapa.',
+    )
+  }
+
+  const enabled = await Location.hasServicesEnabledAsync()
+
+  if (!enabled) {
+    throw new Error(
+      'A localização do celular está desligada. Ative o GPS ou escolha o destino no mapa.',
+    )
+  }
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+
+  try {
+    const position = await Promise.race([
+      Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      }),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(
+            new Error(
+              'O GPS demorou para responder. Tente novamente ou escolha o destino no mapa.',
+            ),
+          )
+        }, 15000)
+      }),
+    ])
+
+    const point = parsePoint(position.coords)
+
+    if (!point) {
+      throw new Error(
+        'Não foi possível identificar uma localização válida. Escolha o destino no mapa.',
+      )
+    }
+
+    return point
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId)
+    }
+  }
+}
+
 export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
   const { userId } = useAuth()
 
@@ -142,27 +189,33 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
   const [reference, setReference] = useState('')
   const [payment, setPayment] = useState('')
 
-  const [availableMethods, setAvailableMethods] = useState<string[]>(
-    pilot.paymentMethods,
+  const [availableMethods, setAvailableMethods] = useState<string[]>(() =>
+    parsePaymentMethods(pilot.paymentMethods),
   )
 
   const [point, setPoint] = useState<DeliveryPoint | null>(null)
-
+  const [savedPoint, setSavedPoint] = useState<DeliveryPoint | null>(null)
   const [storePoint, setStorePoint] = useState<DeliveryPoint | null>(null)
 
+  const [useCurrentLocation, setUseCurrentLocation] = useState(true)
   const [confirmed, setConfirmed] = useState(false)
 
   const [mapType, setMapType] = useState<'standard' | 'hybrid'>('standard')
 
   const [loading, setLoading] = useState(true)
-  const [locating, setLocating] = useState(false)
+  const [locating, setLocating] = useState(true)
   const [sending, setSending] = useState(false)
-  const [notice, setNotice] = useState('')
 
-  const lockRef = useRef(false)
-  const locationLockRef = useRef(false)
-  const mountedRef = useRef(true)
+  const [notice, setNotice] = useState('')
+  const [locationMessage, setLocationMessage] = useState('')
+
   const mapRef = useRef<MapView>(null)
+  const mountedRef = useRef(false)
+  const mapReadyRef = useRef(false)
+
+  const submitLockRef = useRef(false)
+  const locationLockRef = useRef(false)
+  const sessionRef = useRef(0)
 
   const busy = sending || locating
 
@@ -171,47 +224,75 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
 
     return () => {
       mountedRef.current = false
+      sessionRef.current += 1
     }
   }, [])
 
   useEffect(() => {
-    let active = true
+    const session = ++sessionRef.current
 
-    async function loadSavedData() {
-      setLoading(true)
-      setNotice('')
-      setConfirmed(false)
-      setPayment('')
-      setAddress('')
-      setReference('')
-      setPoint(null)
-      setStorePoint(null)
+    const isCurrentSession = () =>
+      mountedRef.current && sessionRef.current === session
 
+    mapReadyRef.current = false
+
+    setLoading(true)
+    setLocating(true)
+    setUseCurrentLocation(true)
+
+    setAddress('')
+    setReference('')
+    setPayment('')
+    setPoint(null)
+    setSavedPoint(null)
+    setStorePoint(null)
+
+    setConfirmed(false)
+    setNotice('')
+    setLocationMessage('')
+
+    setAvailableMethods(parsePaymentMethods(pilot.paymentMethods))
+
+    locationLockRef.current = true
+
+    async function loadData() {
       if (!userId) {
-        if (active) {
-          setNotice('Entre novamente para consultar seus dados.')
+        if (isCurrentSession()) {
+          setNotice('Entre novamente para solicitar a entrega.')
+          setUseCurrentLocation(false)
           setLoading(false)
+          setLocating(false)
+          locationLockRef.current = false
         }
 
         return
       }
 
-      const [addressResult, locationResult, storeResult] =
+      // O GPS e as consultas são iniciados em paralelo.
+      const [addressResult, locationResult, storeResult, gpsResult] =
         await Promise.allSettled([
-          api.get(`/users/${userId}/address`),
-          api.get(`/users/${userId}/location`),
-          api.get(`/stores/${pilot.storeId}`),
+          api.get(`/users/${userId}/address`, {
+            timeout: 15000,
+          }),
+          api.get(`/users/${userId}/location`, {
+            timeout: 15000,
+          }),
+          api.get(`/stores/${pilot.storeId}`, {
+            timeout: 15000,
+          }),
+          getCurrentPoint(),
         ])
 
-      if (!active) return
+      if (!isCurrentSession()) return
 
       if (addressResult.status === 'fulfilled') {
         const savedAddress = addressResult.value.data?.address
 
         if (savedAddress) {
+          // Mantém a correção solicitada: não acrescenta
+          // savedAddress.city, que acompanha a navegação.
           const formattedAddress = [
             savedAddress.street,
-            savedAddress.city,
             savedAddress.state,
             savedAddress.postalCode,
           ]
@@ -219,18 +300,25 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
               (value): value is string =>
                 typeof value === 'string' && value.trim() !== '',
             )
+            .map((value) => value.trim())
             .join(', ')
 
           setAddress(formattedAddress)
+
+          if (!formattedAddress) {
+            setNotice('Preencha o endereço completo da entrega.')
+          }
+        } else {
+          setNotice('Preencha o endereço completo da entrega.')
         }
       } else {
         setNotice(
-          'Não foi possível preencher o endereço salvo. Digite o destino da entrega.',
+          'Não foi possível carregar seu endereço. Preencha o destino da entrega.',
         )
       }
 
       if (locationResult.status === 'fulfilled') {
-        setPoint(parsePoint(locationResult.value.data))
+        setSavedPoint(parsePoint(locationResult.value.data))
       }
 
       if (storeResult.status === 'fulfilled') {
@@ -238,26 +326,58 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
 
         if (store?.id === pilot.storeId) {
           setStorePoint(parsePoint(store))
-
           setAvailableMethods(parsePaymentMethods(store.deliveryPaymentMethods))
         }
       }
 
+      if (gpsResult.status === 'fulfilled') {
+        setPoint(gpsResult.value)
+        setUseCurrentLocation(true)
+        setLocationMessage(
+          'Localização obtida. Confira se o marcador está no destino da entrega.',
+        )
+      } else {
+        setPoint(null)
+        setUseCurrentLocation(false)
+
+        setLocationMessage(
+          gpsResult.reason instanceof Error
+            ? gpsResult.reason.message
+            : 'Não foi possível obter sua localização. Escolha o destino no mapa.',
+        )
+      }
+
+      locationLockRef.current = false
+      setLocating(false)
       setLoading(false)
     }
 
-    void loadSavedData()
+    void loadData()
 
     return () => {
-      active = false
+      if (sessionRef.current === session) {
+        sessionRef.current += 1
+      }
     }
-  }, [userId, pilot.storeId])
+  }, [userId, pilot.storeId, order.id])
+
+  function centerMap(coordinate: DeliveryPoint, closeZoom = true) {
+    if (!mapReadyRef.current) return
+
+    mapRef.current?.animateToRegion(
+      {
+        ...coordinate,
+        ...(closeZoom ? CLOSE_ZOOM : CITY_ZOOM),
+      },
+      400,
+    )
+  }
 
   function handleClose() {
-    if (lockRef.current || locationLockRef.current) {
-      return
-    }
+    if (submitLockRef.current) return
 
+    // Ignora resultados de consultas que terminem após o fechamento.
+    sessionRef.current += 1
     onClose()
   }
 
@@ -267,90 +387,80 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
   }
 
   function handleSelectPoint(coordinate: DeliveryPoint) {
-    if (lockRef.current || locationLockRef.current) {
-      return
-    }
+    if (submitLockRef.current || locationLockRef.current) return
 
-    setPoint(coordinate)
+    const selected = parsePoint(coordinate)
+
+    if (!selected) return
+
+    setPoint(selected)
+    setUseCurrentLocation(false)
     setConfirmed(false)
-  }
-
-  function handleShowStoreArea() {
-    const center = storePoint ?? CAMPOS_BELOS_REFERENCE
-
-    mapRef.current?.animateToRegion(
-      {
-        ...center,
-        ...CITY_ZOOM,
-      },
-      400,
+    setLocationMessage(
+      'Destino escolhido no mapa. Confira o endereço antes de continuar.',
     )
-
-    // Somente move o mapa; não altera o destino.
   }
 
-  async function handleCurrentLocation() {
-    if (locationLockRef.current || lockRef.current) {
+  async function handleToggleCurrentLocation() {
+    if (submitLockRef.current || locationLockRef.current) return
+
+    if (useCurrentLocation) {
+      setUseCurrentLocation(false)
+      setPoint(null)
+      setConfirmed(false)
+      setLocationMessage(
+        'Toque no mapa para escolher o outro destino da entrega.',
+      )
       return
     }
+
+    const session = sessionRef.current
 
     locationLockRef.current = true
+    setUseCurrentLocation(true)
     setLocating(true)
+    setConfirmed(false)
+    setLocationMessage('')
 
     try {
-      const permission = await Location.requestForegroundPermissionsAsync()
+      const currentPoint = await getCurrentPoint()
 
-      if (!mountedRef.current) return
-
-      if (permission.status !== 'granted') {
-        Alert.alert(
-          'Localização não autorizada',
-          'Você pode marcar o destino no mapa e preencher o endereço.',
-        )
-
+      if (!mountedRef.current || sessionRef.current !== session) {
         return
       }
 
-      const currentLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      })
-
-      if (!mountedRef.current) return
-
-      const currentPoint = parsePoint(currentLocation.coords)
-
-      if (!currentPoint) {
-        throw new Error('Coordenadas inválidas.')
-      }
-
       setPoint(currentPoint)
-      setConfirmed(false)
 
-      mapRef.current?.animateToRegion(
-        {
-          ...currentPoint,
-          ...CLOSE_ZOOM,
-        },
-        400,
+      setLocationMessage(
+        'Localização obtida. Confira se o marcador está no destino da entrega.',
       )
-    } catch {
-      if (mountedRef.current) {
-        Alert.alert(
-          'Não foi possível obter sua localização',
-          'Confira se o GPS está ligado. Você também pode marcar o destino no mapa.',
+
+      centerMap(currentPoint)
+    } catch (error) {
+      if (mountedRef.current && sessionRef.current === session) {
+        setUseCurrentLocation(false)
+        setPoint(null)
+
+        setLocationMessage(
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível obter sua localização. Escolha o destino no mapa.',
         )
       }
     } finally {
-      locationLockRef.current = false
-
-      if (mountedRef.current) {
+      if (mountedRef.current && sessionRef.current === session) {
+        locationLockRef.current = false
         setLocating(false)
       }
     }
   }
 
+  function handleShowStoreArea() {
+    centerMap(storePoint ?? CAMPOS_BELOS_REFERENCE, false)
+  }
+
   async function handleOpenWhatsApp() {
-    if (lockRef.current || locationLockRef.current) {
+    if (submitLockRef.current || locationLockRef.current || loading) {
       return
     }
 
@@ -381,21 +491,30 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
     if (!point || !confirmed) {
       Alert.alert(
         'Confirme o destino',
-        'Marque o ponto no mapa e confirme que ele corresponde ao endereço da entrega.',
+        'Confira o marcador e confirme que o ponto corresponde ao endereço da entrega.',
       )
       return
     }
 
-    lockRef.current = true
+    const deliveryPoint = point
+    const session = sessionRef.current
+
+    submitLockRef.current = true
     setSending(true)
 
     try {
       const [orderResponse, storeResponse] = await Promise.all([
-        api.get(`/orders/${order.id}`),
-        api.get(`/stores/${order.store.id}`),
+        api.get(`/orders/${order.id}`, {
+          timeout: 15000,
+        }),
+        api.get(`/stores/${order.store.id}`, {
+          timeout: 15000,
+        }),
       ])
 
-      if (!mountedRef.current) return
+      if (!mountedRef.current || sessionRef.current !== session) {
+        return
+      }
 
       const currentOrder = orderResponse.data?.order ?? orderResponse.data
 
@@ -414,6 +533,26 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
         Alert.alert(
           'Solicitação indisponível',
           'Confira se o pedido continua pendente e se a loja ainda aceita solicitações de entrega.',
+        )
+        return
+      }
+
+      // Mantém o prazo atual de 30 dias do pedido.
+      const createdAt = new Date(
+        currentOrder.createdAt ?? currentOrder.created_at,
+      )
+
+      if (!Number.isFinite(createdAt.getTime())) {
+        throw new Error('Data do pedido indisponível.')
+      }
+
+      const expiresAt = new Date(createdAt)
+      expiresAt.setDate(expiresAt.getDate() + 30)
+
+      if (Date.now() >= expiresAt.getTime()) {
+        Alert.alert(
+          'Pedido expirado',
+          'O prazo desse pedido terminou. Consulte seus pedidos antes de continuar.',
         )
         return
       }
@@ -450,7 +589,6 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
       }
 
       const totalAmount = Number(currentOrder.totalAmount)
-
       const discountApplied = Number(currentOrder.discountApplied ?? 0)
 
       if (
@@ -492,7 +630,9 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
 
       const locationUrl =
         'https://www.google.com/maps/search/?api=1&query=' +
-        encodeURIComponent(`${point.latitude},${point.longitude}`)
+        encodeURIComponent(
+          `${deliveryPoint.latitude},${deliveryPoint.longitude}`,
+        )
 
       const storeName = singleLine(String(currentStore.name || pilot.storeName))
 
@@ -532,26 +672,26 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
       await Linking.openURL(
         `https://wa.me/${currentWhatsapp}?text=` + encodeURIComponent(message),
       )
+    } catch (error) {
+      if (mountedRef.current && sessionRef.current === session) {
+        console.warn('[OrderDeliveryModal] Falha ao abrir solicitação:', error)
 
-      // Não confirma envio, entrega ou pagamento.
-      // Não cria outro pedido.
-    } catch {
-      if (mountedRef.current) {
         Alert.alert(
           'Não foi possível abrir a solicitação',
           'Confira sua conexão e tente novamente. Seu pedido continua no histórico; não registre outro para reenviar.',
         )
       }
     } finally {
-      lockRef.current = false
+      submitLockRef.current = false
 
-      if (mountedRef.current) {
+      if (mountedRef.current && sessionRef.current === session) {
         setSending(false)
       }
     }
   }
 
-  const initialCenter = point ?? storePoint ?? CAMPOS_BELOS_REFERENCE
+  const initialCenter =
+    point ?? savedPoint ?? storePoint ?? CAMPOS_BELOS_REFERENCE
 
   return (
     <Modal
@@ -578,43 +718,47 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
             </Text>
 
             <Text style={styles.notice}>
-              A loja confirmará disponibilidade, taxa, prazo e pagamento pelo
-              WhatsApp. Os dados desta solicitação não ficam salvos no pedido do
-              aplicativo.
+              Combine disponibilidade, taxa, prazo e pagamento com a loja pelo
+              WhatsApp.
             </Text>
 
             {loading ? (
               <View style={styles.loading}>
-                <ActivityIndicator color="#2563EB" />
+                <ActivityIndicator size="large" color="#2563EB" />
 
                 <Text style={styles.help}>
-                  Buscando endereço e localização...
+                  Buscando seu endereço e sua localização atual…
                 </Text>
               </View>
             ) : (
               <>
-                {!!notice && <Text style={styles.help}>{notice}</Text>}
+                {!!notice && <Text style={styles.warning}>{notice}</Text>}
 
-                <Text style={styles.label}>Endereço completo *</Text>
+                <Text style={styles.label}>Endereço da entrega *</Text>
 
                 <TextInput
                   value={address}
                   onChangeText={handleChangeAddress}
-                  editable={!busy}
+                  editable={!sending}
                   multiline
                   maxLength={400}
                   style={styles.input}
-                  accessibilityLabel="Endereço completo"
+                  accessibilityLabel="Endereço completo da entrega"
                   placeholder="Rua, número, bairro e cidade"
                   placeholderTextColor="#64748B"
                 />
+
+                <Text style={styles.help}>
+                  Confira se o endereço corresponde ao ponto no mapa. O GPS não
+                  altera esse campo.
+                </Text>
 
                 <Text style={styles.label}>Complemento / referência</Text>
 
                 <TextInput
                   value={reference}
                   onChangeText={setReference}
-                  editable={!busy}
+                  editable={!sending}
                   multiline
                   maxLength={250}
                   style={styles.input}
@@ -626,17 +770,51 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
                 <Text style={styles.label}>Local da entrega *</Text>
 
                 <Pressable
-                  style={[styles.option, busy && styles.disabled]}
+                  style={[
+                    styles.option,
+                    useCurrentLocation && styles.selected,
+                    busy && styles.disabled,
+                  ]}
                   disabled={busy}
-                  accessibilityRole="button"
-                  onPress={() => void handleCurrentLocation()}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{
+                    checked: useCurrentLocation,
+                    disabled: busy,
+                    busy: locating,
+                  }}
+                  onPress={() => void handleToggleCurrentLocation()}
                 >
-                  <Text style={styles.optionText}>
-                    {locating
-                      ? 'Obtendo localização...'
-                      : 'Usar minha localização atual'}
-                  </Text>
+                  <View style={styles.optionRow}>
+                    <Text
+                      style={[
+                        styles.checkbox,
+                        useCurrentLocation && styles.checkboxSelected,
+                      ]}
+                    >
+                      {useCurrentLocation ? '✓' : ''}
+                    </Text>
+
+                    <View style={styles.optionContent}>
+                      <Text style={styles.optionTitle}>
+                        Usar minha localização atual
+                      </Text>
+
+                      <Text style={styles.optionDescription}>
+                        {locating
+                          ? 'Obtendo sua posição pelo GPS…'
+                          : useCurrentLocation
+                            ? 'Desmarque para escolher outro destino.'
+                            : 'Marque para buscar sua posição pelo GPS.'}
+                      </Text>
+                    </View>
+
+                    {locating && <ActivityIndicator color="#2563EB" />}
+                  </View>
                 </Pressable>
+
+                {!!locationMessage && (
+                  <Text style={styles.help}>{locationMessage}</Text>
+                )}
 
                 <View style={styles.mapActions}>
                   <Pressable
@@ -667,8 +845,8 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
                 </View>
 
                 <Text style={styles.help}>
-                  Aproxime com dois dedos e toque no destino. Você também pode
-                  arrastar o marcador para a entrada do imóvel.
+                  Toque no mapa ou arraste o marcador para escolher outro
+                  destino. Isso desmarca o uso da localização atual.
                 </Text>
 
                 <MapView
@@ -679,8 +857,13 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
                     ...initialCenter,
                     ...(point ? CLOSE_ZOOM : CITY_ZOOM),
                   }}
-                  zoomEnabled
-                  scrollEnabled
+                  zoomEnabled={!busy}
+                  scrollEnabled={!busy}
+                  rotateEnabled={!busy}
+                  pitchEnabled={!busy}
+                  onMapReady={() => {
+                    mapReadyRef.current = true
+                  }}
                   onPress={(event) =>
                     handleSelectPoint(event.nativeEvent.coordinate)
                   }
@@ -699,10 +882,8 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
 
                 <Text style={styles.help}>
                   {point
-                    ? `Ponto selecionado: ${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}`
+                    ? `Destino: ${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}`
                     : 'Nenhum destino selecionado. Toque no mapa para marcar.'}
-                  {'\n'}A localização salva pode ser antiga. Confira se
-                  corresponde ao endereço informado.
                 </Text>
 
                 <Pressable
@@ -715,19 +896,31 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
                   accessibilityRole="checkbox"
                   accessibilityState={{
                     checked: confirmed,
+                    disabled: !point || busy,
                   }}
-                  onPress={() => setConfirmed(!confirmed)}
+                  onPress={() => setConfirmed((current) => !current)}
                 >
-                  <Text style={styles.optionText}>
-                    {confirmed ? '☑' : '☐'} Confirmo que o ponto e o endereço
-                    são o destino da entrega.
-                  </Text>
+                  <View style={styles.optionRow}>
+                    <Text
+                      style={[
+                        styles.checkbox,
+                        confirmed && styles.checkboxSelected,
+                      ]}
+                    >
+                      {confirmed ? '✓' : ''}
+                    </Text>
+
+                    <Text style={styles.confirmationText}>
+                      Confirmo que o endereço e o ponto no mapa são o destino da
+                      entrega.
+                    </Text>
+                  </View>
                 </Pressable>
 
                 <Text style={styles.label}>Como deseja pagar à loja? *</Text>
 
                 {availableMethods.length === 0 && (
-                  <Text style={styles.help}>
+                  <Text style={styles.warning}>
                     A loja está sem formas de pagamento disponíveis para
                     entrega.
                   </Text>
@@ -739,8 +932,9 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
                     style={[
                       styles.option,
                       payment === method && styles.selected,
+                      sending && styles.disabled,
                     ]}
-                    disabled={busy}
+                    disabled={sending}
                     accessibilityRole="radio"
                     accessibilityState={{
                       checked: payment === method,
@@ -754,11 +948,11 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
                 ))}
 
                 <Text style={styles.help}>
-                  O endereço e o ponto confirmado serão incluídos na mensagem.
-                  Confira e toque em Enviar no WhatsApp.
+                  Confira a mensagem e toque em Enviar no WhatsApp. Abrir a
+                  conversa não confirma entrega ou pagamento.
                   {'\n\n'}
-                  Abrir a conversa não confirma entrega ou pagamento. Os pontos
-                  dependem da validação da compra pela loja.
+                  Os pontos serão creditados após a validação da compra pela
+                  loja.
                 </Text>
 
                 <Pressable
@@ -782,8 +976,8 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
             )}
 
             <Pressable
-              style={[styles.cancel, busy && styles.disabled]}
-              disabled={busy}
+              style={[styles.cancel, sending && styles.disabled]}
+              disabled={sending}
               accessibilityRole="button"
               onPress={handleClose}
             >
@@ -825,13 +1019,14 @@ const styles = StyleSheet.create({
   },
   loading: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 30,
   },
   label: {
     fontWeight: '600',
     color: '#0F172A',
     marginTop: 18,
     marginBottom: 8,
+    fontSize: 15,
   },
   help: {
     color: '#475569',
@@ -847,6 +1042,15 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginVertical: 14,
   },
+  warning: {
+    backgroundColor: '#FFFBEB',
+    color: '#92400E',
+    padding: 12,
+    borderRadius: 10,
+    lineHeight: 20,
+    marginVertical: 8,
+    fontSize: 13,
+  },
   input: {
     borderWidth: 1,
     borderColor: '#CBD5E1',
@@ -855,6 +1059,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     color: '#0F172A',
     textAlignVertical: 'top',
+    fontSize: 15,
   },
   option: {
     padding: 14,
@@ -863,9 +1068,51 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginTop: 10,
   },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  optionContent: {
+    flex: 1,
+  },
+  optionTitle: {
+    color: '#1E293B',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  optionDescription: {
+    color: '#475569',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
+  },
   optionText: {
     color: '#1E293B',
     lineHeight: 21,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 1.5,
+    borderColor: '#94A3B8',
+    borderRadius: 5,
+    textAlign: 'center',
+    lineHeight: 21,
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    overflow: 'hidden',
+  },
+  checkboxSelected: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  confirmationText: {
+    flex: 1,
+    color: '#1E293B',
+    lineHeight: 21,
+    fontSize: 13,
   },
   selected: {
     backgroundColor: '#EFF6FF',
@@ -874,7 +1121,7 @@ const styles = StyleSheet.create({
   mapActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 12,
+    marginTop: 8,
     gap: 8,
   },
   mapAction: {
@@ -906,6 +1153,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     textAlign: 'center',
+    fontSize: 15,
   },
   cancel: {
     padding: 16,
