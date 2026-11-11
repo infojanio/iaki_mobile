@@ -609,8 +609,7 @@ export function OrderHistory() {
                           textAlign="center"
                           mt={1}
                         >
-                          A loja confirma disponibilidade, taxa e prazo pelo
-                          WhatsApp.
+                          Confirme disponibilidade, taxa e prazo pelo WhatsApp.
                         </Text>
                       </Box>
                     )}

@@ -274,7 +274,7 @@ export function AppRoutes() {
         name="wallet"
         component={ProfileWallet}
         options={{
-          title: 'Pontos',
+          title: 'Resgates',
           tabBarIcon: ({ color }) => (
             <TabIconBox>
               <ProfileSvg fill={color} width={iconSize} height={iconSize} />

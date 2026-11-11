@@ -615,7 +615,7 @@ export function ProfileWallet() {
                             </HStack>
                           </Box>
 
-                          {/* CTA PRINCIPAL DE BRINDES */}
+                          {/* VER BRINDES DA LOJA */}
 
                           <Pressable
                             onPress={() =>
@@ -623,55 +623,53 @@ export function ProfileWallet() {
                                 storeId: store.storeId,
                               })
                             }
+                            accessibilityRole="button"
                             accessibilityLabel={`Ver brindes da loja ${store.storeName}`}
                             _pressed={{
-                              opacity: 0.82,
+                              opacity: 0.85,
                             }}
                           >
-                            <HStack
-                              bg="amber.400"
-                              p={4}
-                              minHeight={88}
-                              borderRadius="2xl"
-                              shadow={3}
-                              borderWidth={1}
-                              borderColor="amber.500"
-                              alignItems="center"
-                              space={3}
-                            >
-                              <Center
-                                width={14}
-                                height={14}
-                                bg="white"
-                                borderRadius="full"
-                                shadow={1}
+                            {({ isPressed }) => (
+                              <HStack
+                                bg={isPressed ? '#F5F3FF' : '#FFFFFF'}
+                                p={4}
+                                minHeight={100}
+                                borderRadius={20}
+                                borderWidth={1}
+                                borderColor="#DDD6FE"
+                                alignItems="center"
+                                space={3}
                               >
-                                <Gift size={28} color="#B45309" />
-                              </Center>
-
-                              <VStack flex={1} space={1}>
-                                <Text
-                                  fontSize="lg"
-                                  fontWeight="bold"
-                                  color="amber.900"
+                                <Center
+                                  width={12}
+                                  height={12}
+                                  bg="#EDE9FE"
+                                  borderRadius={16}
                                 >
-                                  Ver brindes da loja
-                                </Text>
+                                  <Gift size={25} color="#6D28D9" />
+                                </Center>
 
-                                <Text fontSize="sm" color="amber.800">
-                                  Use seus pontos para resgatar recompensas
-                                </Text>
-                              </VStack>
+                                <VStack flex={1} space={1}>
+                                  <Text
+                                    fontSize="md"
+                                    fontWeight="bold"
+                                    color="#182230"
+                                  >
+                                    Ver brindes da loja
+                                  </Text>
 
-                              <Center
-                                width={9}
-                                height={9}
-                                bg="amber.500"
-                                borderRadius="full"
-                              >
-                                <ChevronRight size={22} color="#78350F" />
-                              </Center>
-                            </HStack>
+                                  <Text
+                                    fontSize="xs"
+                                    lineHeight={18}
+                                    color="#667085"
+                                  >
+                                    Escolha uma recompensa e troque seus pontos.
+                                  </Text>
+                                </VStack>
+
+                                <ChevronRight size={21} color="#7C3AED" />
+                              </HStack>
+                            )}
                           </Pressable>
 
                           {/* HISTÓRICO */}
