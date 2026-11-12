@@ -143,9 +143,9 @@ function getOrderExpirationInfo(order: Order): ExpirationInfo | null {
     daysRemaining,
     expirationDate,
     message: `Este pedido expira em ${daysRemaining} dias.`,
-    backgroundColor: 'blue.50',
-    borderColor: 'blue.400',
-    textColor: 'blue.700',
+    backgroundColor: 'white',
+    borderColor: 'white',
+    textColor: 'red.700',
   }
 }
 function parseCoordinate(value: unknown): number | null {
@@ -552,11 +552,12 @@ export function OrderHistory() {
                 >
                   <Text
                     fontSize="sm"
-                    fontWeight="bold"
+                    fontWeight="normal"
                     color={expirationInfo.textColor}
                   >
                     ⚠️ {expirationInfo.message}
                   </Text>
+                  {/*
                   <Text mt={1} fontSize="xs" color={expirationInfo.textColor}>
                     Prazo final:{' '}
                     {format(expirationInfo.expirationDate, 'dd/MM/yyyy HH:mm')}
@@ -565,7 +566,10 @@ export function OrderHistory() {
                     <Text mt={2} fontSize="xs" color={expirationInfo.textColor}>
                       Valide a compra e ganhe seus pontos.
                     </Text>
-                  )}
+                    
+                  }
+                  
+                  )} */}
                 </Box>
               )}
               {item.status === 'PENDING' &&
@@ -586,7 +590,7 @@ export function OrderHistory() {
                         py={3}
                         rounded="lg"
                         borderWidth={1}
-                        borderColor="green.200"
+                        borderColor="green.300"
                         bg={isPressed ? 'green.100' : 'green.50'}
                       >
                         <HStack
@@ -603,14 +607,6 @@ export function OrderHistory() {
                               : '🚚 Solicitar entrega'}
                           </Text>
                         </HStack>
-                        <Text
-                          color="green.700"
-                          fontSize="xs"
-                          textAlign="center"
-                          mt={1}
-                        >
-                          Confirme disponibilidade, taxa e prazo pelo WhatsApp.
-                        </Text>
                       </Box>
                     )}
                   </Pressable>
@@ -636,7 +632,7 @@ export function OrderHistory() {
                       alignItems="center"
                     >
                       <Text color="blue.700" fontWeight="bold">
-                        📍 Como chegar
+                        📍 Retirar na loja
                       </Text>
                     </Box>
                   )}

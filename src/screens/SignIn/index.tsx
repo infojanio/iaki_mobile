@@ -123,7 +123,7 @@ export function SignIn() {
        * seleção de cidade e app.
        */
     } catch (error: any) {
-      console.error('[SignIn] Erro no login:', {
+      console.log('[SignIn] Erro ao logar:', {
         message: error?.message,
 
         code: error?.code,
@@ -135,8 +135,7 @@ export function SignIn() {
         url: error?.config?.url,
       })
 
-      let message =
-        'Não foi possível entrar. Verifique seus dados e tente novamente.'
+      let message = 'Email ou senha incorretos!.'
 
       if (error?.response?.data?.message) {
         message = error.response.data.message

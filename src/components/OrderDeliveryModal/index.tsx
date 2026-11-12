@@ -637,7 +637,7 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
       const storeName = singleLine(String(currentStore.name || pilot.storeName))
 
       const message = [
-        '*SOLICITAÇÃO DE ENTREGA · IAkí*',
+        '*SOLICITAÇÃO DE ENTREGA · Clube IAkí*',
         '',
         `Olá, equipe *${storeName}*!`,
         'Gostaria de solicitar a entrega do pedido abaixo.',
@@ -654,14 +654,12 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
         '',
         '*ENDEREÇO DE ENTREGA*',
         address.trim(),
-        ...(reference.trim()
-          ? [`Complemento / referência: ${reference.trim()}`]
-          : []),
+        ...(reference.trim() ? [`Complemento: ${reference.trim()}`] : []),
         '',
         '*LOCALIZAÇÃO CONFIRMADA*',
         locationUrl,
         '',
-        '*FORMA DE PAGAMENTO DESEJADA*',
+        '*FORMA DE PAGAMENTO*',
         payment,
         '',
         'Por favor, confirme a disponibilidade dos produtos, a taxa de entrega, o valor final e o prazo.',
@@ -753,7 +751,7 @@ export function OrderDeliveryModal({ order, pilot, onClose }: Props) {
                   altera esse campo.
                 </Text>
 
-                <Text style={styles.label}>Complemento / referência</Text>
+                <Text style={styles.label}>Complemento</Text>
 
                 <TextInput
                   value={reference}

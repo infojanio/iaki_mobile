@@ -9,14 +9,13 @@ import {
   StyleSheet,
   View,
 } from 'react-native'
-
 import type {
   LayoutChangeEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
 } from 'react-native'
-
 import { useIsFocused, useNavigation } from '@react-navigation/native'
+
 import type { BannerDTO } from '@dtos/BannerDTO'
 
 type PromoBanner = {
@@ -34,7 +33,7 @@ type Props = {
 const EMPTY_BANNERS: BannerDTO[] = []
 
 const HORIZONTAL_PADDING = 10
-const BANNER_HEIGHT = 180
+const BANNER_ASPECT_RATIO = 1600 / 700
 const AUTOPLAY_DELAY = 5000
 
 export function Promotion({
@@ -42,7 +41,6 @@ export function Promotion({
 }: Props) {
   const navigation = useNavigation<any>()
   const isFocused = useIsFocused()
-
   const listRef = useRef<FlatList<PromoBanner>>(null)
 
   const [containerWidth, setContainerWidth] = useState(0)
@@ -51,6 +49,9 @@ export function Promotion({
   const [isAppActive, setIsAppActive] = useState(
     AppState.currentState === 'active',
   )
+
+  const cardWidth = Math.max(0, containerWidth - HORIZONTAL_PADDING * 2)
+  const bannerHeight = cardWidth / BANNER_ASPECT_RATIO
 
   const banners = useMemo<PromoBanner[]>(() => {
     return bannersFromProps
@@ -66,7 +67,6 @@ export function Promotion({
       .slice(0, 8)
   }, [bannersFromProps])
 
-  // Reinicia somente quando a sequência de banners muda.
   const bannersKey = JSON.stringify(banners.map((banner) => banner.id))
 
   useEffect(() => {
@@ -91,11 +91,10 @@ export function Promotion({
     return () => cancelAnimationFrame(frame)
   }, [bannersKey, containerWidth])
 
-  // Aguarda cinco segundos após cada troca ou interação.
   useEffect(() => {
     if (
       banners.length <= 1 ||
-      containerWidth <= 0 ||
+      cardWidth <= 0 ||
       isDragging ||
       !isFocused ||
       !isAppActive
@@ -108,8 +107,6 @@ export function Promotion({
 
       listRef.current?.scrollToOffset({
         offset: nextIndex * containerWidth,
-
-        // Evita atravessar todos os banners ao voltar ao início.
         animated: nextIndex !== 0,
       })
 
@@ -121,6 +118,7 @@ export function Promotion({
     activeIndex,
     banners.length,
     bannersKey,
+    cardWidth,
     containerWidth,
     isDragging,
     isFocused,
@@ -128,13 +126,7 @@ export function Promotion({
   ])
 
   function handleLayout(event: LayoutChangeEvent) {
-    const width = event.nativeEvent.layout.width
-
-    if (width <= 0) return
-
-    setContainerWidth((current) =>
-      Math.abs(current - width) > 0.5 ? width : current,
-    )
+    setContainerWidth(event.nativeEvent.layout.width)
   }
 
   function updateActiveIndex(event: NativeSyntheticEvent<NativeScrollEvent>) {
@@ -172,9 +164,8 @@ export function Promotion({
 
   return (
     <View style={styles.container} onLayout={handleLayout}>
-      {/* Reserva a altura antes mesmo de medir a largura. */}
-      <View style={styles.carousel}>
-        {containerWidth > 0 && (
+      {cardWidth > 0 && (
+        <>
           <FlatList
             ref={listRef}
             data={banners}
@@ -184,7 +175,7 @@ export function Promotion({
             overScrollMode="never"
             showsHorizontalScrollIndicator={false}
             scrollEnabled={banners.length > 1}
-            style={styles.list}
+            style={{ height: bannerHeight }}
             extraData={containerWidth}
             keyExtractor={(item) => item.id}
             getItemLayout={(_, index) => ({
@@ -192,9 +183,7 @@ export function Promotion({
               offset: containerWidth * index,
               index,
             })}
-            onScrollBeginDrag={() => {
-              setIsDragging(true)
-            }}
+            onScrollBeginDrag={() => setIsDragging(true)}
             onScrollEndDrag={(event) => {
               updateActiveIndex(event)
               setIsDragging(false)
@@ -204,7 +193,12 @@ export function Promotion({
               const hasAction = Boolean(item.storeId || item.link?.trim())
 
               return (
-                <View style={[styles.page, { width: containerWidth }]}>
+                <View
+                  style={[
+                    styles.page,
+                    { width: containerWidth, height: bannerHeight },
+                  ]}
+                >
                   <Pressable
                     disabled={!hasAction}
                     accessibilityRole={hasAction ? 'button' : 'image'}
@@ -231,25 +225,27 @@ export function Promotion({
               )
             }}
           />
-        )}
-      </View>
 
-      {banners.length > 1 && (
-        <View
-          style={styles.dotsContainer}
-          accessible
-          accessibilityLabel={`Banner ${activeIndex + 1} de ${banners.length}`}
-        >
-          {banners.map((banner, index) => (
+          {banners.length > 1 && (
             <View
-              key={banner.id}
-              style={[
-                styles.dot,
-                index === activeIndex ? styles.activeDot : styles.inactiveDot,
-              ]}
-            />
-          ))}
-        </View>
+              style={styles.dotsContainer}
+              accessible
+              accessibilityLabel={`Banner ${activeIndex + 1} de ${banners.length}`}
+            >
+              {banners.map((banner, index) => (
+                <View
+                  key={banner.id}
+                  style={[
+                    styles.dot,
+                    index === activeIndex
+                      ? styles.activeDot
+                      : styles.inactiveDot,
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+        </>
       )}
     </View>
   )
@@ -261,18 +257,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  carousel: {
-    height: BANNER_HEIGHT,
-  },
-
-  list: {
-    height: BANNER_HEIGHT,
-  },
-
-  // Cada página ocupa exatamente a largura do carrossel.
-  // O espaçamento fica dentro da página, mantendo o centro.
   page: {
-    height: BANNER_HEIGHT,
     paddingHorizontal: HORIZONTAL_PADDING,
   },
 
@@ -281,8 +266,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#F9FAFB',
     overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   image: {
